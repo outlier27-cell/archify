@@ -49,6 +49,11 @@ test('research manifest hashes source bytes and protects input paths', () => {
   try {
     const first = path.join(dir, 'first.json'); const second = path.join(dir, 'second.json'); const text = JSON.stringify(valid()); fs.writeFileSync(first, text); fs.writeFileSync(second, `${text}\n`);
     const one = JSON.parse(run(['research-manifest', 'validate', first, '--json']).stdout); const two = JSON.parse(run(['research-manifest', 'validate', second, '--json']).stdout);
-    assert.notEqual(one.inputSha256, two.inputSha256); assert.notEqual(run(['research-manifest', 'validate', first, '--jsoon']).status, 0); assert.notEqual(run(['research-manifest', 'render', first, first, '--json']).status, 0);
+    assert.notEqual(one.inputSha256, two.inputSha256);
+    assert.notEqual(run(['research-manifest', 'validate', first, '--jsoon']).status, 0);
+    const sameFileRender = run(['research-manifest', 'render', first, first, '--json']);
+    assert.equal(sameFileRender.status, 1);
+    assert.match(sameFileRender.stderr, /Research manifest output must not replace its input\./);
+    assert.equal(fs.readFileSync(first, 'utf8'), text);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
