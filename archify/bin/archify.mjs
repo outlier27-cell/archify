@@ -2181,6 +2181,8 @@ function usage() {
   archify finalize <type> <input.json> <output.html> [--json] [--receipt path] [--out-dir <dir>] [--quality standard|showcase] [--repo-root path] [--candidate-sha256 hex]
   archify preview <type> <input.json> [output.html] [--no-open] [--quality standard|showcase] [--repo-root path]
   archify validate <type> <input.json> [--json] [--layout-json] [--quality standard|showcase] [--repo-root path]
+  archify research-manifest validate <manifest.json> [--json]
+  archify research-manifest render <manifest.json> <output.html> [--json]
   archify migrate workflow <old.json> <new.json> --to-schema 2 [--output portable.html] [--json] [--repo-root path]
   archify inspect <type> <input.json>
   archify check <output.html> [--json] [--require-provenance]
@@ -2201,6 +2203,24 @@ Types:
 function fail(message, code = 2) {
   console.error(message);
   process.exit(code);
+}
+
+function commandResearchManifest(args) {
+  const [action, input, output, ...rest] = args;
+  const json = rest.includes('--json') || output === '--json';
+  const actualOutput = output === '--json' ? undefined : output;
+  if (!['validate', 'render'].includes(action) || !input || (action === 'render' && !actualOutput) || rest.some(arg => arg !== '--json')) {
+    fail('Usage: archify research-manifest validate <manifest.json> [--json]\n       archify research-manifest render <manifest.json> <output.html> [--json]');
+  }
+  return import('../research-manifest/research-manifest.mjs').then(({ readManifest, validateManifest, renderManifest, sha256, writeArtifact }) => {
+    let manifest;
+    try { manifest = readManifest(input); } catch (error) { fail(`Could not read manifest: ${error.message}`, 1); return; }
+    const diagnostics = validateManifest(manifest);
+    const receipt = { schemaVersion: 1, command: `research-manifest ${action}`, inputSha256: sha256(JSON.stringify(manifest)), diagnostics, ok: diagnostics.length === 0 };
+    if (!receipt.ok) { if (json) console.log(JSON.stringify(receipt)); else console.error(diagnostics.map(entry => entry.message).join('\n')); process.exitCode = 1; return; }
+    if (action === 'render') { const html = renderManifest(manifest); writeArtifact(actualOutput, html); receipt.artifactSha256 = sha256(html); receipt.output = path.resolve(actualOutput); }
+    if (json) console.log(JSON.stringify(receipt)); else console.log(`ok ${receipt.command} ${path.resolve(input)}`);
+  });
 }
 
 function rejectCliArgument(message, details = {}) {
@@ -6861,6 +6881,9 @@ try {
       break;
     case 'validate':
       await commandValidate(args);
+      break;
+    case 'research-manifest':
+      await commandResearchManifest(args);
       break;
     case 'migrate':
       await commandMigrate(args);
