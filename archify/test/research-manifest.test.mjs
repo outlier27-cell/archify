@@ -34,3 +34,21 @@ test('research manifest rejects drift and claims without evidence', () => {
     assert.equal(result.status, 1); assert.deepEqual(receipt.diagnostics.map(entry => entry.code), ['research/claim-without-evidence', 'research/revision-drift']);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('research manifest rejects malformed collections and planned evidence for supported claims', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-research-'));
+  try {
+    const input = path.join(dir, 'invalid.json'); const manifest = valid(); manifest.runs = {}; manifest.assets[0].status = 'planned'; manifest.claims[0].status = 'supported';
+    fs.writeFileSync(input, JSON.stringify(manifest)); const result = run(['research-manifest', 'validate', input, '--json']); const receipt = JSON.parse(result.stdout);
+    assert.equal(result.status, 1); assert.ok(receipt.diagnostics.some(entry => entry.code === 'research/schema')); assert.ok(receipt.diagnostics.some(entry => entry.code === 'research/unsupported-supported-claim'));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('research manifest hashes source bytes and protects input paths', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-research-'));
+  try {
+    const first = path.join(dir, 'first.json'); const second = path.join(dir, 'second.json'); const text = JSON.stringify(valid()); fs.writeFileSync(first, text); fs.writeFileSync(second, `${text}\n`);
+    const one = JSON.parse(run(['research-manifest', 'validate', first, '--json']).stdout); const two = JSON.parse(run(['research-manifest', 'validate', second, '--json']).stdout);
+    assert.notEqual(one.inputSha256, two.inputSha256); assert.notEqual(run(['research-manifest', 'validate', first, '--jsoon']).status, 0); assert.notEqual(run(['research-manifest', 'render', first, first, '--json']).status, 0);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

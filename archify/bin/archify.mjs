@@ -2209,16 +2209,17 @@ function commandResearchManifest(args) {
   const [action, input, output, ...rest] = args;
   const json = rest.includes('--json') || output === '--json';
   const actualOutput = output === '--json' ? undefined : output;
-  if (!['validate', 'render'].includes(action) || !input || (action === 'render' && !actualOutput) || rest.some(arg => arg !== '--json')) {
+  if (!['validate', 'render'].includes(action) || !input || (action === 'validate' && actualOutput) || (action === 'render' && !actualOutput) || rest.some(arg => arg !== '--json')) {
     fail('Usage: archify research-manifest validate <manifest.json> [--json]\n       archify research-manifest render <manifest.json> <output.html> [--json]');
   }
-  return import('../research-manifest/research-manifest.mjs').then(({ readManifest, validateManifest, renderManifest, sha256, writeArtifact }) => {
+  return import('../research-manifest/research-manifest.mjs').then(({ readManifest, validateManifest, renderManifest, sha256, sameFile, writeArtifact }) => {
     let manifest;
-    try { manifest = readManifest(input); } catch (error) { fail(`Could not read manifest: ${error.message}`, 1); return; }
+    let bytes;
+    try { ({ bytes, manifest } = readManifest(input)); } catch (error) { fail(`Could not read manifest: ${error.message}`, 1); return; }
     const diagnostics = validateManifest(manifest);
-    const receipt = { schemaVersion: 1, command: `research-manifest ${action}`, inputSha256: sha256(JSON.stringify(manifest)), diagnostics, ok: diagnostics.length === 0 };
+    const receipt = { schemaVersion: 1, command: `research-manifest ${action}`, inputSha256: sha256(bytes), diagnostics, ok: diagnostics.length === 0 };
     if (!receipt.ok) { if (json) console.log(JSON.stringify(receipt)); else console.error(diagnostics.map(entry => entry.message).join('\n')); process.exitCode = 1; return; }
-    if (action === 'render') { const html = renderManifest(manifest); writeArtifact(actualOutput, html); receipt.artifactSha256 = sha256(html); receipt.output = path.resolve(actualOutput); }
+    if (action === 'render') { if (sameFile(input, actualOutput)) { fail('Research manifest output must not replace its input.', 1); return; } const html = renderManifest(manifest); writeArtifact(actualOutput, html); receipt.artifactSha256 = sha256(html); receipt.output = path.resolve(actualOutput); }
     if (json) console.log(JSON.stringify(receipt)); else console.log(`ok ${receipt.command} ${path.resolve(input)}`);
   });
 }
