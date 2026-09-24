@@ -655,7 +655,12 @@ export function renderBrandMark(node, { x, y, size = 16, mode = 'badge' } = {}) 
   let content;
   if (mark.kind === 'preset') {
     const scale = (size - inset * 2) / mark.viewBox;
-    content = `<path d="${esc(mark.path)}" transform="translate(${inset} ${inset}) scale(${scale})" fill="#${esc(mark.hex)}"/>`;
+    const channels = mark.hex.match(/../g).map((value) => Number.parseInt(value, 16));
+    const neutral = Math.max(...channels) - Math.min(...channels) <= 4
+      && (Math.max(...channels) <= 32 || Math.min(...channels) >= 224);
+    const fill = mode === 'icon-first' && neutral
+      ? 'var(--text)' : `#${esc(mark.hex)}`;
+    content = `<path d="${esc(mark.path)}" transform="translate(${inset} ${inset}) scale(${scale})" fill="${fill}"/>`;
   } else if (mark.kind === 'remote') {
     content = `<image href="${esc(mark.dataUrl)}" x="${inset}" y="${inset}" width="${size - inset * 2}" height="${size - inset * 2}" preserveAspectRatio="xMidYMid meet"/>`;
   } else {
