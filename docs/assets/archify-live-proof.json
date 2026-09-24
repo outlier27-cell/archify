@@ -7,13 +7,13 @@
   "fps": 10,
   "frameCount": 54,
   "durationSeconds": 5.4,
-  "bytes": 1724890,
-  "sha256": "b482db2f90b619daa7248b8ae28eec9379402b003c0ed72707ede73787863560",
+  "bytes": 1867319,
+  "sha256": "2b42fdd926fc1bf0d5b5279342d93f6a91465411df627f1f19a3f3127b0acb6e",
   "scenes": [
     {
       "id": "signal-flow",
       "artifact": "docs/gallery/artifacts/agent-tool-call.workflow.html",
-      "artifactSha256": "cd79072e587133a5a08f38f5c9435787aaff42ad395b6a059512d0c44c551f2b",
+      "artifactSha256": "3e5e7e54d1c130ad52988e45f8b4e4debe22b8d48c9c5b20470c7adf03fb4f75",
       "view": "happy-path",
       "eyebrow": "WORKFLOW · SIGNAL FLOW",
       "title": "Agent Tool Call",
