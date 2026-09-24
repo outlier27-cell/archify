@@ -483,7 +483,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       min-height: 100vh;
       padding: 2rem;
       color: var(--text);
-      transition: background 0.2s ease, color 0.2s ease;
+      /* Theme surfaces change together; animating the page background leaves it
+         visibly out of sync with the SVG and panel for the first 200ms. */
     }
 
     html[data-preset="signal-flow"] body {
@@ -3049,7 +3050,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       .header { margin-bottom: 0.875rem; }
       .cards { margin-top: 0.75rem; }
       html[data-nav-stage-rail="true"] body { padding-block: 0.375rem; }
-      html[data-nav-stage-rail="true"] .header { margin-bottom: 0.5rem; }
+      /* Align the fixed toolbar with the compact title row. Reserve its hit area
+         above the guide without taking extra height from a fitted diagram. */
+      html[data-nav-stage-rail="true"] .toolbar { top: 0.25rem; }
+      html[data-nav-stage-rail="true"] .header { min-height: 2.625rem; margin-bottom: 0.5rem; }
       html[data-nav-stage-rail="true"] .guided-views { margin-bottom: 0.375rem; }
       html[data-nav-stage-rail="true"] .diagram-container[data-nav-stage-rail="true"] { padding-top: 0.5rem; }
       html[data-nav-stage-rail="true"] .cards { margin-top: 0.375rem; }
@@ -5270,36 +5274,36 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <!-- Connection paths (before components for correct z-order) -->
         <g data-graph-role="automatic-crossover" style="--step:0">
           <path data-graph-role="automatic-crossover-underlay" d="M 160 330 L 250 330" fill="none" stroke="var(--mask)" stroke-width="5.8" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="users" data-edge-to="cdn" data-edge-label="HTTPS" data-edge-key="0" data-edge-id="users-to-cdn" data-composition-points="160,330;250,330" data-composition-crossover="halo" d="M 160 330 L 250 330" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
+          <path data-edge-from="users" data-edge-to="cdn" data-edge-label="HTTPS" data-edge-key="0" data-edge-id="users-to-cdn" data-composition-points="160,330;250,330" data-composition-crossover="halo" data-composition-independent="true" d="M 160 330 L 250 330" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
         </g>
         <path data-edge-from="auth" data-edge-to="api" data-edge-label="verify JWT" data-edge-key="1" data-edge-id="jwt-verification" data-composition-points="160,142;620,142;620,246;735,246;735,300" d="M 160 142 L 612 142 Q 620 142 620 150 L 620 238 Q 620 246 628 246 L 727 246 Q 735 246 735 254 L 735 300" class="a-security" stroke-width="1.5" marker-end="url(#arrowhead-security)"/>
         <g data-graph-role="automatic-crossover" style="--step:2">
           <path data-graph-role="automatic-crossover-underlay" d="M 380 330 L 460 330" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="cdn" data-edge-to="lb" data-edge-key="2" data-edge-id="cdn-to-lb" data-composition-points="380,330;460,330" data-composition-crossover="halo" d="M 380 330 L 460 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="cdn" data-edge-to="lb" data-edge-key="2" data-edge-id="cdn-to-lb" data-composition-points="380,330;460,330" data-composition-crossover="halo" data-composition-independent="true" d="M 380 330 L 460 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:3">
           <path data-graph-role="automatic-crossover-underlay" d="M 315 360 L 315 440" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="cdn" data-edge-to="s3" data-edge-label="static" data-edge-key="3" data-edge-id="static-assets" data-composition-points="315,360;315,440" data-composition-crossover="halo" d="M 315 360 L 315 440" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-edge-from="cdn" data-edge-to="s3" data-edge-label="static" data-edge-key="3" data-edge-id="static-assets" data-composition-points="315,360;315,440" data-composition-crossover="halo" data-composition-independent="true" d="M 315 360 L 315 440" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:4">
           <path data-graph-role="automatic-crossover-underlay" d="M 590 330 L 670 330" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="lb" data-edge-to="api" data-edge-key="4" data-edge-id="lb-to-api" data-composition-points="590,330;670,330" data-composition-crossover="halo" d="M 590 330 L 670 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="lb" data-edge-to="api" data-edge-key="4" data-edge-id="lb-to-api" data-composition-points="590,330;670,330" data-composition-crossover="halo" data-composition-independent="true" d="M 590 330 L 670 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:5">
           <path data-graph-role="automatic-crossover-underlay" d="M 735 300 L 735 210" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="api" data-edge-to="cache" data-edge-label="read-through" data-edge-key="5" data-edge-id="cache-read-through" data-composition-points="735,300;735,210" data-composition-crossover="halo" d="M 735 300 L 735 210" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="api" data-edge-to="cache" data-edge-label="read-through" data-edge-key="5" data-edge-id="cache-read-through" data-composition-points="735,300;735,210" data-composition-crossover="halo" data-composition-independent="true" d="M 735 300 L 735 210" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:6">
           <path data-graph-role="automatic-crossover-underlay" d="M 800 330 L 880 330" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="api" data-edge-to="db" data-edge-label="SQL" data-edge-key="6" data-edge-id="api-sql" data-composition-points="800,330;880,330" data-composition-crossover="halo" d="M 800 330 L 880 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="api" data-edge-to="db" data-edge-label="SQL" data-edge-key="6" data-edge-id="api-sql" data-composition-points="800,330;880,330" data-composition-crossover="halo" data-composition-independent="true" d="M 800 330 L 880 330" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:7">
           <path data-graph-role="automatic-crossover-underlay" d="M 735 360 L 735 440" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="api" data-edge-to="queue" data-edge-label="enqueue" data-edge-key="7" data-edge-id="enqueue-job" data-composition-points="735,360;735,440" data-composition-crossover="halo" d="M 735 360 L 735 440" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
+          <path data-edge-from="api" data-edge-to="queue" data-edge-label="enqueue" data-edge-key="7" data-edge-id="enqueue-job" data-composition-points="735,360;735,440" data-composition-crossover="halo" data-composition-independent="true" d="M 735 360 L 735 440" class="a-dashed" stroke-width="1.5" marker-end="url(#arrowhead-dashed)"/>
         </g>
         <g data-graph-role="automatic-crossover" style="--step:8">
           <path data-graph-role="automatic-crossover-underlay" d="M 800 470 L 880 470" fill="none" stroke="var(--mask)" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round" pointer-events="none"/>
-          <path data-edge-from="queue" data-edge-to="worker" data-edge-key="8" data-edge-id="queue-to-worker" data-composition-points="800,470;880,470" data-composition-crossover="halo" d="M 800 470 L 880 470" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+          <path data-edge-from="queue" data-edge-to="worker" data-edge-key="8" data-edge-id="queue-to-worker" data-composition-points="800,470;880,470" data-composition-crossover="halo" data-composition-independent="true" d="M 800 470 L 880 470" class="a-default" stroke-width="1.5" marker-end="url(#arrowhead)"/>
         </g>
 
         <!-- Components -->
@@ -7788,6 +7792,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       var relationshipHitTargets = [];
       var directPreviewTimer = null;
       var lensDrag = null;
+      var lensDragClickPointer = null;
       var manualLensPosition = null;
       var reachabilityMode = null;
       var activeReachability = null;
@@ -8865,6 +8870,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         event.stopPropagation();
         var activeDrag = lensDrag;
         lensDrag = null;
+        if (activeDrag.moved) lensDragClickPointer = activeDrag.pointerId;
         chip.removeAttribute('data-panel-dragging');
         try { moveBtn.releasePointerCapture(event.pointerId); } catch (_) {}
         if (!cancel) return;
@@ -9278,7 +9284,20 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         event.preventDefault();
         buttons[index].focus();
       });
+      document.addEventListener('pointerdown', function () {
+        lensDragClickPointer = null;
+      }, true);
       document.addEventListener('click', function (event) {
+        // Losing capture (for example when a resize hides the handle) can
+        // retarget this drag's final click to the page. It is not dismissal.
+        // A new pointerdown releases the guard; keyboard clicks remain live.
+        if (lensDragClickPointer != null && event.detail > 0 &&
+            (event.pointerId == null || event.pointerId === lensDragClickPointer)) {
+          lensDragClickPointer = null;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         var target = event.target;
         if (chip.hidden || !target || typeof target.closest !== 'function' || chip.contains(target)) return;
         if (container.getAttribute('data-just-panned') === 'true') return;
@@ -9354,6 +9373,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         active: function () { return activeIds.length === 0 ? null : (activeIds.length === 1 ? activeIds[0] : activeIds.slice()); }
       };
     })();
+
 
     /* ============================================================
        Intent Trace — temporary one-hop topology before durable focus.
@@ -11379,6 +11399,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       var requestedMinimumText = Number.isFinite(declaredMinimumText)
         ? Math.max(MIN_PROJECTED_NODE_TEXT_PX, declaredMinimumText)
         : MIN_PROJECTED_NODE_TEXT_PX;
+      var declaredPrimaryText = svg ? parseFloat(svg.getAttribute('data-reader-primary-text') || '') : null;
       var SAFE_BOTTOM_GAP = 12;
 
       if (diagram && ratio >= WIDE_RATIO) {
@@ -11416,6 +11437,20 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         return sourceMinimum != null
           ? Math.min(1, requestedMinimumText / sourceMinimum)
           : 1;
+      }
+      function primaryReadingWidth() {
+        if (!measuredHeightFit || !Number.isFinite(declaredPrimaryText) || declaredPrimaryText <= 0) return 0;
+        var sourcePrimary = null;
+        Array.from(svg.querySelectorAll('text[data-node-label]')).forEach(function (text) {
+          var size = parseFloat(text.getAttribute('font-size') || '');
+          if (Number.isFinite(size) && size > 0) sourcePrimary = sourcePrimary == null ? size : Math.max(sourcePrimary, size);
+        });
+        // Primary labels should remain comfortable to read when cards or
+        // auxiliary rows make a one-screen fit too small. Ordinary page
+        // scroll preserves that reading size; viewport width still caps it.
+        // A long title may already use a smaller fitted font. Preserve that
+        // hierarchy rather than enlarging every other node to compensate.
+        return sourcePrimary == null ? 0 : viewBox.width * declaredPrimaryText / sourcePrimary;
       }
       function eligible() {
         return Boolean(
@@ -11498,6 +11533,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         } else {
           minWidth = Math.min(readableMinimumWidth, viewportCap);
         }
+        var primaryWidth = primaryReadingWidth();
+        if (primaryWidth > 0) minWidth = Math.max(minWidth, Math.min(maxWidth, primaryWidth + chrome.diagramX));
         var fixedHeight = chrome.bodyY + chrome.diagramY + SAFE_BOTTOM_GAP +
           outerHeight(header) + outerHeight(guided) + outerHeight(cards);
         var availableSvgHeight = Math.max(1, window.innerHeight - fixedHeight);
@@ -11862,7 +11899,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       if (typeof MutationObserver === 'function') {
         var contentObserver = new MutationObserver(function (records) {
-          var viewerModeChanged = records.some(function (record) { return record.target === html; });
+          // A theme switch changes paint, not the stage geometry. Reprobing
+          // drops the bottom rail for several frames and makes the diagram jump.
+          var viewerModeChanged = records.some(function (record) {
+            return record.target === html && record.attributeName !== 'data-theme';
+          });
           if (viewerModeChanged) reprobe();
           else schedule();
         });

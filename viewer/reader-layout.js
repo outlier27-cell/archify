@@ -27,6 +27,7 @@
       var requestedMinimumText = Number.isFinite(declaredMinimumText)
         ? Math.max(MIN_PROJECTED_NODE_TEXT_PX, declaredMinimumText)
         : MIN_PROJECTED_NODE_TEXT_PX;
+      var declaredPrimaryText = svg ? parseFloat(svg.getAttribute('data-reader-primary-text') || '') : null;
       var SAFE_BOTTOM_GAP = 12;
 
       if (diagram && ratio >= WIDE_RATIO) {
@@ -64,6 +65,20 @@
         return sourceMinimum != null
           ? Math.min(1, requestedMinimumText / sourceMinimum)
           : 1;
+      }
+      function primaryReadingWidth() {
+        if (!measuredHeightFit || !Number.isFinite(declaredPrimaryText) || declaredPrimaryText <= 0) return 0;
+        var sourcePrimary = null;
+        Array.from(svg.querySelectorAll('text[data-node-label]')).forEach(function (text) {
+          var size = parseFloat(text.getAttribute('font-size') || '');
+          if (Number.isFinite(size) && size > 0) sourcePrimary = sourcePrimary == null ? size : Math.max(sourcePrimary, size);
+        });
+        // Primary labels should remain comfortable to read when cards or
+        // auxiliary rows make a one-screen fit too small. Ordinary page
+        // scroll preserves that reading size; viewport width still caps it.
+        // A long title may already use a smaller fitted font. Preserve that
+        // hierarchy rather than enlarging every other node to compensate.
+        return sourcePrimary == null ? 0 : viewBox.width * declaredPrimaryText / sourcePrimary;
       }
       function eligible() {
         return Boolean(
@@ -146,6 +161,8 @@
         } else {
           minWidth = Math.min(readableMinimumWidth, viewportCap);
         }
+        var primaryWidth = primaryReadingWidth();
+        if (primaryWidth > 0) minWidth = Math.max(minWidth, Math.min(maxWidth, primaryWidth + chrome.diagramX));
         var fixedHeight = chrome.bodyY + chrome.diagramY + SAFE_BOTTOM_GAP +
           outerHeight(header) + outerHeight(guided) + outerHeight(cards);
         var availableSvgHeight = Math.max(1, window.innerHeight - fixedHeight);

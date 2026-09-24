@@ -314,7 +314,8 @@ body {
   min-height: 100vh;
   padding: 2rem;
   color: var(--text);
-  transition: background 0.2s ease, color 0.2s ease;
+  /* Theme surfaces change together; animating the page background leaves it
+     visibly out of sync with the SVG and panel for the first 200ms. */
 }
 
 html[data-preset="signal-flow"] body {
@@ -2880,7 +2881,10 @@ html[data-preset="signal-flow"][data-theme="light"] .card {
   .header { margin-bottom: 0.875rem; }
   .cards { margin-top: 0.75rem; }
   html[data-nav-stage-rail="true"] body { padding-block: 0.375rem; }
-  html[data-nav-stage-rail="true"] .header { margin-bottom: 0.5rem; }
+  /* Align the fixed toolbar with the compact title row. Reserve its hit area
+     above the guide without taking extra height from a fitted diagram. */
+  html[data-nav-stage-rail="true"] .toolbar { top: 0.25rem; }
+  html[data-nav-stage-rail="true"] .header { min-height: 2.625rem; margin-bottom: 0.5rem; }
   html[data-nav-stage-rail="true"] .guided-views { margin-bottom: 0.375rem; }
   html[data-nav-stage-rail="true"] .diagram-container[data-nav-stage-rail="true"] { padding-top: 0.5rem; }
   html[data-nav-stage-rail="true"] .cards { margin-top: 0.375rem; }

@@ -63,13 +63,11 @@ test('update awareness is notification-only and never replaces the requested wor
 
 test('language behavior stays within the bounded locale contract', () => {
   assert.match(defaults, /one primary authored language/);
-  assert.match(defaults, /explicit user choice; otherwise follow the request or conversation's dominant language/);
-  assert.match(defaults, /`meta\.locale` controls only renderer-owned Viewer UI/);
-  assert.match(defaults, /use `"en"`, `"zh-CN"`, or `"es"`/);
-  assert.match(defaults, /For every other language, omit `meta\.locale`/);
-  assert.match(defaults, /fixed Viewer UI and `<html lang>` fall back to English/);
-  assert.match(defaults, /renderer never translates authored content/i);
-  assert.match(defaults, /product names.*code identifiers.*protocols.*API paths.*environment names/);
+  assert.match(defaults, /user's choice or the request\/conversation/);
+  assert.match(defaults, /English \(`en`\), Simplified Chinese \(`zh-CN`\), or Spanish \(`es`\)/);
+  assert.match(defaults, /otherwise omit it and disclose the fixed Viewer UI and `<html lang>` English fallback/);
+  assert.match(defaults, /exact product, code, protocol, command, API, and environment names/);
+  assert.match(defaults, /Language consistency\]\(authoring-contract\.md#language-consistency\)/);
   assert.match(authoringContract, /`meta\.locale` controls only renderer-owned reader surfaces/);
   assert.match(authoringContract, /outside `en`, `zh-CN`, and `es`/);
   assert.match(authoringContract, /artifact is\s+not fully localized/);
@@ -80,7 +78,8 @@ test('language behavior stays within the bounded locale contract', () => {
 });
 
 test('skill keeps the title hierarchy compact by default', () => {
-  assert.match(defaults, /Omit `meta\.subtitle` by default/);
-  assert.match(defaults, /Never invent a subtitle that restates the title, nodes, or cards/);
+  assert.match(defaults, /`meta\.subtitle` for a title-only header/);
+  assert.match(defaults, /Explicit styles and a subtitle require a user request/);
+  assert.match(authoringContract, /never use it to restate the title, nodes, edges,\s+or cards/);
   assert.match(authoringContract, /omitted or blank subtitle must not leave an empty visual row/);
 });
