@@ -22,6 +22,11 @@ test('research manifest validates and renders deterministically without promotin
     assert.equal(check.status, 0); assert.equal(JSON.parse(check.stdout).ok, true);
     for (const output of [one, two]) assert.equal(run(['research-manifest', 'render', input, output, '--json']).status, 0);
     assert.equal(fs.readFileSync(one, 'utf8'), fs.readFileSync(two, 'utf8'));
+    const rendered = fs.readFileSync(one, 'utf8');
+    for (const target of ['asset-asset', 'run-run', 'dataset-data', 'code-code']) {
+      assert.match(rendered, new RegExp(`href="#${target}"`));
+      assert.match(rendered, new RegExp(`id="${target}"`));
+    }
     assert.match(fs.readFileSync(one, 'utf8'), /data-status="observed"/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
