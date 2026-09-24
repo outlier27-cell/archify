@@ -2186,8 +2186,8 @@ function usage() {
   archify migrate workflow <old.json> <new.json> --to-schema 2 [--output portable.html] [--json] [--repo-root path]
   archify inspect <type> <input.json>
   archify check <output.html> [--json] [--require-provenance]
-  archify browser-check <output.html> [--json] [--require-provenance] [--out-dir <dir>]
-  archify visual-check <output.html> [--json] [--require-provenance] [--out-dir <dir>]
+  archify browser-check <output.html> [--json|--summary] [--require-provenance] [--out-dir <dir>]
+  archify visual-check <output.html> [--json|--summary] [--require-provenance] [--out-dir <dir>]
   archify guide [scenario or question] [--json] [--lang en|zh]
   archify brands [name, alias, domain, or category] [--json]
   archify brands capture <url> [--json]
@@ -4882,6 +4882,9 @@ async function commandDeliver(args) {
         ...(engineeringProfile ? { engineeringProfile } : {}),
         errors: result.composition.summary.errors,
         warnings: result.composition.summary.warnings,
+        ...(result.composition.summary.warnings ? {
+          compositionIssues: result.composition.issues.filter((issue) => issue.severity === 'warning'),
+        } : {}),
       },
       ...(sourceEvidence ? {
         evidence: {
@@ -5500,9 +5503,16 @@ async function executeBrowserEvidence({
 
 async function commandBrowserEvidence(rawArgs, { command, capture }) {
   const { rest: args, outDir: rawOutDir } = extractOutDirArgs(rawArgs);
-  const json = args.includes('--json');
+  const summary = args.includes('--summary');
+  const json = args.includes('--json') || summary;
+  const printJson = async (receipt) => {
+    const value = summary
+      ? (await import('./visual-check.mjs')).summarizeBrowserEvidence(receipt)
+      : receipt;
+    console.log(JSON.stringify(value, null, summary ? undefined : 2));
+  };
   const requireProvenance = args.includes('--require-provenance');
-  const knownOptions = new Set(['--json', '--require-provenance']);
+  const knownOptions = new Set(['--json', '--summary', '--require-provenance']);
   const unknown = args.filter((arg) => arg.startsWith('--') && !knownOptions.has(arg));
   if (unknown.length) fail(`Unknown ${command} option "${unknown[0]}".`, 1);
   const positional = args.filter((arg) => !knownOptions.has(arg));
@@ -5533,7 +5543,7 @@ async function commandBrowserEvidence(rawArgs, { command, capture }) {
         error: error.message,
         diagnostics: [outputDiagnostic],
       };
-      if (json) console.log(JSON.stringify(failure, null, 2));
+      if (json) await printJson(failure);
       else {
         console.error(formatDiagnostics(`automated browser evidence failed: ${failure.error}`, failure.diagnostics));
         console.error('perceptual visual review pending');
@@ -5545,7 +5555,7 @@ async function commandBrowserEvidence(rawArgs, { command, capture }) {
   const result = await executeBrowserEvidence({ artifactPath, outDir, requireProvenance, command, capture });
 
   if (result.inputFailure) {
-    if (json) console.log(JSON.stringify(result.receipt, null, 2));
+    if (json) await printJson(result.receipt);
     else {
       console.error(formatDiagnostics(`automated browser evidence failed: ${result.receipt.error}`, result.receipt.diagnostics));
       console.error(capture ? 'perceptual visual review pending' : 'perceptual visual review not requested');
@@ -5555,7 +5565,7 @@ async function commandBrowserEvidence(rawArgs, { command, capture }) {
   }
 
   if (json) {
-    console.log(JSON.stringify(result.receipt, null, 2));
+    await printJson(result.receipt);
   } else {
     const sidecarDirectory = outDir || path.dirname(result.receipt.artifact.path);
     console.log(`automated browser evidence ${result.receipt.status}: ${result.receipt.artifact.path}`);

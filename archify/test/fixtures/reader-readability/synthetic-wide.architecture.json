@@ -55,7 +55,7 @@
       "label": "Client caller",
       "sublabel": "external request",
       "pos": [
-        40,
+        10,
         270
       ],
       "size": [
@@ -167,7 +167,7 @@
       "label": "Work worker",
       "sublabel": "queued to complete",
       "pos": [
-        1115,
+        1195,
         370
       ],
       "size": [
@@ -181,7 +181,7 @@
       "label": "Result formatter",
       "sublabel": "text transform",
       "pos": [
-        1115,
+        1195,
         170
       ],
       "size": [

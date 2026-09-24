@@ -39,6 +39,7 @@
       var relationshipHitTargets = [];
       var directPreviewTimer = null;
       var lensDrag = null;
+      var lensDragClickPointer = null;
       var manualLensPosition = null;
       var reachabilityMode = null;
       var activeReachability = null;
@@ -1116,6 +1117,7 @@
         event.stopPropagation();
         var activeDrag = lensDrag;
         lensDrag = null;
+        if (activeDrag.moved) lensDragClickPointer = activeDrag.pointerId;
         chip.removeAttribute('data-panel-dragging');
         try { moveBtn.releasePointerCapture(event.pointerId); } catch (_) {}
         if (!cancel) return;
@@ -1529,7 +1531,20 @@
         event.preventDefault();
         buttons[index].focus();
       });
+      document.addEventListener('pointerdown', function () {
+        lensDragClickPointer = null;
+      }, true);
       document.addEventListener('click', function (event) {
+        // Losing capture (for example when a resize hides the handle) can
+        // retarget this drag's final click to the page. It is not dismissal.
+        // A new pointerdown releases the guard; keyboard clicks remain live.
+        if (lensDragClickPointer != null && event.detail > 0 &&
+            (event.pointerId == null || event.pointerId === lensDragClickPointer)) {
+          lensDragClickPointer = null;
+          event.preventDefault();
+          event.stopPropagation();
+          return;
+        }
         var target = event.target;
         if (chip.hidden || !target || typeof target.closest !== 'function' || chip.contains(target)) return;
         if (container.getAttribute('data-just-panned') === 'true') return;

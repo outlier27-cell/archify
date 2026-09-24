@@ -21,6 +21,7 @@ import {
   runBrowserCheck,
   browserCheckSidecarPaths,
   sidecarPaths,
+  summarizeBrowserEvidence,
 } from '../bin/visual-check.mjs';
 import { sameLocation } from '../renderers/shared/path-semantics.mjs';
 
@@ -28,6 +29,33 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(__dirname, '..');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-visual-check-'));
 const png = Buffer.from('89504e470d0a1a0a', 'hex');
+
+test('summary indexes every captured viewport/theme and preserves failed diagnostics', async () => {
+  const input = artifact('summary-captures.html');
+  const result = await runVisualCheck({ artifactPath: input, browserFactory: () => fakeBrowser() });
+  const receipt = result.receipt;
+  const summary = summarizeBrowserEvidence(receipt);
+  assert.equal(summary.visualReview, 'pending');
+  assert.equal(summary.evidence.screenshots.length, 4);
+  for (const capture of summary.evidence.screenshots) {
+    assert.ok(path.isAbsolute(capture.path));
+    assert.ok(fs.existsSync(capture.path));
+    assert.ok(['light', 'dark'].includes(capture.theme));
+  }
+  assert.deepEqual(summary.evidence.screenshots.map(({ width, height, theme }) => [width, height, theme]),
+    receipt.captures.screenshots.map(({ width, height, theme }) => [width, height, theme]));
+  assert.ok(fs.existsSync(summary.evidence.receipt));
+  assert.ok(fs.existsSync(summary.evidence.contactSheet));
+  assert.ok(JSON.stringify(summary).length < JSON.stringify(receipt).length / 2);
+  const diagnostic = { code: 'viewer/example', severity: 'error', evidence: { gap: 3 }, supportedFixes: ['reposition'] };
+  const failed = summarizeBrowserEvidence({ ...receipt, ok: false, status: 'fail', diagnostics: [diagnostic] });
+  assert.equal(failed.ok, false);
+  assert.equal(failed.status, 'fail');
+  assert.deepEqual(failed.diagnostics, [diagnostic]);
+  assert.equal(failed.evidence.receipt, undefined);
+  assert.equal(failed.evidence.contactSheet, undefined);
+  assert.deepEqual(failed.evidence.screenshots, [], 'unpublished capture metadata is not an evidence link');
+});
 
 function artifact(name = 'diagram.html') {
   const file = path.join(tmp, name);
@@ -52,6 +80,9 @@ function fakeBrowser({
   overflowAt,
   tallAt,
   readableScrollAt,
+  authoredScrollAt,
+  authoredDiagramType = 'architecture',
+  authoredUnclipped = true,
   unreadableAt,
   chromeCollisionAt,
   stageCollisionAt,
@@ -74,6 +105,7 @@ function fakeBrowser({
       const overflow = overflowAt?.({ width, height, theme }) || false;
       const tall = tallAt?.({ width, height, theme }) || false;
       const readableScroll = readableScrollAt?.({ width, height, theme }) || false;
+      const authoredScroll = authoredScrollAt?.({ width, height, theme }) || false;
       const unreadable = unreadableAt?.({ width, height, theme }) || false;
       const chromeCollision = chromeCollisionAt?.({ width, height, theme }) || false;
       const stageCollision = stageCollisionAt?.({ width, height, theme }) || false;
@@ -83,7 +115,7 @@ function fakeBrowser({
         innerWidth: width,
         innerHeight: height,
         scrollWidth: width + (overflow ? 1 : 0),
-        scrollHeight: height + (readableScroll ? 240 : 0) + (tall ? 300 : 0),
+        scrollHeight: height + (readableScroll || authoredScroll ? 240 : 0) + (tall ? 300 : 0),
         resolvedTheme: resolvedThemeAt?.({ width, height, theme }) ?? theme,
         ...(tall ? {
           pageComposition: {
@@ -93,7 +125,9 @@ function fakeBrowser({
         } : {}),
         readerLayout: readableScroll ? 'adaptive' : null,
         readerOverflow: readableScroll ? 'authored' : null,
-        readerFit: readableScroll ? 'intrinsic-height' : null,
+        readerFit: readableScroll ? 'intrinsic-height' : authoredScroll ? 'authored-height' : null,
+        diagramType: authoredScroll ? authoredDiagramType : null,
+        documentScrollUnclipped: authoredScroll && authoredUnclipped,
         readerWidth: 960,
         diagramWidth: 930,
         viewBoxWidth: 1300,
@@ -2203,6 +2237,12 @@ for (const scenario of [
       scenario.fault === 'unlink' ? oldContactSheet : claimantBytes,
     );
     assert.equal(JSON.parse(fs.readFileSync(outputs.receipt, 'utf8')).status, 'pass');
+    const summary = summarizeBrowserEvidence(result.receipt);
+    assert.equal(summary.status, 'fail', 'cleanup failure stays visible after evidence was committed');
+    assert.equal(fs.realpathSync.native(summary.evidence.receipt), fs.realpathSync.native(outputs.receipt));
+    assert.deepEqual(summary.publication, result.receipt.publication);
+    assert.equal(summary.publication.recoveryDirectory, expectedRecovery);
+    assert.deepEqual(summary.diagnostics, result.receipt.diagnostics);
     assert.equal(fs.existsSync(outputs.contactSheet), true);
     assert.equal(outputs.screenshots.every((entry) => fs.existsSync(entry.path)), true);
   });
@@ -3127,3 +3167,27 @@ for (const [command, run] of [['browser-check', runBrowserCheck], ['visual-check
     });
   }
 }
+
+
+test('authored Architecture scroll requires readable unclipped document flow and preserves other modes', async () => {
+  const input = artifact('authored-scroll.html');
+  const target = ({ width, theme }) => width === 1440 && theme === 'light';
+  for (const [name, options, accepted] of [
+    ['readable document', {}, true],
+    ['other diagram mode', { authoredDiagramType: 'workflow' }, false],
+    ['missing mode', { authoredDiagramType: null }, false],
+    ['clipped or internally scrolled SVG', { authoredUnclipped: false }, false],
+    ['unreadable text', { unreadableAt: target }, false],
+    ['horizontal overflow', { overflowAt: target }, false],
+  ]) {
+    const result = await runVisualCheck({
+      artifactPath: input, outDir: path.join(tmp, `authored-${name.replace(/[^a-z]/g, '-')}`),
+      chromePath: '/fake/chrome',
+      browserFactory: async () => fakeBrowser({ authoredScrollAt: target, ...options }),
+    });
+    const viewport = result.receipt.containment.viewports.find(({ width }) => width === 1440);
+    assert.equal(result.exitCode, accepted ? 0 : 1, name);
+    assert.equal(viewport.verticalScrollAccepted, accepted, name);
+    assert.equal(viewport.readerLayout, null, 'the fixed canvas does not acquire adaptive scaling');
+  }
+});

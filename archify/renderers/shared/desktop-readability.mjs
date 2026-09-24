@@ -97,6 +97,7 @@ export function predictedFixedWidthOverflow({
   viewBoxWidth,
   viewBoxHeight,
   readerFit,
+  diagramType,
   hasGuidedViews = false,
   viewport = DESKTOP_READABILITY_VIEWPORT,
   bodyHorizontalPx = DECLARED_WIDE_REFERENCE_BODY_HORIZONTAL_PX,
@@ -105,7 +106,9 @@ export function predictedFixedWidthOverflow({
 } = {}) {
   if (![viewBoxWidth, viewBoxHeight].every(Number.isFinite) || viewBoxWidth <= 0 || viewBoxHeight <= 0) return null;
   const ratio = viewBoxWidth / viewBoxHeight;
-  if (readerFit === 'intrinsic-height' || ratio >= DECLARED_WIDE_READER_RATIO) return null;
+  if (readerFit === 'intrinsic-height'
+      || (readerFit === 'authored-height' && diagramType === 'architecture')
+      || ratio >= DECLARED_WIDE_READER_RATIO) return null;
   const svgWidthPx = viewport.width - bodyHorizontalPx - diagramHorizontalPx;
   const svgHeightPx = Math.round(svgWidthPx * viewBoxHeight / viewBoxWidth);
   const fixedChromePx = chrome.body + chrome.header + chrome.diagram + (hasGuidedViews ? chrome.guidedViews : 0);

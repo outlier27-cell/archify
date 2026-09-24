@@ -2,6 +2,16 @@
 
 Read this reference only after the Fast authoring path calls for more detail. The schemas and examples remain authoritative.
 
+## Composition repair
+
+When correcting an authored overview's abstraction, map every affected role, relationship direction, protocol, boundary, condition, and source reference to its surviving node or relationship before regrouping. A startup citation does not prove a message protocol. Preserve each claim's inspected evidence. Keep user-supplied or agreed topology fixed; fewer routes alone do not justify merging. A boundary around one node requires an explicit isolation fact and must not merely repeat its label.
+
+## Label repair
+
+When a relationship label collides, move the label, adjust the route or spacing, then shorten the wording while preserving meaning. Omit wording only when both endpoints fully imply it and it conveys no protocol, action, direction, synchronous or asynchronous behavior, or cross-boundary mechanism. Spacing means clear gap rather than center distance; measured mask width takes precedence. The first-draft gap budget is in [Layout and routing](authoring-defaults.md#layout-and-routing).
+
+For a disproportionate sublabel, keep its exact role or protocol concise and place the supplementary fact in a note or card. Preserve every required responsibility, protocol, and boundary fact. Use the first-draft node-width budget in [Layout and routing](authoring-defaults.md#layout-and-routing).
+
 ## Schema lookup
 
 Read both the mode schema and `schemas/common.schema.json`. The mode schemas use `$ref`, so the common file is where shared enums live.
@@ -21,6 +31,10 @@ edge labels are never deleted as a spacing repair. Do not change only
 [migration and layout-receipt contract](../renderers/workflow/README.md#migration-and-layout-receipt).
 The complete normative invariants live in the workflow renderer's
 [layout contracts](../renderers/workflow/README.md#layout-contracts).
+For sequential stages stacked in one container, use one v2 lane and group,
+omit `meta.viewBox`, and center nodes around the lane content with symmetric
+`yOffset` values such as `-90 / 0 / 90`. Keep semantic edge labels and act on
+compiler diagnostics.
 
 ## Legend contract
 
@@ -103,7 +117,9 @@ in the generated viewer.
 
 ## Executable geometry rules
 
-- Node anchors start at side midpoints. `left`/`right` change the horizontal endpoint; `top`/`bottom` change the vertical endpoint. For an automatic Architecture relationship, unobstructed facing ports whose axis offset is under 16px may share one horizontal or vertical axis when both endpoints retain the 16px corner gutter. If exactly one endpoint belongs to a spread group, only its unshared counterpart moves; relationships spread at both endpoints keep their distinct ports and outside bridge.
+Generate one responsive artifact for laptops and external displays, preserving the authored SVG/viewBox, proportions, semantic geometry, and normal document flow. Use meaningful content rows and the Reader-declared readable page-scroll behavior when the complete diagram needs more height; viewport fitting does not authorize alternate topology or smaller typography.
+
+- Node anchors start at side midpoints. `left`/`right` change the horizontal endpoint; `top`/`bottom` change the vertical endpoint. For an automatic Architecture relationship, unobstructed facing ports whose axis offset is under 16px may share one horizontal or vertical axis when both endpoints retain the 16px corner gutter. If exactly one endpoint belongs to a spread group, only its unshared counterpart moves; relationships spread at both endpoints keep their distinct ports and outside bridge unless a reciprocal facing pair can jointly use separate straight lanes while preserving endpoint spacing, labels, and all surrounding route and obstacle clearances.
 - A side is a direction contract. The first and final route segment must be perpendicular and outward/inward in the named direction.
 - In architecture, data-flow, and lifecycle diagrams, explicit `route: "straight"` requests one direct segment, which may be diagonal when endpoint sides are not pinned. The artifact checker preserves this intent; explicit sides, opaque-node clearance, and other quality gates still apply. `via` takes precedence and retains existing rules, including data-flow's requirement for orthogonal via segments.
 - Automatic Port Spread is a default renderer behavior for architecture, workflow, data-flow, and lifecycle diagrams. Shared automatic endpoints spread deterministically and symmetrically with a 16px corner gutter. It does not apply to sequence messages, single relationships, or explicit `via`, `channelX`, `channelY`, `labelAt`, or non-`auto` routes.
@@ -232,7 +248,7 @@ Run `validate` after every edit. Consume `diagnostics[]` by stable `code`, exact
 
 ### Architecture
 
-Use one obvious primary reading path, which may step across meaningful rows when the source-driven topology needs room. Include every component required to explain the requested responsibilities and boundaries; omit only genuinely irrelevant detail. Group only real ownership, trust, process, or deployment boundaries. Boundaries do not replace relationships.
+Choose overview or mechanism detail using [Composition and meaning](authoring-defaults.md#composition-and-meaning). Use one obvious primary reading path, which may step across meaningful rows when the requested topology needs room. Keep the overview readable at its chosen abstraction; expand implementation details when they answer the reader's question. Group only real ownership, trust, process, or deployment boundaries. Boundaries do not replace relationships.
 
 Grid placement is preferred when the schema supports it. Free positions are appropriate for a bounded exception, not for prose-level coordinate planning. Keep external actors outside the system boundary when that is factually true.
 
@@ -279,6 +295,8 @@ Main phases use columns `0..4`; event and terminal bands use columns `0..2`.
 Event/terminal column `N` aligns to the same x coordinate as main column
 `N + 2`. A recoverable failure needs a real transition back to an active state.
 A card or guided view saying “retry” is not topology.
+Every lane other than `main` and `terminal` shares one middle band; states in
+the same column there need distinct `yOffset` values.
 
 ## Repository evidence
 
