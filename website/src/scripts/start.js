@@ -4,7 +4,7 @@
 
       var DATA = JSON.parse(document.getElementById('start-data').textContent);
       var KNOWN_TYPES = new Set(['architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle']);
-      var KNOWN_AGENTS = new Set(['cursor', 'codex', 'claude-code', 'opencode']);
+      var KNOWN_AGENTS = new Set(['cursor', 'codex', 'claude-code', 'opencode', 'github-copilot']);
       var KNOWN_INPUTS = new Set(['description', 'repository']);
       var KNOWN_SOURCES = new Set(['artifact', 'gallery', 'readme', 'direct']);
       var EVENT_KEY = 'archify.start.events.v1';

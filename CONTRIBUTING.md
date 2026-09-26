@@ -14,13 +14,13 @@ Do not include secrets, access tokens, credentials, private repository content, 
 
 ## Prepare a reviewable change
 
-Start from the latest `main`. Check whether its existing controls already solve the reported case. Record the comparison base and candidate head.
+Start from the latest `dev` and target `dev` for fixes and features. Check whether its existing controls already solve the reported case. Record the comparison base and candidate head.
 
 Use Draft for unresolved scope or early implementation feedback. At this stage, provide the smallest reproduction and relevant checks. Prepare broad integration evidence and generated artifacts once the approach is settled.
 
 Before requesting final review, explain:
 
-- The current-main trigger, intended outcome, and why the benefit justifies the implementation and ongoing maintenance cost.
+- The current-base trigger, intended outcome, and why the benefit justifies the implementation and ongoing maintenance cost.
 - The changed behavior and shared callers, existing behavior that must remain stable, and any intended compatibility changes.
 - The applicable checks, actual results, and reproducible evidence links.
 
@@ -79,6 +79,19 @@ ARCHIFY_CHROME="/path/to/chrome" node --test test/desktop-reader-browser.test.mj
 
 A browser test skipped because Chrome was unavailable is **skipped**, not passed. Follow [the delivery contract](archify/references/delivery-contract.md) for visual evidence, receipts, and failure stages. Successful validation, atomic delivery, browser checks, and perceptual review establish different claims.
 
+PR CI and tag releases run the same browser regression gate:
+
+```sh
+cd archify
+ARCHIFY_CHROME="/path/to/chrome" npm run test:browser
+```
+
+This command requires a usable Chrome/Chromium and fails when none is available.
+Its maintained file list is in `scripts/run-browser-tests.mjs`; add new browser
+suites there so both workflows keep the same coverage. Ordinary `npm test`
+retains optional browser skips. Real WebM decoding and site-language integration
+remain in the separate `npm run test:webm` gate used by both workflows.
+
 ## Packages and generated artifacts
 
 Viewer maintenance starts in [`viewer/`](viewer/README.md). Edit its source
@@ -105,7 +118,9 @@ Treat published versions as immutable. Ordinary feature PRs do not change versio
 
 ## Final integration and follow-up
 
-Refresh `main` and the PR head before final integration; account for relevant base changes and resolve conflicts. Rerun local checks whose evidence was invalidated. Unchanged evidence may be linked with its original revision and reuse rationale; do not relabel it as a new-head run. Verify that required remote CI actually ran on the final head and obey branch protection; zero checks is not green.
+`dev` is the integration and trial-use branch; `main` is the stable branch. Integrate reviewed changes into `dev` first. Promote a tested batch from `dev` to `main` through a separate PR after maintainers have used it on real diagram tasks and confirmed stability. Record the tested revision, usage evidence, and unresolved issues in that PR; passing CI alone does not establish trial-use acceptance. Keep Pages deployment on `main` and formal releases on version tags.
+
+Refresh the target base branch and the PR head before final integration; account for relevant base changes and resolve conflicts. Rerun local checks whose evidence was invalidated. Unchanged evidence may be linked with its original revision and reuse rationale; do not relabel it as a new-head run. Verify that required remote CI actually ran on the final head and obey branch protection; zero checks is not green.
 
 On revision, summarize what changed since the reviewed head and which findings it addresses. This lets reviewers focus on the new diff and outstanding decisions.
 

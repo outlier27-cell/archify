@@ -78,11 +78,15 @@ function versionLabels(source) {
     .map((match) => match[1]);
 }
 
+const readmeMarkers = {
+  en: { development: 'Current development version:', stable: 'Current stable version:' },
+  zh: { development: '当前开发版本：', stable: '当前稳定版本：' },
+  ja: { development: '現在の開発版:', stable: '現在の安定版:' },
+};
+
 function checkReadme(relativePath, source, version, language, isDevelopment) {
   const badge = `/badge/version-${shieldEscape(version)}-`;
-  const markerLabel = language === 'zh'
-    ? isDevelopment ? '当前开发版本：' : '当前稳定版本：'
-    : isDevelopment ? 'Current development version:' : 'Current stable version:';
+  const markerLabel = readmeMarkers[language][isDevelopment ? 'development' : 'stable'];
   const identity = isDevelopment ? 'development' : 'stable';
   const hasMarker = source.split('\n').some((line) => line.includes(markerLabel) && line.includes(`\`v${version}\``));
   if (!source.includes(badge) || !hasMarker) {
@@ -211,10 +215,12 @@ if (hasSupportedVersion) {
   const english = read('README.md');
   const englishMirror = read('README_EN.md');
   const chinese = read('README_ZH.md');
+  const japanese = read('README_JA.md');
   checkReadme('README.md', english, version, 'en', isDevelopment);
   checkReadme('README_EN.md', englishMirror, version, 'en', isDevelopment);
   checkReadme('README_ZH.md', chinese, version, 'zh', isDevelopment);
-  for (const [path, content] of [['README.md', english], ['README_EN.md', englishMirror], ['README_ZH.md', chinese]]) {
+  checkReadme('README_JA.md', japanese, version, 'ja', isDevelopment);
+  for (const [path, content] of [['README.md', english], ['README_EN.md', englishMirror], ['README_ZH.md', chinese], ['README_JA.md', japanese]]) {
     checkNoRavenSwitcher(path, content);
   }
   if (english !== englishMirror) fail('README_EN.md must remain byte-identical to README.md.');

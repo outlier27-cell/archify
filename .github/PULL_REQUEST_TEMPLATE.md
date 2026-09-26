@@ -2,7 +2,7 @@
 
 ## Problem and value
 
-Current-main trigger or rationale, intended outcome, why the approach is worth maintaining, and linked issue/agreed scope:
+Current-base trigger or rationale, intended outcome, why the approach is worth maintaining, and linked issue/agreed scope:
 
 ## Stability impact
 

@@ -4,7 +4,7 @@ Use this guide for initial and revised PR reviews. Judge the user value, impleme
 
 ## Understand the problem and approach
 
-Record the current main/base and candidate head. Read the linked issue or agreed scope and check the current-main behavior where feasible. Separate the reported problem from the proposed implementation.
+Record the current target base and candidate head. Read the linked issue or agreed scope and check the current-base behavior where feasible. Separate the reported problem from the proposed implementation.
 
 Identify who benefits and whether the approach is worth maintaining. Consider whether existing capabilities or a smaller change would solve the problem. For a new default, schema field, or acceptance policy, clarify the value and compatibility tradeoff early. Reuse decisions already made in the issue or authorized task.
 
@@ -40,6 +40,6 @@ Assess bot findings against the current diff and existing evidence before forwar
 
 ## Re-review and finish
 
-Compare against the last reviewed head, resolve outstanding findings, and inspect added changes. Check intervening main changes for effects on the earlier assessment. Expand review when those changes invalidate scope or evidence; do not treat an old pass as proof of new behavior.
+Compare against the last reviewed head, resolve outstanding findings, and inspect added changes. Check intervening base changes for effects on the earlier assessment. Expand review when those changes invalidate scope or evidence; do not treat an old pass as proof of new behavior.
 
 Finish when the agreed outcome is delivered, relevant evidence is sufficient, and no acceptance blockers remain. Report non-blocking limitations. A review conclusion does not itself authorize a GitHub approval or merge; follow the authorized action and [final integration requirements](CONTRIBUTING.md#final-integration-and-follow-up).

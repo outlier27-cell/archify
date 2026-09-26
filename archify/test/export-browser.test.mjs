@@ -241,6 +241,72 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
     assert.equal(sync,true);assert.deepEqual((await record('svg-sync-throw')).receipt,{});
   });
 
+  await t.test('standalone SVG keeps intrinsic dimensions without changing Viewer or raster sizing', async () => {
+    const fixtures = [
+      ['architecture', 'web-app.architecture.json'],
+      ['workflow', 'agent-tool-call.workflow.json'],
+      ['sequence', 'cache-miss-request.sequence.json'],
+      ['dataflow', 'product-analytics.dataflow.json'],
+      ['lifecycle', 'agent-run.lifecycle.json'],
+    ];
+    try {
+      for (const [mode, fixture] of fixtures) {
+        execFileSync(process.execPath, [path.join(skillRoot, `renderers/${mode}/render-${mode}.mjs`), path.join(skillRoot, 'examples', fixture), file]);
+        for (const theme of ['dark', 'light']) {
+          await load({ theme });
+          const dimensions = await run(`(()=>{const v=document.querySelector('.diagram-container svg').viewBox.baseVal;return [v.width,v.height];})()`);
+          const viewerWidths = [];
+          for (const width of [640, 1440]) {
+            await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+            await run('Archify.readerLayout.whenStable()');
+            await run('Archify.viewerChromeLayout.whenStable()');
+            viewerWidths.push(await run(`document.querySelector('.diagram-container svg').getBoundingClientRect().width`));
+          }
+          assert.notEqual(viewerWidths[0], viewerWidths[1], `${mode}: Viewer remains responsive`);
+          const original = await run(`document.querySelector('.diagram-container svg').outerHTML`);
+          await run(`Archify.exportMenu.run('svg')`);
+          await run('exportWait(()=>exportDownloads.length===1)');
+          const svgText = await run('exportDownloads[0].blob.text()');
+          const svgFile = path.join(evidence || scratch, `${mode}-${theme}.svg`);
+          fs.writeFileSync(svgFile, svgText);
+          const rasterSizes = [];
+          for (const format of ['png', 'jpeg', 'webp']) {
+            await run(`Archify.exportMenu.run('${format}')`);
+            const result = await run(`(async()=>{const blob=exportDownloads.at(-1).blob;const image=await createImageBitmap(blob);const dimensions=[image.width,image.height];image.close();return {dimensions,type:blob.type};})()`);
+            assert.deepEqual(result.dimensions, dimensions.map(n => n * 4), `${mode} ${theme} ${format}: native 4x raster`);
+            assert.equal(result.type, 'image/' + format);
+            rasterSizes.push({ format, ...result });
+            if (evidence) {
+              const bytes = await run('(async()=>Array.from(new Uint8Array(await exportDownloads.at(-1).blob.arrayBuffer())))()');
+              fs.writeFileSync(path.join(evidence, `${mode}-${theme}.${format}`), Buffer.from(bytes));
+            }
+          }
+          assert.equal(await run(`document.querySelector('.diagram-container svg').outerHTML`), original, 'exports leave the live SVG unchanged');
+          await record(`${mode}-${theme}-sizing`);
+          for (const width of [640, 1440]) {
+            await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: false });
+            await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: theme }, { name: 'prefers-reduced-motion', value: 'reduce' }] });
+            const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
+            await send('Page.navigate', { url: pathToFileURL(svgFile).href });
+            await loaded;
+            await run('document.fonts.ready');
+            const actual = await run(`(()=>{const s=document.documentElement,r=s.getBoundingClientRect(),v=s.viewBox.baseVal;return {rendered:[r.width,r.height],attributes:[Number(s.getAttribute('width')),Number(s.getAttribute('height'))],viewBox:[v.width,v.height]};})()`);
+            records.push({ label: `${mode}-${theme}-direct-${width}`, ...actual, viewerWidths, rasterSizes });
+            if (evidence && mode === 'architecture') {
+              const shot = await send('Page.captureScreenshot', { format: 'png' });
+              fs.writeFileSync(path.join(evidence, `${mode}-${theme}-direct-${width}.png`), Buffer.from(shot.data, 'base64'));
+            }
+            assert.deepEqual(actual.attributes, dimensions);
+            assert.deepEqual(actual.viewBox, dimensions);
+            assert.deepEqual(actual.rendered, dimensions, `${mode} ${theme}: intrinsic size at ${width}px viewport`);
+          }
+        }
+      }
+    } finally {
+      execFileSync(process.execPath, [path.join(skillRoot, 'renderers/architecture/render-architecture.mjs'), input, file]);
+    }
+  });
+
   await t.test('SVG download declares UTF-8 and preserves CJK text', async () => {
     const originalInput = fs.readFileSync(input, 'utf8');
     try {

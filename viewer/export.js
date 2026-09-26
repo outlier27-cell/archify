@@ -249,6 +249,10 @@
         // canvas upscaling.
         clone.setAttribute('width', vb.width * scale);
         clone.setAttribute('height', vb.height * scale);
+        // Keep copied Viewer layout rules from overriding the export's size.
+        clone.style.width = vb.width * scale + 'px';
+        clone.style.height = vb.height * scale + 'px';
+        clone.style.minWidth = '0';
         clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
 
         // Only the SVG-relevant rules: semantic classes, markers, and the
@@ -360,15 +364,15 @@
         }
 
         if (opts.routeSnapshot) {
-          style.textContent += "\nsvg[data-share-route] [data-node-id], svg[data-share-route] [data-edge-from] { opacity: 0.18; }\n" +
-            "svg[data-share-route] [data-share-route-match] { opacity: 1; }\n" +
+          style.textContent += "\nsvg[data-share-route] [data-node-id], svg[data-share-route] [data-edge-from], svg[data-share-route] [data-graph-role=\"automatic-crossover-underlay\"] { opacity: 0.18; }\n" +
+            "svg[data-share-route] [data-share-route-match], svg[data-share-route] [data-graph-role=\"automatic-crossover\"]:has(> [data-share-route-match]) > [data-graph-role=\"automatic-crossover-underlay\"] { opacity: 1; }\n" +
             "svg[data-share-route] [data-share-route-start] > :is(rect, circle, polygon):not(.c-mask) { stroke-width: 3; stroke-dasharray: 5 3; }\n" +
             "svg[data-share-route] [data-share-route-middle] > :is(rect, circle, polygon):not(.c-mask) { stroke-width: 2.2; }\n" +
             "svg[data-share-route] [data-share-route-end] > :is(rect, circle, polygon):not(.c-mask) { stroke-width: 3.4; stroke-dasharray: 1 0; }\n";
         }
         if (opts.reachSnapshot) {
-          style.textContent += "\nsvg[data-share-reach] [data-node-id], svg[data-share-reach] [data-edge-from] { opacity: 0.14; }\n" +
-            "svg[data-share-reach] [data-share-reach-match] { opacity: 1; }\n" +
+          style.textContent += "\nsvg[data-share-reach] [data-node-id], svg[data-share-reach] [data-edge-from], svg[data-share-reach] [data-graph-role=\"automatic-crossover-underlay\"] { opacity: 0.14; }\n" +
+            "svg[data-share-reach] [data-share-reach-match], svg[data-share-reach] [data-graph-role=\"automatic-crossover\"]:has(> [data-share-reach-match]) > [data-graph-role=\"automatic-crossover-underlay\"] { opacity: 1; }\n" +
             "svg[data-share-reach] [data-edge-from][data-share-reach-match] { stroke-width: 1.55; }\n" +
             "svg[data-share-reach=\"upstream\"] [data-share-reach-origin] > :is(rect, circle, polygon):not(.c-mask) { stroke: var(--database-stroke); stroke-width: 3.4; stroke-dasharray: 5 3; }\n" +
             "svg[data-share-reach=\"downstream\"] [data-share-reach-origin] > :is(rect, circle, polygon):not(.c-mask) { stroke: var(--backend-stroke); stroke-width: 3.4; stroke-dasharray: 1 0; }\n" +

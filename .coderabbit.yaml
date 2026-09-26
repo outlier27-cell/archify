@@ -25,6 +25,7 @@ reviews:
   suggested_labels: false
   suggested_reviewers: false
   auto_review:
+    base_branches: ["^dev$"]
     enabled: true
     drafts: false
     auto_incremental_review: true
