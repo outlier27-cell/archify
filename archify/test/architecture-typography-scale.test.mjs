@@ -62,6 +62,8 @@ test('architecture typography scale preserves default bytes and synchronizes ren
 
     for (const [role, source, scaled] of [
       ['node', /data-node-label=""[^>]*font-size="([\d.]+)"[^>]*>Gateway<\//, /data-node-label=""[^>]*font-size="([\d.]+)"[^>]*>Gateway<\//],
+      ['sublabel', /data-detail="context"[^>]*font-size="([\d.]+)"[^>]*>request broker<\//, /data-detail="context"[^>]*font-size="([\d.]+)"[^>]*>request broker<\//],
+      ['tag', /data-detail="fine"[^>]*font-size="([\d.]+)"[^>]*>edge<\//, /data-detail="fine"[^>]*font-size="([\d.]+)"[^>]*>edge<\//],
       ['relation', /class="[^"]+" font-size="([\d.]+)" text-anchor="middle">writes records<\//, /class="[^"]+" font-size="([\d.]+)" text-anchor="middle">writes records<\//],
       ['boundary', /data-boundary-label=""[^>]*font-size="([\d.]+)"[^>]*>Application zone<\//, /data-boundary-label=""[^>]*font-size="([\d.]+)"[^>]*>Application zone<\//],
       ['legend', /class="t-primary" font-size="([\d.]+)" font-weight="650">Legend<\//, /class="t-primary" font-size="([\d.]+)" font-weight="650">Legend<\//],
@@ -70,7 +72,7 @@ test('architecture typography scale preserves default bytes and synchronizes ren
       const before = Number(defaultHtml.match(source)?.[1]);
       const after = Number(scaledHtml.match(scaled)?.[1]);
       assert.ok(Number.isFinite(before), `missing ${role} source font`);
-      const expected = role === 'node' ? Math.floor(before * 1.25 * 10) / 10 : before * 1.25;
+      const expected = ['node', 'sublabel', 'tag'].includes(role) ? Math.floor(before * 1.25 * 10) / 10 : before * 1.25;
       assert.equal(after, expected, `${role} font must use the same scale`);
     }
     const defaultMask = defaultHtml.match(/<rect x="[^"]+" y="[^"]+" width="([\d.]+)" height="([\d.]+)" rx="3" class="c-mask"\/>\s*<text[^>]*>writes records<\//);
