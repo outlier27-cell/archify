@@ -482,9 +482,17 @@ function validateArchitecture() {
     if (c.x < 0 || c.y < 0 || c.x + c.width > viewBox[0] || c.y + c.height > viewBox[1]) {
       problems.push(`Component "${c.id}" falls outside the viewBox ${viewBox[0]}x${viewBox[1]} — adjust pos/size or set a larger meta.viewBox.`);
     }
-    const estLabelW = textUnits(c.label) * typography(6.6);
-    if (estLabelW > c.width + 8) {
-      problems.push(`Label "${c.label}" (~${Math.round(estLabelW)}px) is wider than component "${c.id}" (${c.width}px) — shorten the label or widen size.`);
+    if (typographyScale === 1) {
+      const estLabelW = textUnits(c.label) * typography(6.6);
+      if (estLabelW > c.width + 8) {
+        problems.push(`Label "${c.label}" (~${Math.round(estLabelW)}px) is wider than component "${c.id}" (${c.width}px) — shorten the label or widen size.`);
+      }
+    } else {
+      const labelWidth = availableNodeTextWidth(brandLabelFitWidth(c, c.width));
+      const minimumW = minimumNodeTextWidth(c.label, typography(8));
+      if (minimumW > labelWidth) {
+        problems.push(`Label "${c.label}" needs ~${Math.ceil(minimumW)}px at the ${typography(8)}px legible minimum, but component "${c.id}" provides ${labelWidth}px — shorten the label or widen size.`);
+      }
     }
     const brandRailProblem = brandTopRailProblem(c, c.width, 8, 'Component');
     if (brandRailProblem) problems.push(brandRailProblem);
@@ -908,12 +916,16 @@ function renderComponent(c) {
   const accent = componentText[c.type] || 't-muted';
   const cx = c.cx;
   const hasSub = c.sublabel != null && c.sublabel !== '';
-  const labelY = hasSub ? c.y + c.height / 2 - 2 : c.y + c.height / 2 + 4;
+  const labelY = typographyScale === 1
+    ? (hasSub ? c.y + c.height / 2 - 2 : c.y + c.height / 2 + 4)
+    : (hasSub ? c.y + c.height / 2 - typography(2) : c.y + c.height / 2 + typography(4));
+  const subY = typographyScale === 1 ? c.y + c.height / 2 + 14 : labelY + typography(16);
+  const tagY = typographyScale === 1 ? c.y + c.height - 8 : c.y + c.height - typography(5);
   const sub = hasSub
-    ? `\n        <text data-detail="context" x="${cx}" y="${c.y + c.height / 2 + 14}" class="t-muted" font-size="${fittedNodeFontSize(c.sublabel, c.width, componentTextFit.sublabelPreferred, componentTextFit.sublabelMinimum)}" text-anchor="middle">${esc(c.sublabel)}</text>`
+    ? `\n        <text data-detail="context" x="${cx}" y="${subY}" class="t-muted" font-size="${fittedNodeFontSize(c.sublabel, c.width, componentTextFit.sublabelPreferred, componentTextFit.sublabelMinimum)}" text-anchor="middle">${esc(c.sublabel)}</text>`
     : '';
   const tag = c.tag
-    ? `\n        <text data-detail="fine" x="${cx}" y="${c.y + c.height - 8}" class="${accent}" font-size="${fittedNodeFontSize(c.tag, c.width, componentTextFit.tagPreferred, componentTextFit.tagMinimum)}" text-anchor="middle">${esc(c.tag)}</text>`
+    ? `\n        <text data-detail="fine" x="${cx}" y="${tagY}" class="${accent}" font-size="${fittedNodeFontSize(c.tag, c.width, componentTextFit.tagPreferred, componentTextFit.tagMinimum)}" text-anchor="middle">${esc(c.tag)}</text>`
     : '';
   const brand = renderBrandMark(c, { x: c.x + c.width - 22, y: c.y + 6 });
   const labelFontSize = fittedNodeFontSize(c.label, brandLabelFitWidth(c, c.width), typography(11), typography(8));

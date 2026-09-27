@@ -60,6 +60,11 @@ test('architecture typography scale preserves default bytes and synchronizes ren
     assert.equal(explicitHtml, defaultHtml, 'explicit default must preserve existing artifacts byte-for-byte');
     assert.equal(fs.readFileSync(scaledAgainOutput, 'utf8'), scaledHtml, 'scaled artifacts must remain deterministic');
 
+    const scaledTextY = (text) => Number(scaledHtml.match(new RegExp(`<text[^>]* y="([^"]+)"[^>]*>${text}<\\/text>`))?.[1]);
+    assert.equal(scaledTextY('Gateway'), 163.5, 'scaled primary label must retain a proportional upper baseline');
+    assert.equal(scaledTextY('request broker'), 183.5, 'scaled sublabel must gain proportional separation from its label');
+    assert.equal(scaledTextY('edge'), 195.75, 'scaled tag must retain bottom clearance for its larger font');
+
     for (const [role, source, scaled] of [
       ['node', /data-node-label=""[^>]*font-size="([\d.]+)"[^>]*>Gateway<\//, /data-node-label=""[^>]*font-size="([\d.]+)"[^>]*>Gateway<\//],
       ['sublabel', /data-detail="context"[^>]*font-size="([\d.]+)"[^>]*>request broker<\//, /data-detail="context"[^>]*font-size="([\d.]+)"[^>]*>request broker<\//],
@@ -93,6 +98,28 @@ test('architecture typography scale is schema-bounded', () => {
     const result = spawnSync(process.execPath, [cli, 'validate', 'architecture', input, '--json'], { cwd: root, encoding: 'utf8' });
     assert.equal(result.status, 1);
     assert.match(result.stdout, /typography_scale/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('architecture typography scale accepts labels that can shrink to the scaled legible minimum', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-typography-label-fit-'));
+  try {
+    const input = path.join(dir, 'label-fit.json');
+    const output = path.join(dir, 'label-fit.html');
+    const diagram = specimen(1.25);
+    diagram.components = [{
+      id: 'fitted', type: 'backend', label: 'abcdefghijklmnop',
+      pos: [80, 130], size: [120, 72],
+    }];
+    diagram.boundaries = [];
+    diagram.connections = [];
+    fs.writeFileSync(input, JSON.stringify(diagram));
+    const result = render(input, output);
+    assert.equal(result.status, 0, result.stderr);
+    const html = fs.readFileSync(output, 'utf8');
+    assert.match(html, /data-node-label=""[^>]*font-size="11\.6"[^>]*>abcdefghijklmnop<\//);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

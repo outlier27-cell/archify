@@ -55,7 +55,17 @@ test('architecture typography scale keeps real-browser text inside the SVG in or
               return { value: entry.textContent, left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height };
             }).filter((entry) => entry.width > 0 && entry.height > 0);
             const primary = [...svg.querySelectorAll('text[data-node-label]')].map((entry) => Number(entry.getAttribute('font-size')));
-            return { active: Archify.presentation.active(), bounds, text, primary, scrollWidth: document.documentElement.scrollWidth };
+            const components = [...svg.querySelectorAll('[data-node-id]')].map((node) => {
+              const shape = [...node.children].find((entry) => entry.tagName === 'rect' && !entry.classList.contains('c-mask'));
+              const box = shape.getBoundingClientRect();
+              const text = [...node.querySelectorAll(':scope > text[data-node-label], :scope > text[data-detail="context"], :scope > text[data-detail="fine"]')]
+                .map((entry) => {
+                  const rect = entry.getBoundingClientRect();
+                  return { value: entry.textContent, top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right };
+                });
+              return { id: node.getAttribute('data-node-id'), box: { top: box.top, bottom: box.bottom, left: box.left, right: box.right }, text };
+            });
+            return { active: Archify.presentation.active(), bounds, text, primary, components, scrollWidth: document.documentElement.scrollWidth };
           })()`,
         });
         assert.equal(result.exceptionDetails, undefined);
@@ -67,6 +77,18 @@ test('architecture typography scale keeps real-browser text inside the SVG in or
           assert.ok(text.left >= observed.bounds.left - 1 && text.right <= observed.bounds.right + 1
             && text.top >= observed.bounds.top - 1 && text.bottom <= observed.bounds.bottom + 1,
           `${label}: text escaped SVG: ${JSON.stringify(text)}`);
+        }
+        for (const component of observed.components) {
+          for (const text of component.text) {
+            assert.ok(text.left >= component.box.left - 1 && text.right <= component.box.right + 1
+              && text.top >= component.box.top - 1 && text.bottom <= component.box.bottom + 1,
+            `${label}: ${component.id} text escaped its node: ${JSON.stringify(text)}`);
+          }
+          const ordered = [...component.text].sort((left, right) => left.top - right.top);
+          for (let index = 1; index < ordered.length; index += 1) {
+            assert.ok(ordered[index - 1].bottom <= ordered[index].top + 1,
+              `${label}: ${component.id} text overlaps: ${JSON.stringify(ordered)}`);
+          }
         }
         assert.ok(observed.scrollWidth <= 1440, `${label}: horizontal document overflow`);
       }
