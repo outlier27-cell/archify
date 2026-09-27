@@ -78,8 +78,8 @@ test('architecture typography scale preserves default bytes and synchronizes ren
     const defaultMask = defaultHtml.match(/<rect x="[^"]+" y="[^"]+" width="([\d.]+)" height="([\d.]+)" rx="3" class="c-mask"\/>\s*<text[^>]*>writes records<\//);
     const scaledMask = scaledHtml.match(/<rect x="[^"]+" y="[^"]+" width="([\d.]+)" height="([\d.]+)" rx="3" class="c-mask"\/>\s*<text[^>]*>writes records<\//);
     assert.ok(defaultMask && scaledMask, 'relation label masks must be emitted');
-    assert.ok(Number(scaledMask[1]) > Number(defaultMask[1]), 'relation mask width must grow with text');
-    assert.ok(Number(scaledMask[2]) > Number(defaultMask[2]), 'relation mask height must grow with text');
+    assert.equal(Number(scaledMask[1]), (Number(defaultMask[1]) - 10) * 1.25 + 10, 'relation mask width must use the typography scale');
+    assert.equal(Number(scaledMask[2]), Math.ceil(8 * 1.25 + 6), 'relation mask height must use the scaled label font');
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

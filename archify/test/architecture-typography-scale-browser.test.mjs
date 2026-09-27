@@ -55,12 +55,13 @@ test('architecture typography scale keeps real-browser text inside the SVG in or
               return { value: entry.textContent, left: box.left, top: box.top, right: box.right, bottom: box.bottom, width: box.width, height: box.height };
             }).filter((entry) => entry.width > 0 && entry.height > 0);
             const primary = [...svg.querySelectorAll('text[data-node-label]')].map((entry) => Number(entry.getAttribute('font-size')));
-            return { bounds, text, primary, scrollWidth: document.documentElement.scrollWidth };
+            return { active: Archify.presentation.active(), bounds, text, primary, scrollWidth: document.documentElement.scrollWidth };
           })()`,
         });
         assert.equal(result.exceptionDetails, undefined);
         const observed = result.result.value;
         const label = `${presentation ? 'present' : 'ordinary'}/${theme}`;
+        assert.equal(observed.active, presentation, `${label}: presentation mode state mismatch`);
         assert.ok(Math.min(...observed.primary) >= 13.7, `${label}: primary label was not scaled`);
         for (const text of observed.text) {
           assert.ok(text.left >= observed.bounds.left - 1 && text.right <= observed.bounds.right + 1
