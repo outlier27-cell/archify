@@ -57,13 +57,17 @@ const componentTextFit = {
   tagMinimum: typography(6),
 };
 const connectionLabelFontSize = typography(8);
+const legendRenderedFontSize = typography(10);
 const legendLayout = {
-  fontSize: typography(8),
+  // The default layout keeps its historical 8px measurement. Once typography
+  // is scaled, measure at the emitted text size so auto viewBox sizing cannot
+  // accept an entry that the final SVG overruns.
+  fontSize: typographyScale === 1 ? typography(8) : legendRenderedFontSize,
   itemGap: typography(22),
   lineGap: typography(22),
   swatchGap: typography(8),
   titleFontSize: typography(12),
-  renderedFontSize: typography(10),
+  renderedFontSize: legendRenderedFontSize,
 };
 
 const grid = gridLayout(arch);

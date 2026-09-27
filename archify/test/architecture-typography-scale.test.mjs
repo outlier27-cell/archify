@@ -95,3 +95,27 @@ test('architecture typography scale is schema-bounded', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('architecture typography scale measures long legend entries at their rendered size', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-typography-legend-'));
+  try {
+    const input = path.join(dir, 'legend.json');
+    const output = path.join(dir, 'legend.html');
+    const diagram = specimen(1.25);
+    diagram.meta.legend = {
+      mode: 'all',
+      entries: { backend: { label: 'Backend service with a deliberately long legend label' } },
+    };
+    fs.writeFileSync(input, JSON.stringify(diagram));
+    const result = render(input, output);
+    assert.equal(result.status, 0, result.stderr);
+    const html = fs.readFileSync(output, 'utf8');
+    const viewBox = html.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+    const entry = html.match(/data-legend-semantic-kind="backend"[^>]*data-legend-x="([\d.]+)"[^>]*data-legend-baseline="[^"]+"[^>]*data-legend-width="([\d.]+)"/);
+    assert.ok(viewBox && entry, 'scaled legend must expose its measured geometry');
+    assert.ok(Number(entry[1]) + Number(entry[2]) <= Number(viewBox[1]) - 40, 'auto viewBox must contain the rendered legend entry');
+    assert.match(html, /class="t-muted" font-size="12\.5" font-weight="500">Backend service with a deliberately long legend label<\//);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
