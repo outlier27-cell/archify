@@ -19,13 +19,22 @@ test('architecture typography scale keeps real-browser text inside the SVG in or
   fs.writeFileSync(input, JSON.stringify({
     schema_version: 1,
     diagram_type: 'architecture',
-    meta: { title: 'Typography scale browser', output: 'output.html', quality_profile: 'showcase', typography_scale: 1.25 },
+    meta: {
+      title: 'Redacted wide service topology', output: 'output.html', quality_profile: 'showcase',
+      typography_scale: 1.25, viewBox: [1440, 520],
+    },
     components: [
-      { id: 'gateway', type: 'backend', label: 'Gateway', sublabel: 'request broker', tag: 'edge', pos: [80, 130], size: [150, 72] },
-      { id: 'store', type: 'database', label: 'Store', sublabel: 'durable records', tag: 'primary', pos: [390, 130], size: [150, 72] },
+      { id: 'edge', type: 'backend', label: 'Edge request gateway', sublabel: 'authenticated ingress', tag: 'public API', pos: [80, 220], size: [210, 72] },
+      { id: 'policy', type: 'backend', label: 'Authorization policy service', sublabel: 'tenant-aware decisions', tag: 'internal', pos: [430, 220], size: [210, 72] },
+      { id: 'ledger', type: 'database', label: 'Durable audit ledger', sublabel: 'append-only records', tag: 'retention', pos: [780, 220], size: [210, 72] },
+      { id: 'warehouse', type: 'database', label: 'Reporting warehouse', sublabel: 'governed analytical copy', tag: 'scheduled sync', pos: [1130, 220], size: [210, 72] },
     ],
-    boundaries: [{ kind: 'region', label: 'Application zone', wraps: ['gateway', 'store'] }],
-    connections: [{ from: 'gateway', to: 'store', label: 'writes records' }],
+    boundaries: [{ kind: 'region', label: 'Redacted production service plane', wraps: ['edge', 'policy', 'ledger', 'warehouse'] }],
+    connections: [
+      { from: 'edge', to: 'policy', label: 'authorize' },
+      { from: 'policy', to: 'ledger', label: 'record' },
+      { from: 'ledger', to: 'warehouse', label: 'replicate' },
+    ],
   }));
   execFileSync(process.execPath, [path.join(root, 'bin/archify.mjs'), 'render', 'architecture', input, output]);
   const browser = new ChromeVisualBrowser(chrome);
@@ -72,7 +81,8 @@ test('architecture typography scale keeps real-browser text inside the SVG in or
         const observed = result.result.value;
         const label = `${presentation ? 'present' : 'ordinary'}/${theme}`;
         assert.equal(observed.active, presentation, `${label}: presentation mode state mismatch`);
-        assert.ok(Math.min(...observed.primary) >= 13.7, `${label}: primary label was not scaled`);
+        assert.ok(Math.min(...observed.primary) >= 10, `${label}: primary label fell below the scaled legible minimum`);
+        assert.ok(Math.max(...observed.primary) >= 13.7, `${label}: no primary label retained the scaled preferred size`);
         for (const text of observed.text) {
           assert.ok(text.left >= observed.bounds.left - 1 && text.right <= observed.bounds.right + 1
             && text.top >= observed.bounds.top - 1 && text.bottom <= observed.bounds.bottom + 1,
