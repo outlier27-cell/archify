@@ -245,7 +245,9 @@ test('legacy v1 explicit narrow viewBoxes never hard-fail on an implicit auto le
     assert.equal((svg.match(/data-node-id=/g) || []).length, expectedNodeCounts[mode], `${mode}: topology must remain intact`);
     if (mode === 'lifecycle') {
       assert.match(svg, />Legend</, 'a fitting implicit legend should remain visible');
-      assert.equal((svg.match(/data-legend-semantic-kind=/g) || []).length, 8);
+      // 8 state kinds plus the non-interactive `final` structural entry
+      // (the col-1 states have no outgoing transitions).
+      assert.equal((svg.match(/data-legend-semantic-kind=/g) || []).length, 9);
     } else {
       assert.doesNotMatch(svg, />Legend</, `${mode}: an unfit implicit legend should degrade without overlap`);
     }

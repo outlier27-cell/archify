@@ -64,12 +64,13 @@ test('update awareness is notification-only and never replaces the requested wor
 test('language behavior stays within the bounded locale contract', () => {
   assert.match(defaults, /one primary authored language/);
   assert.match(defaults, /user's choice or the request\/conversation/);
-  assert.match(defaults, /English \(`en`\), Simplified Chinese \(`zh-CN`\), or Spanish \(`es`\)/);
-  assert.match(defaults, /otherwise omit it and disclose the fixed Viewer UI and `<html lang>` English fallback/);
+  assert.match(defaults, /English \(`en`\) or Simplified Chinese \(`zh-CN`\)/);
+  assert.match(defaults, /meta\.translations/);
   assert.match(defaults, /exact product, code, protocol, command, API, and environment names/);
   assert.match(defaults, /Language consistency\]\(authoring-contract\.md#language-consistency\)/);
   assert.match(authoringContract, /`meta\.locale` controls only renderer-owned reader surfaces/);
-  assert.match(authoringContract, /outside `en`, `zh-CN`, and `es`/);
+  assert.match(authoringContract, /every other `meta\.locale`, also set `meta\.translations`/);
+  assert.match(authoringContract, /Reuse suitable translations/);
   assert.match(authoringContract, /artifact is\s+not fully localized/);
   assert.match(authoringContract, /Do not silently substitute\s+`zh-CN` for another language or Chinese locale/);
   assert.match(authoringContract, /It never translates authored content/);

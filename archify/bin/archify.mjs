@@ -4736,6 +4736,7 @@ async function commandDeliver(args) {
       });
       return;
     }
+    if (render.stderr) process.stderr.write(render.stderr);
     try {
       const renderedCandidate = fs.readFileSync(candidatePath);
       if (preparedDeliveryTargets.artifact.mode !== null) {
@@ -6774,6 +6775,7 @@ async function commandValidate(args) {
       });
       exitCode = render.status ?? 1;
     } else {
+      if (render.stderr) process.stderr.write(render.stderr);
       const check = runNode([path.join(skillRoot, 'scripts/check-render-output.mjs'), out], { stdio: 'pipe' });
       if (check.status !== 0) {
         let checker;

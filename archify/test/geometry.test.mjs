@@ -171,6 +171,14 @@ test('label-route clearance locks tangent, sub-threshold, boundary, and reversed
   }
 });
 
+test('near-zero segments preserve the existing label clearance threshold', () => {
+  const q = 100 - 3.999899999 / Math.sqrt(2);
+  const segment = { start: [q - 0.0001, q + 0.0001], end: [q + 0.0001, q - 0.0001] };
+  const box = rect(100, 100, 20, 20);
+  assert.ok(segmentRectClearance(segment, box) + 0.0001 >= 4);
+  assert.ok(segmentRectClearance({ start: segment.end, end: segment.start }, box) + 0.0001 >= 4);
+});
+
 test('collectLabelRouteClearance exempts only the owning relationship at an exact threshold', () => {
   const owner = { id: 'owner', from: 'a', to: 'b' };
   const sharedSource = { id: 'other', from: 'a', to: 'c' };
@@ -1186,7 +1194,7 @@ test('applyTemplate preserves dollar sequences in titles', () => {
 <title>[PROJECT NAME] Architecture Diagram</title>
 <h1>[PROJECT NAME] Architecture</h1>
 <p class="subtitle">[Subtitle description]</p>
-<!-- ARCHIFY:GUIDED_VIEWS_DATA -->
+    <!-- ARCHIFY:I18N_DATA -->
       <!-- ARCHIFY:SVG_SLOT_START --><svg></svg>      <!-- ARCHIFY:SVG_SLOT_END -->
     <!-- ARCHIFY:CARDS_SLOT_START --><div></div>    <!-- ARCHIFY:CARDS_SLOT_END -->`;
   const html = applyTemplate(template, {
@@ -1204,7 +1212,7 @@ test('applyTemplate omits the subtitle row when no subtitle is authored', () => 
 <title>[PROJECT NAME] Architecture Diagram</title>
 <h1>[PROJECT NAME] Architecture</h1>
 <p class="subtitle">[Subtitle description]</p>
-<!-- ARCHIFY:GUIDED_VIEWS_DATA -->
+    <!-- ARCHIFY:I18N_DATA -->
       <!-- ARCHIFY:SVG_SLOT_START --><svg></svg>      <!-- ARCHIFY:SVG_SLOT_END -->
     <!-- ARCHIFY:CARDS_SLOT_START --><div></div>    <!-- ARCHIFY:CARDS_SLOT_END -->`;
   const html = applyTemplate(template, {
@@ -1222,7 +1230,7 @@ test('applyTemplate requires the new evidence slot only when evidence is present
 <title>[PROJECT NAME] Architecture Diagram</title>
 <h1>[PROJECT NAME] Architecture</h1>
 <p class="subtitle">[Subtitle description]</p>
-<!-- ARCHIFY:GUIDED_VIEWS_DATA -->
+    <!-- ARCHIFY:I18N_DATA -->
       <!-- ARCHIFY:SVG_SLOT_START --><svg></svg>      <!-- ARCHIFY:SVG_SLOT_END -->
     <!-- ARCHIFY:CARDS_SLOT_START --><div></div>    <!-- ARCHIFY:CARDS_SLOT_END -->`;
   assert.doesNotThrow(() => applyTemplate(legacyTemplate, {
