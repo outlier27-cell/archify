@@ -125,6 +125,41 @@ test('architecture typography scale accepts labels that can shrink to the scaled
   }
 });
 
+test('architecture typography scale fits tag-only rows at their legible minimum and rejects shorter nodes', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-typography-tag-only-'));
+  try {
+    const fittingInput = path.join(dir, 'fitting.json');
+    const tooShortInput = path.join(dir, 'too-short.json');
+    const output = path.join(dir, 'fitting.html');
+    const diagram = specimen(1.25);
+    diagram.components = [{
+      id: 'tagged', type: 'backend', label: 'Core', tag: 'hot',
+      pos: [80, 130], size: [150, 41],
+    }];
+    diagram.boundaries = [];
+    diagram.connections = [];
+    fs.writeFileSync(fittingInput, JSON.stringify(diagram));
+    const fitting = render(fittingInput, output);
+    assert.equal(fitting.status, 0, fitting.stderr);
+    const html = fs.readFileSync(output, 'utf8');
+    const label = html.match(/data-node-label=""[^>]* y="([\d.]+)"[^>]*font-size="([\d.]+)"[^>]*>Core<\//);
+    const tag = html.match(/data-detail="fine"[^>]* y="([\d.]+)"[^>]*font-size="([\d.]+)"[^>]*>hot<\//);
+    assert.ok(label && tag, 'tag-only node must render both text rows');
+    assert.equal(Number(label[2]), 10, 'label must shrink to its scaled legible minimum');
+    assert.equal(Number(tag[2]), 7.5, 'tag must shrink to its scaled legible minimum');
+    assert.ok(Number(tag[1]) - Number(tag[2]) * 0.8 >= Number(label[1]) + Number(label[2]) * 0.2 + 3,
+      'tag-only rows must preserve vertical clearance');
+
+    diagram.components[0].size = [150, 40];
+    fs.writeFileSync(tooShortInput, JSON.stringify(diagram));
+    const tooShort = render(tooShortInput, path.join(dir, 'too-short.html'));
+    assert.equal(tooShort.status, 1);
+    assert.match(tooShort.stderr, /too short for its scaled label and tag at their legible minimums/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('architecture typography scale measures long legend entries at their rendered size', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-typography-legend-'));
   try {

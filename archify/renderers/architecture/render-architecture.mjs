@@ -200,11 +200,12 @@ function connectionLabelRects() {
 
 function componentTextRows(c) {
   const hasSub = c.sublabel != null && c.sublabel !== '';
-  const labelFontSize = fittedNodeFontSize(c.label, brandLabelFitWidth(c, c.width), typography(11), typography(8));
+  const labelMinimum = typography(8);
+  let labelFontSize = fittedNodeFontSize(c.label, brandLabelFitWidth(c, c.width), typography(11), labelMinimum);
   let subFontSize = hasSub
     ? fittedNodeFontSize(c.sublabel, c.width, componentTextFit.sublabelPreferred, componentTextFit.sublabelMinimum)
     : 0;
-  const tagFontSize = c.tag
+  let tagFontSize = c.tag
     ? fittedNodeFontSize(c.tag, c.width, componentTextFit.tagPreferred, componentTextFit.tagMinimum)
     : 0;
   const labelY = typographyScale === 1
@@ -213,7 +214,7 @@ function componentTextRows(c) {
 
   // The historical positions are part of the v1 rendering contract. Scaled
   // secondary rows are instead fitted to the actual component height.
-  if (typographyScale === 1 || !hasSub || !c.tag) {
+  if (typographyScale === 1 || !c.tag) {
     return {
       hasSub,
       labelFontSize,
@@ -222,6 +223,39 @@ function componentTextRows(c) {
       labelY,
       subY: typographyScale === 1 ? c.y + c.height / 2 + 14 : labelY + typography(16),
       tagY: typographyScale === 1 ? c.y + c.height - 8 : c.y + c.height - typography(5),
+    };
+  }
+
+  if (!hasSub) {
+    const rowClearance = 3;
+    const preferredTagY = c.y + c.height - typography(5);
+    const placement = (labelSize, tagSize) => ({
+      minTagY: labelY + labelSize * 0.2 + tagSize * 0.8 + rowClearance,
+      maxTagY: c.y + c.height - tagSize * 0.2 - rowClearance,
+    });
+    let tagPlacement = placement(labelFontSize, tagFontSize);
+    if (tagPlacement.minTagY > tagPlacement.maxTagY) {
+      labelFontSize = labelMinimum;
+      tagFontSize = componentTextFit.tagMinimum;
+      tagPlacement = placement(labelFontSize, tagFontSize);
+      if (tagPlacement.minTagY > tagPlacement.maxTagY) {
+        return {
+          hasSub,
+          labelFontSize,
+          subFontSize,
+          tagFontSize,
+          labelY,
+          problem: `Component \"${c.id}\" is too short for its scaled label and tag at their legible minimums — increase its height or remove the tag.`,
+        };
+      }
+    }
+    return {
+      hasSub,
+      labelFontSize,
+      subFontSize,
+      tagFontSize,
+      labelY,
+      tagY: Math.max(tagPlacement.minTagY, Math.min(preferredTagY, tagPlacement.maxTagY)),
     };
   }
 
