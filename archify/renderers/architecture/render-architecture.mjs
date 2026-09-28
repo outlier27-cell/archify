@@ -198,6 +198,71 @@ function connectionLabelRects() {
   return rects;
 }
 
+function componentTextRows(c) {
+  const hasSub = c.sublabel != null && c.sublabel !== '';
+  const labelFontSize = fittedNodeFontSize(c.label, brandLabelFitWidth(c, c.width), typography(11), typography(8));
+  let subFontSize = hasSub
+    ? fittedNodeFontSize(c.sublabel, c.width, componentTextFit.sublabelPreferred, componentTextFit.sublabelMinimum)
+    : 0;
+  const tagFontSize = c.tag
+    ? fittedNodeFontSize(c.tag, c.width, componentTextFit.tagPreferred, componentTextFit.tagMinimum)
+    : 0;
+  const labelY = typographyScale === 1
+    ? (hasSub ? c.y + c.height / 2 - 2 : c.y + c.height / 2 + 4)
+    : (hasSub ? c.y + c.height / 2 - typography(2) : c.y + c.height / 2 + typography(4));
+
+  // The historical positions are part of the v1 rendering contract. Scaled
+  // secondary rows are instead fitted to the actual component height.
+  if (typographyScale === 1 || !hasSub || !c.tag) {
+    return {
+      hasSub,
+      labelFontSize,
+      subFontSize,
+      tagFontSize,
+      labelY,
+      subY: typographyScale === 1 ? c.y + c.height / 2 + 14 : labelY + typography(16),
+      tagY: typographyScale === 1 ? c.y + c.height - 8 : c.y + c.height - typography(5),
+    };
+  }
+
+  const preferredSubY = labelY + typography(16);
+  const preferredTagY = c.y + c.height - typography(5);
+  const rowClearance = 3;
+  const subBottom = (baseline, fontSize) => baseline + fontSize * 0.2;
+  const tagTop = (baseline, fontSize) => baseline - fontSize * 0.8;
+  if (tagTop(preferredTagY, tagFontSize) >= subBottom(preferredSubY, subFontSize) + rowClearance) {
+    return { hasSub, labelFontSize, subFontSize, tagFontSize, labelY, subY: preferredSubY, tagY: preferredTagY };
+  }
+
+  const labelBottom = labelY + labelFontSize * 0.2;
+  const maxTagY = c.y + c.height - tagFontSize * 0.2 - rowClearance;
+  const minSubY = (fontSize) => labelBottom + fontSize * 0.8 + rowClearance;
+  const maxSubY = (fontSize) => maxTagY - tagFontSize * 0.8 - rowClearance - fontSize * 0.2;
+  if (maxSubY(subFontSize) < minSubY(subFontSize)) {
+    const verticalFit = Math.floor(((maxTagY - tagFontSize * 0.8 - rowClearance - labelBottom - rowClearance) / 1) * 10) / 10;
+    subFontSize = Math.max(componentTextFit.sublabelMinimum, Math.min(subFontSize, verticalFit));
+  }
+  if (maxSubY(subFontSize) < minSubY(subFontSize)) {
+    return {
+      hasSub,
+      labelFontSize,
+      subFontSize,
+      tagFontSize,
+      labelY,
+      problem: `Component "${c.id}" is too short for its scaled label, sublabel, and tag at their legible minimums — increase its height or remove a secondary text row.`,
+    };
+  }
+  return {
+    hasSub,
+    labelFontSize,
+    subFontSize,
+    tagFontSize,
+    labelY,
+    subY: Math.max(minSubY(subFontSize), Math.min(preferredSubY, maxSubY(subFontSize))),
+    tagY: maxTagY,
+  };
+}
+
 function autoViewBoxFor(candidateBoundaries, extraRects = []) {
   let maxX = 0;
   let maxY = 0;
@@ -509,6 +574,8 @@ function validateArchitecture() {
         problems.push(`${field} "${value}" needs ~${Math.ceil(minimumW)}px at the ${minimum}px legible minimum, but component "${c.id}" provides ${availableTextW}px — shorten the ${field.toLowerCase()} or widen size.`);
       }
     }
+    const rows = componentTextRows(c);
+    if (rows.problem) problems.push(rows.problem);
   }
 
   // Component overlap — the highest-traffic hand-placement failure mode.
@@ -915,27 +982,21 @@ function renderComponent(c) {
   const fill = componentFill[c.type] || 'c-external';
   const accent = componentText[c.type] || 't-muted';
   const cx = c.cx;
-  const hasSub = c.sublabel != null && c.sublabel !== '';
-  const labelY = typographyScale === 1
-    ? (hasSub ? c.y + c.height / 2 - 2 : c.y + c.height / 2 + 4)
-    : (hasSub ? c.y + c.height / 2 - typography(2) : c.y + c.height / 2 + typography(4));
-  const subY = typographyScale === 1 ? c.y + c.height / 2 + 14 : labelY + typography(16);
-  const tagY = typographyScale === 1 ? c.y + c.height - 8 : c.y + c.height - typography(5);
-  const sub = hasSub
-    ? `\n        <text data-detail="context" x="${cx}" y="${subY}" class="t-muted" font-size="${fittedNodeFontSize(c.sublabel, c.width, componentTextFit.sublabelPreferred, componentTextFit.sublabelMinimum)}" text-anchor="middle">${esc(c.sublabel)}</text>`
+  const rows = componentTextRows(c);
+  const sub = rows.hasSub
+    ? `\n        <text data-detail="context" x="${cx}" y="${rows.subY}" class="t-muted" font-size="${rows.subFontSize}" text-anchor="middle">${esc(c.sublabel)}</text>`
     : '';
   const tag = c.tag
-    ? `\n        <text data-detail="fine" x="${cx}" y="${tagY}" class="${accent}" font-size="${fittedNodeFontSize(c.tag, c.width, componentTextFit.tagPreferred, componentTextFit.tagMinimum)}" text-anchor="middle">${esc(c.tag)}</text>`
+    ? `\n        <text data-detail="fine" x="${cx}" y="${rows.tagY}" class="${accent}" font-size="${rows.tagFontSize}" text-anchor="middle">${esc(c.tag)}</text>`
     : '';
   const brand = renderBrandMark(c, { x: c.x + c.width - 22, y: c.y + 6 });
-  const labelFontSize = fittedNodeFontSize(c.label, brandLabelFitWidth(c, c.width), typography(11), typography(8));
   const passport = { kind: c.type, sublabel: c.sublabel, tag: c.tag, context: componentContext(c), ...brandMetadataFor(c) };
   return `        <g ${focusNodeAttrs(c.id, c.label, passport, arch.meta.locale)}>
           ${focusNodeTitle(c.label, passport)}
           <rect x="${c.x}" y="${c.y}" width="${c.width}" height="${c.height}" rx="6" class="c-mask"/>
           <rect x="${c.x}" y="${c.y}" width="${c.width}" height="${c.height}" rx="6" class="${fill}"${animateAttr(arch.meta, 'node', componentSteps.get(c.id))} stroke-width="1.5"/>
           ${renderSemanticSigil(c.type, { icon: c.icon, x: c.x + 6, y: c.y + 6 })}${brand ? `\n          ${brand}` : ''}
-          <text data-node-label=""${hasSub ? ' data-detail-anchor=""' : ''} x="${cx}" y="${labelY}" class="t-primary" font-size="${labelFontSize}" font-weight="600" text-anchor="middle">${esc(c.label)}</text>${sub}${tag}
+          <text data-node-label=""${rows.hasSub ? ' data-detail-anchor=""' : ''} x="${cx}" y="${rows.labelY}" class="t-primary" font-size="${rows.labelFontSize}" font-weight="600" text-anchor="middle">${esc(c.label)}</text>${sub}${tag}
         </g>`;
 }
 

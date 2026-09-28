@@ -28,8 +28,9 @@ test('architecture typography scale keeps real-browser text inside the SVG in or
       { id: 'policy', type: 'backend', label: 'Authorization policy service', sublabel: 'tenant-aware decisions', tag: 'internal', pos: [430, 220], size: [210, 72] },
       { id: 'ledger', type: 'database', label: 'Durable audit ledger', sublabel: 'append-only records', tag: 'retention', pos: [780, 220], size: [210, 72] },
       { id: 'warehouse', type: 'database', label: 'Reporting warehouse', sublabel: 'governed analytical copy', tag: 'scheduled sync', pos: [1130, 220], size: [210, 72] },
+      { id: 'compact', type: 'backend', label: 'Compact policy node', sublabel: 'scoped decisions', tag: 'internal', pos: [645, 355], size: [180, 60] },
     ],
-    boundaries: [{ kind: 'region', label: 'Redacted production service plane', wraps: ['edge', 'policy', 'ledger', 'warehouse'] }],
+    boundaries: [{ kind: 'region', label: 'Redacted production service plane', wraps: ['edge', 'policy', 'ledger', 'warehouse', 'compact'] }],
     connections: [
       { from: 'edge', to: 'policy', label: 'authorize' },
       { from: 'policy', to: 'ledger', label: 'record' },
