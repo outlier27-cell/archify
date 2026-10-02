@@ -92,6 +92,7 @@ try {
               button.click(); await new Promise(r=>requestAnimationFrame(r));
               return {focused, focusPreview, hoverPreview, id:button.dataset.outlineNode, selected:button.getAttribute('aria-current')};
             })()` });
+            assert.equal(interaction.exceptionDetails, undefined);
             assert.equal(interaction.result.value.focused, true);
             assert.equal(interaction.result.value.selected, 'true');
             if (!candidate) baselineInteraction = interaction.result.value;

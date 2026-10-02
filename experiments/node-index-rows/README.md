@@ -41,10 +41,11 @@ using a separate experiment attribute. These screenshots test the CSS proposal,
 not a shipped narrow-screen reader behavior. Whether to expose that index on
 mobile remains a product decision.
 
-The browser reports no persistent focus preview after a frame on either the
-baseline or candidate, while pointer-enter preview and click selection work.
-This unchanged baseline behavior must not be reported as a newly fixed
-keyboard-preview feature.
+The saved observations report no persistent focus preview after a frame on
+either baseline or candidate. The script only compares `focusPreview` for
+equality between them; it does not independently verify keyboard focus-preview
+behavior. Pointer-enter preview and click selection work. These results must
+not be reported as a newly fixed or verified keyboard-preview feature.
 
 Visually reviewed the unselected Sample Web App desktop comparison and the
 long-text narrow candidate. Group membership is clear; desktop whitespace is
