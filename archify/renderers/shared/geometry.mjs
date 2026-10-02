@@ -17,6 +17,14 @@ export function isFinitePoint(...coords) {
   return coords.every((c) => Number.isFinite(c));
 }
 
+// Separation the layout solver guarantees and separation this check re-derives
+// travel through different arithmetic, so a pair the solver placed at exactly
+// its minimum can land a few ulps short of this comparison. In #583 the CLI's
+// own receipt has the pair `793.6 + 160 + 8` read as 2**-43 past a5's left edge
+// at 961.5999999999999 — one ulp at that magnitude. 0.0001 is the numeric
+// tolerance the route and layout geometry in this file already compares with.
+const NUMERIC_CLEARANCE_PX = 0.0001;
+
 export function rectsOverlap(a, b, gap = 0) {
   // Non-finite geometry means "unknown", not "overlapping". Every comparison
   // below is false for NaN, so without this guard the negation reports a
@@ -27,10 +35,10 @@ export function rectsOverlap(a, b, gap = 0) {
     return false;
   }
   return !(
-    a.x + a.width + gap <= b.x ||
-    b.x + b.width + gap <= a.x ||
-    a.y + a.height + gap <= b.y ||
-    b.y + b.height + gap <= a.y
+    a.x + a.width + gap <= b.x + NUMERIC_CLEARANCE_PX ||
+    b.x + b.width + gap <= a.x + NUMERIC_CLEARANCE_PX ||
+    a.y + a.height + gap <= b.y + NUMERIC_CLEARANCE_PX ||
+    b.y + b.height + gap <= a.y + NUMERIC_CLEARANCE_PX
   );
 }
 

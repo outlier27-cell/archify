@@ -439,6 +439,11 @@ html[data-present="true"]:not([data-embed="true"]) #btn-present {
   max-width: var(--archify-reader-width, 1440px);
   margin: 0 auto;
 }
+html[data-reader-narrow="true"]:not([data-present="true"]) .diagram-container > svg {
+  min-width: 0;
+  max-width: var(--archify-diagram-max-width);
+  margin-inline: auto;
+}
 @media (min-width: 768px) and (max-height: 920px) {
   .header { margin-bottom: 1rem; }
   .diagram-container { padding: 1rem; }
@@ -2289,6 +2294,13 @@ html[data-preset="blueprint"] .node-finder-results { border-radius: 0.18rem; }
   border-radius: 0.75rem;
   border: 1px solid var(--panel-border);
   padding: 1.125rem 1.25rem;
+  /* Card notes are authored prose and may carry an unbreakable run such as a
+     slash-joined pipeline or a long identifier. Without this, that run sets the
+     card's min-content width, spills past its track in every rail placement,
+     and pushes the whole page into horizontal overflow at desktop widths.
+     `anywhere` rather than `break-word` because only `anywhere` shrinks the
+     intrinsic minimum the layout is sized from. */
+  overflow-wrap: anywhere;
 }
 
 html[data-preset="signal-flow"] .card {

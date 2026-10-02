@@ -71,24 +71,34 @@
         var style = window.getComputedStyle(element);
         return element.getBoundingClientRect().height + number(style.marginTop) + number(style.marginBottom);
       }
+      // Smallest scale that keeps node text at the requested floor and
+      // context relationship labels readable. A declared wide reader holds
+      // relationship labels to the requested floor too; every other reader
+      // still keeps them at the 6px hard floor the browser gate enforces, so
+      // a first-screen fit can never push them below it.
       function minimumReadableScale() {
-        var sourceMinimum = null;
-        var selectors = [
-          'text[data-node-label], text[data-boundary-label], text[data-detail="context"]'
-        ];
-        if (measuredHeightFit && ratio >= WIDE_RATIO && Number.isFinite(declaredMinimumText)) {
-          selectors.push('g[data-detail="context"][data-edge-from][data-edge-to] > text');
-        }
-        Array.from(svg.querySelectorAll(selectors.join(', '))).forEach(function (text) {
-          if (text.getAttribute('data-detail') === 'context' && !text.closest('[data-node-id]')) return;
+        var nodeMinimum = null;
+        var edgeMinimum = null;
+        var selectors = 'text[data-node-label], text[data-boundary-label], text[data-detail="context"], g[data-detail="context"] text';
+        Array.from(svg.querySelectorAll(selectors)).forEach(function (text) {
+          if (text.getAttribute('data-detail') === 'fine' || text.closest('[data-detail="fine"]')) return;
           var sourceFontPx = parseFloat(text.getAttribute('font-size') || '');
-          if (Number.isFinite(sourceFontPx)) {
-            sourceMinimum = sourceMinimum == null ? sourceFontPx : Math.min(sourceMinimum, sourceFontPx);
+          if (!Number.isFinite(sourceFontPx)) return;
+          var primary = text.hasAttribute('data-node-label') || text.hasAttribute('data-boundary-label');
+          var context = text.getAttribute('data-detail') === 'context' || Boolean(text.closest('g[data-detail="context"]'));
+          if (!primary && context && text.closest('[data-edge-from][data-edge-to]')) {
+            edgeMinimum = edgeMinimum == null ? sourceFontPx : Math.min(edgeMinimum, sourceFontPx);
+          } else if (primary || text.closest('[data-node-id]')) {
+            nodeMinimum = nodeMinimum == null ? sourceFontPx : Math.min(nodeMinimum, sourceFontPx);
           }
         });
-        return sourceMinimum != null
-          ? Math.min(1, requestedMinimumText / sourceMinimum)
-          : 1;
+        var edgeTarget = measuredHeightFit && ratio >= WIDE_RATIO && Number.isFinite(declaredMinimumText)
+          ? requestedMinimumText
+          : MIN_PROJECTED_NODE_TEXT_PX;
+        var scale = 0;
+        if (nodeMinimum != null) scale = Math.max(scale, requestedMinimumText / nodeMinimum);
+        if (edgeMinimum != null) scale = Math.max(scale, edgeTarget / edgeMinimum);
+        return scale > 0 ? Math.min(1, scale) : 1;
       }
       var sourcePrimary = null;
       if (svg) Array.from(svg.querySelectorAll('text[data-node-label]')).forEach(function (text) {
@@ -121,6 +131,8 @@
       }
       function clear() {
         html.style.removeProperty('--archify-reader-width');
+        html.style.removeProperty('--archify-diagram-max-width');
+        html.removeAttribute('data-reader-narrow');
         html.removeAttribute('data-reader-layout');
         html.removeAttribute('data-reader-overflow');
         setRail(false);
@@ -182,11 +194,25 @@
             number(diagramStyle.borderTopWidth) + number(diagramStyle.borderBottomWidth)
         };
       }
+      // `width` is the diagram's reading width. The page shell never narrows
+      // below the desktop reader floor, so a narrow, tall diagram keeps a
+      // usable header, toolbar, and controls; its SVG is centred instead.
       function applyWidth(width, minWidth) {
         var rounded = Math.max(Math.ceil(minWidth || 0), Math.round(width));
         if (Math.abs(rounded - lastWidth) < 1) return false;
         lastWidth = rounded;
-        html.style.setProperty('--archify-reader-width', rounded + 'px');
+        var shellFloor = Math.min(MIN_READER_WIDTH, Math.max(0, window.innerWidth - chromeMetrics().bodyX));
+        html.style.setProperty('--archify-reader-width', Math.max(rounded, shellFloor) + 'px');
+        if (rounded < shellFloor) {
+          // `rounded` already includes a docked rail and its gap; the SVG cap
+          // is only the diagram's share, not the space beside it.
+          var railShare = html.getAttribute('data-reader-rail') === 'true' ? RAIL_WIDTH + RAIL_GAP : 0;
+          html.style.setProperty('--archify-diagram-max-width', Math.max(1, rounded - railShare - chromeMetrics().diagramX) + 'px');
+          html.setAttribute('data-reader-narrow', 'true');
+        } else {
+          html.style.removeProperty('--archify-diagram-max-width');
+          html.removeAttribute('data-reader-narrow');
+        }
         html.setAttribute('data-reader-layout', 'adaptive');
         return true;
       }
@@ -251,10 +277,11 @@
           if (collapsedPreference === '1' || (collapsedPreference !== '0' && !comfortable)) mode = 'collapsed';
           else mode = fitsReadable ? 'true' : 'overlay';
         }
-        // With notes below the fold, the diagram may trade the renderer's
-        // comfortable primary size down to the rail's 12px floor so it and its
-        // controls fit the first screen; taller graphs still scroll.
-        if (mode === 'bottom' && primaryWidth > 0) primaryWidth = labelWidth(Math.min(RAIL_COMFORT_PRIMARY_PX, declaredPrimaryText));
+        // With notes below the fold, the first screen belongs to the whole
+        // diagram and its controls: it may shrink past the comfortable primary
+        // size down to the renderer's readable text floor, and zoom restores
+        // detail. Only a graph taller than that floor allows still scrolls.
+        if (mode === 'bottom') primaryWidth = 0;
         if (primaryWidth > 0) minWidth = Math.max(minWidth, Math.min(maxWidth, primaryWidth + chrome.diagramX));
         var docked = mode === 'true';
         setRail(mode);

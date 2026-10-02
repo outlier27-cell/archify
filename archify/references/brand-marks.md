@@ -65,6 +65,13 @@ content digest. Later render and validate operations require that exact digest;
 blocked, unavailable, changed, oversized, or unsafe content fails closed instead
 of silently changing the artifact.
 
+For ICO captures, every directory entry must reference a non-empty image range
+after the complete directory and within the downloaded file. This bounds check
+also applies when reproducing a pinned capture. PNG/DIB payloads, multiple
+images, shared or out-of-order ranges, and trailing bytes remain supported;
+the check does not decode pixels or guarantee that an otherwise bounded payload
+is decodable. A rejected ICO candidate does not prevent trying later icons.
+
 Page, icon and redirect requests send `Accept-Encoding: identity`. Capture does
 not decompress response bodies: a successful response declaring another content
 coding is closed and rejected explicitly. This keeps the existing byte limits

@@ -136,7 +136,15 @@ test('Route Probe preserves directed paths, Journey and export contracts', {
     // Route lets the panned key through; the existing Focus handler then consumes it.
     assert.deepEqual(filtered, { capture: { mode: 'source', prevented: false }, mode: null, unrelated: false, panned: true, focus: 'users' });
     await load('architecture', { suffix: '&embed=1#route=users~db' });
-    assert.equal(await run('Archify.routeProbe.begin()'), false); assert.equal((await snapshot('embed-hash')).active, null);
+    assert.equal(await run('Archify.routeProbe.begin()'), false);
+    const embeddedRoute = await snapshot('embed-hash');
+    assert.equal(embeddedRoute.active, null);
+    assert.equal(embeddedRoute.result, null);
+    await load('sequence', { suffix: '&embed=1#focus=web&reach=downstream' });
+    const embeddedFocus = await snapshot('embed-focus');
+    assert.equal(embeddedFocus.focus, 'web');
+    assert.equal(embeddedFocus.active, null);
+    assert.equal(embeddedFocus.hash, '#focus=web&reach=downstream');
   });
 
   await t.test('SVG graph fixtures preserve directed BFS order, parallel edges and strict export snapshots', async () => {

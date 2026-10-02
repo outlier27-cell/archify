@@ -13,6 +13,7 @@ const testFiles = [
   'reader-readability-maintained-browser.test.mjs',
   'reader-layout-browser.test.mjs',
   'reader-layout-settle-browser.test.mjs',
+  'reader-cards-overflow-browser.test.mjs',
   'joint-layout-browser.test.mjs',
   'sequence-header-clearance.test.mjs',
   'compact-header-clearance.test.mjs',

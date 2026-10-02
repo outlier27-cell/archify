@@ -4,7 +4,7 @@
   "meta": {
     "title": "Cache Miss Request Sequence",
     "output": "examples/sequence-cache-miss-request.html",
-    "viewBox": [1080, 560],
+    "viewBox": [1080, 580],
     "column_fit": "spread",
     "animation": "trace",
     "quality_profile": "showcase"

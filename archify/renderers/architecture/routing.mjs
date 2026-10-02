@@ -35,6 +35,23 @@ import { shortestOrthogonalGridRoute } from '../shared/route-quality.mjs';
  *   default label rect of a routed relationship given the routes and label
  *   rects resolved so far; later automatic routes keep clear of it so a dense
  *   fan-out does not leave the label nowhere to go
+ * @param {(conn: object, endpoint: 'source'|'target') => string|undefined} [options.sideFor]
+ *   endpoint side of a relationship whose author did not pin one, for a type
+ *   that reads its layout on a different axis than architecture's row fan-out;
+ *   an endpoint this hook leaves undefined keeps the shared inference
+ * @param {number} [options.maxPortSpacing] widest spacing the automatic port
+ *   spread may use on a shared side; a type whose endpoint glyphs are taller
+ *   than the default raises this so two symbols never draw over each other
+ * @param {(context: {conn: object, from: object, to: object, start: number[], end: number[], fromSide: string, toSide: string}) => number[][][]} [options.preferredCandidates]
+ *   candidate families tried before the shared ones, so a type-owned corridor
+ *   (a bundled trunk, a dedicated lane) wins over the generic midpoint
+ * @param {boolean} [options.compositionFloors = true] hold every automatic
+ *   route to the rhythm floors the showcase gate enforces, so the planner never
+ *   accepts a route the gate will reject. A type that draws a route differently
+ *   from its logical points (the erd renderer removes the bundled trunk stretch
+ *   from each branch and draws the bus as one path) turns this off: the floors
+ *   describe a route drawn exactly as planned, and that type answers for the
+ *   drawn result at its own gate instead.
  */
 export function createRouter(components, connections = [], {
   frames = [],
@@ -43,6 +60,10 @@ export function createRouter(components, connections = [], {
   labelRectFor = null,
   distinctAutomaticPorts = false,
   preferReadableRoutes = false,
+  sideFor = null,
+  maxPortSpacing = null,
+  preferredCandidates = null,
+  compositionFloors = true,
 } = {}) {
   const frameBorders = frames.flatMap((frame) => frameBorderSegments(frame));
   const LABEL_CLEARANCE = 4;
@@ -81,7 +102,8 @@ export function createRouter(components, connections = [], {
   // gate enforces afterwards. Accepting a route here that the gate rejects
   // only hands the author a hand-routing repair the planner could have made.
   function routeMeetsCompositionFloors(points) {
-    if (collectRouteRhythmIssues({ routedRelations: [{ points }], interiorSegmentPx, microSegmentPx }).length) {
+    if (compositionFloors
+        && collectRouteRhythmIssues({ routedRelations: [{ points }], interiorSegmentPx, microSegmentPx }).length) {
       return false;
     }
     return !frames.length || collectBorderRuns({ routedRelations: [{ points }], frames }).length === 0;
@@ -407,6 +429,22 @@ export function createRouter(components, connections = [], {
       }
       case 'auto':
       default: {
+        // A caller may own the corridor for relationships that would otherwise
+        // share one channel. Preferred candidates are tried before the shared
+        // families, so a declared trunk or lane wins over the generic midpoint;
+        // a candidate that violates the endpoint contract or an obstacle is
+        // skipped and the historical order below still applies.
+        if (preferredCandidates) {
+          for (const candidate of preferredCandidates({ conn, from, to, start, end, fromSide, toSide }) || []) {
+            const points = [start, ...candidate, end];
+            if (routeHonorsEndpointSides(points, fromSide, toSide)
+                && routeClearsEndpointComponents(points, from, to)
+                && routeClearsComponents(conn, points)
+                && routeMeetsCompositionFloors(points)
+                && !routeConflictsWithResolved(conn, points, resolvedRoutes)) return candidate;
+          }
+        }
+
         // Direct line unless the anchors are clearly orthogonal-friendly.
         const deltaX = Math.abs(start[0] - end[0]);
         const deltaY = Math.abs(start[1] - end[1]);
@@ -670,9 +708,18 @@ export function createRouter(components, connections = [], {
   const stroke = (relation) => relation.width || (relation.variant === 'emphasis' ? 1.8 : 1.5);
   const markerSpacing = (left, right) => 3.5 * (stroke(left) + stroke(right));
   const portSpacing = (left, right) => Math.max(14, markerSpacing(left, right) + 3.5);
+  function fanOutSide(conn, endpoint) {
+    const fanOut = rowFanOutSides(components.get(conn.from), components.get(conn.to));
+    return endpoint === 'source' ? fanOut?.fromSide : fanOut?.toSide;
+  }
+  // A caller may own the endpoint side of a relationship; whatever it leaves
+  // unresolved keeps architecture's row fan-out inference.
+  function inferredSide(conn, endpoint) {
+    return sideFor?.(conn, endpoint) || fanOutSide(conn, endpoint);
+  }
   const automaticPorts = automaticPortSpread(connections, components, {
-    sideFor: (relation, endpoint) => rowFanOutSides(components.get(relation.from), components.get(relation.to))
-      ?.[endpoint === 'source' ? 'fromSide' : 'toSide'],
+    sideFor: inferredSide,
+    ...(maxPortSpacing === null ? {} : { maxSpacing: maxPortSpacing }),
     // Preserve the established initial placement for ordinary markers; only
     // widen groups whose arrowheads cannot fit the legacy 14px slots.
     ...(distinctAutomaticPorts ? { spacingFor: (left, right) =>
@@ -690,16 +737,23 @@ export function createRouter(components, connections = [], {
   function inferredConnectionSides(conn) {
     const from = components.get(conn.from);
     const to = components.get(conn.to);
-    const fanOut = rowFanOutSides(from, to);
     return {
-      fromSide: chosenSide(conn.fromSide, fanOut?.fromSide || defaultFromSide(from, to)),
-      toSide: chosenSide(conn.toSide, fanOut?.toSide || defaultToSide(from, to)),
+      fromSide: chosenSide(conn.fromSide, inferredSide(conn, 'source') || defaultFromSide(from, to)),
+      toSide: chosenSide(conn.toSide, inferredSide(conn, 'target') || defaultToSide(from, to)),
     };
   }
 
   function connectionSides(conn) {
     if (!routesPlanned && !routesPlanning) planRoutes();
     return selectedSides.get(conn) || inferredConnectionSides(conn);
+  }
+
+  // The same side inference without the planning pass. A caller that must group
+  // relationships before any route exists (the erd renderer assigns a shared
+  // trunk per fan-in) reads its sides here: connectionSides() plans routes, and
+  // planning asks the grouping what the trunks are.
+  function inferredSides(conn) {
+    return inferredConnectionSides(conn);
   }
 
   function connectionEndpointSide(conn, endpoint) {
@@ -1153,5 +1207,5 @@ export function createRouter(components, connections = [], {
     return { ...planningMetrics };
   }
 
-  return { pathFor, connectionSides, connectionEndpointSide, routingMetrics };
+  return { ports: automaticPorts, pathFor, connectionSides, inferredSides, connectionEndpointSide, routingMetrics };
 }

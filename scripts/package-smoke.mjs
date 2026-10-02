@@ -183,14 +183,15 @@ try {
   if (notifierReceipt.status !== 'update_available') {
     throw new Error(`packaged update checker did not return an update candidate: ${JSON.stringify(notifierReceipt)}`);
   }
-  const notifierAcknowledgement = await checker.acknowledgeUpdate({
+  const notifierSnooze = await checker.setUpdatePreference({
     releasePath: path.join(skillRoot, 'skill-release.json'),
     cacheDirectory: notifierCache,
     eventKey: notifierReceipt.eventKey,
+    mode: 'snooze',
     now: () => Date.parse('2026-08-28T00:00:01Z'),
   });
-  if (notifierAcknowledgement.status !== 'acknowledged') {
-    throw new Error('packaged update checker did not persist a visible-notice acknowledgement');
+  if (notifierSnooze.status !== 'snoozed') {
+    throw new Error('packaged update checker did not persist an explicit snooze');
   }
 
   const skill = fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8');
@@ -291,6 +292,29 @@ try {
   const deployment = path.join(scratch, 'deployment.html');
   run(['render', 'architecture', path.join(skillRoot, 'examples', fixtures[0][1]), deployment]);
   run(['check', deployment]);
+
+  // Bundled Viewer catalogs resolve from the installed package, not the cwd,
+  // and the artifact embeds only the selected catalog.
+  const manifest = JSON.parse(fs.readFileSync(path.join(skillRoot, 'locales', 'manifest.json'), 'utf8'));
+  for (const { file } of manifest.catalogs) {
+    if (!fs.existsSync(path.join(skillRoot, 'locales', file))) {
+      throw new Error(`packaged locale manifest lists a missing catalog: ${file}`);
+    }
+  }
+  const localized = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', fixtures[0][1]), 'utf8'));
+  localized.meta.locale = 'ko';
+  localized.meta.output = 'localized.html';
+  const localizedInput = path.join(scratch, 'localized.architecture.json');
+  const localizedOutput = path.join(scratch, 'localized.html');
+  fs.writeFileSync(localizedInput, JSON.stringify(localized));
+  run(['render', 'architecture', localizedInput, localizedOutput], { cwd: os.tmpdir() });
+  const localizedHtml = fs.readFileSync(localizedOutput, 'utf8');
+  const embeddedLocale = localizedHtml.match(/<script id="archify-i18n-data" type="application\/json">([\s\S]*?)<\/script>/);
+  if (!localizedHtml.startsWith('<!DOCTYPE html>\n<html lang="ko"')
+    || !localizedHtml.includes('>범례</text>')
+    || JSON.parse(embeddedLocale?.[1] || '{}').locale !== 'ko') {
+    throw new Error('packaged renderer did not select the bundled ko catalog from meta.locale');
+  }
 
   const compareReceipt = JSON.parse(run([
     'compare', 'architecture',

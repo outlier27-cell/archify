@@ -11,7 +11,9 @@ import { ChromeVisualBrowser, findChrome } from '../bin/visual-check.mjs';
 
 import {
   SUPPORTED_LOCALES,
+  bundledLocaleFor,
   catalogKeys,
+  resolveCatalog,
   translateCount,
   translateMessage,
   registerLocale,
@@ -22,21 +24,18 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(__dirname, '..');
 const cli = path.join(skillRoot, 'bin/archify.mjs');
 const templatePath = path.join(skillRoot, 'assets/template.html');
-const ES_TRANSLATIONS = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples/locales/es.json'), 'utf8'));
+const ES_TRANSLATIONS = JSON.parse(fs.readFileSync(path.join(skillRoot, 'locales/es.json'), 'utf8'));
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-i18n-'));
 const chromePath = process.env.ARCHIFY_CHROME ? findChrome() : null;
 let sequence = 0;
 
-// examples/locales/ko.json is the worked example the maintainer asked for:
-// Korean supplied as data through meta.translations instead of a third
-// hard-coded locale in i18n.mjs. examples/locales/fr.partial.json is the
-// genericity proof — a second, previously unsupported language, deliberately
-// partial to also exercise the coverage/fallback contract. Registering 'ko'
-// here (once, at module scope) makes direct translateMessage('ko', …) calls
-// below resolve the same way the CLI resolves it per-document.
-const KO_TRANSLATIONS = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples/locales/ko.json'), 'utf8'));
+// locales/ holds the package-owned catalogs that meta.locale selects through
+// locales/manifest.json. examples/locales/fr.partial.json is the genericity
+// proof — an unbundled language, deliberately partial to also exercise the
+// coverage/fallback contract.
+const KO_TRANSLATIONS = JSON.parse(fs.readFileSync(path.join(skillRoot, 'locales/ko.json'), 'utf8'));
 const FR_PARTIAL_TRANSLATIONS = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples/locales/fr.partial.json'), 'utf8'));
-registerLocale('ko', KO_TRANSLATIONS);
+const MANIFEST = JSON.parse(fs.readFileSync(path.join(skillRoot, 'locales/manifest.json'), 'utf8'));
 
 const EXAMPLES = {
   architecture: 'web-app.architecture.json',
@@ -152,7 +151,7 @@ async function loadArtifact(browser, artifactPath) {
 }
 
 test('zh-CN localizes renderer-owned output across all five modes without translating authored content', () => {
-  assert.deepEqual(SUPPORTED_LOCALES, ['en', 'zh-CN']);
+  assert.deepEqual(SUPPORTED_LOCALES, ['en', 'zh-CN', 'es', 'ko']);
   for (const type of Object.keys(EXAMPLES)) {
     const document = example(type);
     const authoredTitle = document.meta.title;
@@ -195,7 +194,7 @@ test('supplied es catalog localizes renderer-owned output across all five modes 
     assert.match(result.html, /"locale":"es"/);
     assert.match(result.html, />Exportar diagrama</);
     assert.doesNotMatch(result.html, /\{\{i18n:/);
-    assert.doesNotMatch(result.stderr, /has no built-in catalog/, `${type}: es unexpectedly fell back to English`);
+    assert.doesNotMatch(result.stderr, /has no bundled catalog/, `${type}: es unexpectedly fell back to English`);
   }
 });
 
@@ -458,7 +457,9 @@ test('malformed locale tags fail schema validation in every mode', () => {
 });
 
 test('a well-formed but unregistered locale passes validation, falls back to English chrome, and discloses the fallback', () => {
-  for (const locale of ['fr', 'zh-HK', 'es']) {
+  // Region and script variants are distinct tags: none collapses onto a
+  // bundled catalog without explicit data.
+  for (const locale of ['fr', 'zh-HK', 'zh-Hant', 'es-MX', 'ko-KR']) {
     for (const type of Object.keys(EXAMPLES)) {
       const document = example(type);
       document.meta.locale = locale;
@@ -467,7 +468,7 @@ test('a well-formed but unregistered locale passes validation, falls back to Eng
       assert.equal(JSON.parse(validated.stdout).ok, true, `${type}/${locale}`);
       assert.match(
         validated.stderr,
-        new RegExp(`meta\\.locale "${locale}" has no built-in catalog and no meta\\.translations`),
+        new RegExp(`meta\\.locale "${locale}" has no bundled catalog and no usable meta\\.translations`),
         `${type}/${locale}: fallback was not disclosed`,
       );
 
@@ -500,7 +501,7 @@ test('a previously unsupported locale localizes renderer-owned output once meta.
     assert.match(result.html, />Node index</, `${type}: uncovered key did not fall back to English`);
     assert.match(
       result.stderr,
-      new RegExp(`meta\\.translations for locale "fr" covers ${report.coveredKeys}/${report.totalKeys} renderer-owned messages`),
+      new RegExp(`meta\\.locale "fr" resolves ${report.coveredKeys}/${report.totalKeys} renderer-owned messages \\(\\d+%\\) from ${report.coveredKeys} meta\\.translations entries; ${report.totalKeys - report.coveredKeys} fall back to English`),
       `${type}: coverage was not disclosed`,
     );
   }
@@ -522,7 +523,271 @@ test('translations with unknown keys or mismatched interpolation placeholders ar
   // match the canonical {label} token — never a raw or broken template.
   assert.match(result.html, /aria-label="Focus /);
   assert.doesNotMatch(result.html, /wrongPlaceholder/);
-  assert.match(result.stderr, /meta\.translations for locale "fr" covers \d+\/\d+ renderer-owned messages/);
+  assert.match(result.stderr, /meta\.translations for locale "fr" has 2 unusable entries \(1 unknown, 1 placeholder mismatch\); each keeps its English message/);
+  assert.match(result.stderr, /meta\.locale "fr" resolves \d+\/\d+ renderer-owned messages/);
+});
+
+function embeddedMessages(html) {
+  const embedded = html.match(/<script id="archify-i18n-data" type="application\/json">([\s\S]*?)<\/script>/);
+  assert.ok(embedded, 'missing embedded i18n data script');
+  return JSON.parse(embedded[1]);
+}
+
+function localeDocument(type, meta) {
+  const document = example(type);
+  delete document.meta.subtitle;
+  Object.assign(document.meta, meta);
+  return document;
+}
+
+test('bundled es and ko render from meta.locale alone in all five modes, identical to supplying the full catalog', () => {
+  const cases = {
+    es: { catalog: ES_TRANSLATIONS, legend: 'Leyenda', focus: 'Enfocar', exportLabel: 'Exportar diagrama' },
+    ko: { catalog: KO_TRANSLATIONS, legend: '범례', focus: '포커스', exportLabel: '다이어그램 내보내기' },
+  };
+  for (const [locale, expected] of Object.entries(cases)) {
+    for (const type of Object.keys(EXAMPLES)) {
+      const localeOnly = run(type, localeDocument(type, { locale }));
+      assert.equal(localeOnly.status, 0, `${type}/${locale}: ${localeOnly.stderr || localeOnly.stdout}`);
+      assert.equal(localeOnly.stderr, '', `${type}/${locale}: a complete bundled catalog should not warn`);
+      assert.match(localeOnly.html, new RegExp(`^<!DOCTYPE html>\\n<html lang="${locale}"`));
+      assert.match(localeOnly.html, new RegExp(`<svg\\b[^>]*\\blang="${locale}"`));
+      assert.match(localeOnly.html, new RegExp(`<text\\b[^>]*>${expected.legend}</text>`), `${type}/${locale}: default legend`);
+      assert.match(localeOnly.html, new RegExp(`aria-label="[^"]*${expected.focus}`), `${type}/${locale}: accessibility copy`);
+      assert.ok(localeOnly.html.includes(`>${expected.exportLabel}<`), `${type}/${locale}: fixed control`);
+      const runtime = embeddedMessages(localeOnly.html);
+      assert.equal(runtime.locale, locale);
+      for (const [key, message] of Object.entries(runtime.messages)) {
+        assert.equal(message, expected.catalog[key], `${type}/${locale}: dynamic Viewer message ${key}`);
+      }
+
+      const supplied = run(type, localeDocument(type, { locale, translations: expected.catalog }));
+      assert.equal(supplied.status, 0, `${type}/${locale}: ${supplied.stderr || supplied.stdout}`);
+      assert.equal(supplied.html, localeOnly.html, `${type}/${locale}: supplied catalog changed existing wording`);
+    }
+  }
+});
+
+test('a partial override replaces only its keys and keeps the rest of the selected bundled language', () => {
+  const overrides = {
+    'zh-CN': { message: '关闭面板', legend: '图例' },
+    es: { message: 'Cerrar panel', legend: 'Leyenda' },
+    ko: { message: '패널 닫기', legend: '범례' },
+  };
+  for (const [locale, expected] of Object.entries(overrides)) {
+    for (const type of Object.keys(EXAMPLES)) {
+      const result = run(type, localeDocument(type, { locale, translations: { 'viewer.common.close': expected.message } }));
+      assert.equal(result.status, 0, `${type}/${locale}: ${result.stderr || result.stdout}`);
+      assert.equal(result.stderr, '', `${type}/${locale}: a valid one-key override over a complete catalog is not a coverage gap`);
+      assert.match(result.html, new RegExp(`^<!DOCTYPE html>\\n<html lang="${locale}"`));
+      assert.match(result.html, new RegExp(`<text\\b[^>]*>${expected.legend}</text>`), `${type}/${locale}: rest of the language was lost`);
+      const runtime = embeddedMessages(result.html);
+      assert.equal(runtime.messages['viewer.common.close'], expected.message);
+      assert.equal(runtime.messages['viewer.common.copyLink'], translateMessage(locale, 'viewer.common.copyLink'));
+    }
+  }
+});
+
+test('empty translations and equivalent tag casing select the same bundled catalog', () => {
+  for (const type of Object.keys(EXAMPLES)) {
+    const reference = run(type, localeDocument(type, { locale: 'zh-CN' }));
+    assert.equal(reference.status, 0, reference.stderr);
+    const lowered = run(type, localeDocument(type, { locale: 'zh-cn' }));
+    assert.equal(lowered.status, 0, lowered.stderr);
+    assert.equal(lowered.stderr, '');
+    assert.equal(lowered.html, reference.html, `${type}: zh-cn should select the zh-CN catalog and canonical lang`);
+
+    const korean = run(type, localeDocument(type, { locale: 'ko' }));
+    const empty = run(type, localeDocument(type, { locale: 'ko', translations: {} }));
+    assert.equal(empty.status, 0, empty.stderr);
+    assert.equal(empty.stderr, '');
+    assert.equal(empty.html, korean.html, `${type}: {} is not an override`);
+  }
+  // An override under an equivalent-case tag reaches every lookup path: SVG
+  // copy, the HTML template, and the embedded Viewer catalog.
+  for (const locale of ['zh-cn', 'zh-cN']) {
+    for (const type of Object.keys(EXAMPLES)) {
+      const result = run(type, localeDocument(type, {
+        locale,
+        translations: { 'viewer.common.close': '关闭面板', 'viewer.export.diagram': '导出此图' },
+      }));
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.html, /^<!DOCTYPE html>\n<html lang="zh-CN"/);
+      const runtime = embeddedMessages(result.html);
+      assert.equal(runtime.locale, 'zh-CN');
+      assert.equal(runtime.messages['viewer.common.close'], '关闭面板', `${type}/${locale}: embedded Viewer override lost`);
+      assert.ok(result.html.includes('>导出此图<'), `${type}/${locale}: template override lost`);
+    }
+  }
+  assert.equal(bundledLocaleFor('ZH-cn'), 'zh-CN');
+  assert.equal(bundledLocaleFor('zh-Hant'), null);
+  assert.equal(bundledLocaleFor('zh'), null);
+});
+
+test('rejected overrides keep the bundled message and are reported apart from English fallback gaps', () => {
+  const result = run('architecture', localeDocument('architecture', {
+    locale: 'es',
+    translations: {
+      'viewer.common.close': 'Cerrar {panel}',
+      'viewer.common.clear': 'Vaciar',
+      'viewer.common.closee': 'Cerrar',
+    },
+  }));
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const runtime = embeddedMessages(result.html);
+  assert.equal(runtime.messages['viewer.common.close'], ES_TRANSLATIONS['viewer.common.close']);
+  assert.equal(runtime.messages['viewer.common.clear'], 'Vaciar');
+  assert.match(result.stderr, /meta\.translations for locale "es" has 2 unusable entries \(1 unknown, 1 placeholder mismatch\); each keeps its bundled es message\./);
+  assert.doesNotMatch(result.stderr, /fall back to English/, 'a rejected override over a complete catalog is not an English gap');
+
+  const { report } = resolveCatalog('es', {
+    'viewer.common.close': 'Cerrar {panel}',
+    'viewer.common.clear': 'Vaciar',
+    'viewer.common.closee': 'Cerrar',
+  });
+  assert.equal(report.translatedKeys, report.totalKeys);
+  assert.deepEqual(report.fallbackKeys, []);
+  assert.equal(report.override.appliedKeys, 1);
+  assert.deepEqual(report.override.unknownKeys, ['viewer.common.closee']);
+  assert.deepEqual(report.override.placeholderMismatches, [{ key: 'viewer.common.close', expected: [], actual: ['panel'] }]);
+});
+
+test('an unbundled tag with only unusable translations falls back to English UI and language metadata', () => {
+  const result = run('architecture', localeDocument('architecture', {
+    locale: 'fr',
+    translations: { 'viewer.common.closee': 'Fermer' },
+  }));
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  assert.match(result.html, /^<!DOCTYPE html>\n<html lang="en"/);
+  assert.match(result.stderr, /has 1 unusable entry \(1 unknown, 0 placeholder mismatch\); each keeps its English message/);
+  assert.match(result.stderr, /meta\.locale "fr" has no bundled catalog and no usable meta\.translations/);
+});
+
+test('coverage reports the final resolved catalog with the English source of each gap', () => {
+  const partial = resolveCatalog('fr', FR_PARTIAL_TRANSLATIONS).report;
+  assert.equal(partial.resolvedLocale, 'fr');
+  assert.equal(partial.bundledLocale, null);
+  assert.equal(partial.translatedKeys, Object.keys(FR_PARTIAL_TRANSLATIONS).length);
+  assert.equal(partial.translatedKeys + partial.fallbackKeys.length, partial.totalKeys);
+
+  const oneKey = resolveCatalog('ko', { 'viewer.common.close': '패널 닫기' }).report;
+  assert.equal(oneKey.translatedKeys, oneKey.totalKeys, 'override size must not be reported as coverage');
+  assert.equal(oneKey.override.appliedKeys, 1);
+
+  // A bundled catalog that lags behind a new canonical key reports only that
+  // gap; English is never a gap for English.
+  const lagging = { ...ES_TRANSLATIONS };
+  delete lagging['viewer.common.close'];
+  const unbundledSpanish = resolveCatalog('es-419', lagging).report;
+  assert.deepEqual(unbundledSpanish.fallbackKeys, ['viewer.common.close']);
+  assert.deepEqual(resolveCatalog('en', { 'viewer.common.close': 'Dismiss' }).report.fallbackKeys, []);
+  assert.deepEqual(resolveCatalog('en-GB', { 'viewer.common.close': 'Dismiss' }).report.fallbackKeys, []);
+});
+
+test('a document override never mutates the reusable bundled catalog', () => {
+  const before = translateMessage('es', 'viewer.common.close');
+  const { messages } = resolveCatalog('es', { 'viewer.common.close': 'Cerrar panel' });
+  assert.equal(messages['viewer.common.close'], 'Cerrar panel');
+  assert.ok(Object.isFrozen(messages));
+  assert.equal(translateMessage('es', 'viewer.common.close'), before);
+
+  registerLocale('es', { 'viewer.common.close': 'Cerrar panel' });
+  assert.equal(translateMessage('es', 'viewer.common.close'), 'Cerrar panel');
+  registerLocale('es');
+  assert.equal(translateMessage('es', 'viewer.common.close'), before, 'a later document without overrides reuses the bundled catalog');
+});
+
+function cliJson(args) {
+  const result = spawnSync(process.execPath, [cli, ...args], { cwd: tmp, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  return JSON.parse(result.stdout);
+}
+
+test('validate and deliver receipts carry locale warnings as structured diagnostics without failing', () => {
+  const input = path.join(tmp, 'receipt-fr.json');
+  fs.writeFileSync(input, JSON.stringify(localeDocument('architecture', {
+    locale: 'fr',
+    translations: { ...FR_PARTIAL_TRANSLATIONS, 'viewer.common.closee': 'Fermer' },
+  })));
+  const validated = cliJson(['validate', 'architecture', input, '--json']);
+  const delivered = cliJson(['deliver', 'architecture', input, path.join(tmp, 'receipt-fr.html'), '--json']);
+  for (const receipt of [validated, delivered]) {
+    assert.equal(receipt.ok, true);
+    assert.deepEqual(receipt.diagnostics.map((entry) => [entry.code, entry.severity]), [
+      ['i18n/invalid-translation', 'warning'],
+      ['i18n/translation-coverage', 'warning'],
+    ]);
+    const coverage = receipt.diagnostics[1].evidence;
+    assert.equal(coverage.missingKeysTotal, coverage.totalKeys - coverage.translatedKeys);
+    assert.equal(coverage.missingKeys.length, 10);
+    for (const key of coverage.missingKeys) assert.equal(coverage.englishSource[key], translateMessage('en', key));
+    assert.deepEqual(receipt.diagnostics[0].evidence.unknownKeys, ['viewer.common.closee']);
+  }
+
+  const clean = path.join(tmp, 'receipt-ko.json');
+  fs.writeFileSync(clean, JSON.stringify(localeDocument('architecture', { locale: 'ko' })));
+  assert.equal(cliJson(['validate', 'architecture', clean, '--json']).diagnostics, undefined);
+  assert.equal(cliJson(['deliver', 'architecture', clean, path.join(tmp, 'receipt-ko.html'), '--json']).diagnostics, undefined);
+});
+
+test('a passing finalize keeps locale warnings in its receipt', {
+  skip: chromePath ? false : 'Set ARCHIFY_CHROME to run finalize with its browser gate.',
+}, () => {
+  const input = path.join(tmp, 'finalize-fr.json');
+  fs.writeFileSync(input, JSON.stringify(localeDocument('architecture', { locale: 'fr', translations: FR_PARTIAL_TRANSLATIONS })));
+  const summary = cliJson(['finalize', 'architecture', input, path.join(tmp, 'finalize-fr.html'), '--quality', 'showcase', '--json']);
+  assert.equal(summary.ok, true);
+  assert.equal(summary.status, 'pass');
+  assert.deepEqual(summary.diagnostics.map((entry) => entry.code), ['i18n/translation-coverage']);
+  const full = JSON.parse(fs.readFileSync(summary.evidence.receipt, 'utf8'));
+  assert.deepEqual(full.diagnostics.map((entry) => entry.code), ['i18n/translation-coverage']);
+});
+
+test('the manifest enrolls exactly the bundled catalogs, and each is complete', () => {
+  assert.deepEqual(MANIFEST.catalogs.map(({ locale }) => locale), SUPPORTED_LOCALES);
+  const files = fs.readdirSync(path.join(skillRoot, 'locales')).filter((file) => file.endsWith('.json') && file !== 'manifest.json').sort();
+  assert.deepEqual(MANIFEST.catalogs.map(({ file }) => file).sort(), files, 'every bundled catalog file is enrolled and every entry exists');
+  for (const { locale, file } of MANIFEST.catalogs) {
+    const report = validateTranslations(JSON.parse(fs.readFileSync(path.join(skillRoot, 'locales', file), 'utf8')));
+    assert.equal(report.coveredKeys, report.totalKeys, `${locale}: missing ${report.missingKeys.join(', ')}`);
+    assert.deepEqual(report.unknownKeys, [], locale);
+    assert.deepEqual(report.placeholderMismatches, [], locale);
+  }
+});
+
+test('enrolling a catalog is a data-only change and works from an unrelated working directory', () => {
+  // Copy the runtime (no tests, no node_modules) outside the checkout, enroll
+  // one more catalog through data alone, and render from an unrelated cwd.
+  const packageRoot = path.join(tmp, 'package-copy', 'archify');
+  fs.cpSync(skillRoot, packageRoot, {
+    recursive: true,
+    filter: (source) => !['node_modules', 'test'].includes(path.basename(source)) || path.dirname(source) !== skillRoot,
+  });
+  const french = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples/locales/fr.json'), 'utf8'));
+  fs.writeFileSync(path.join(packageRoot, 'locales/fr.json'), JSON.stringify(french));
+  const manifestPath = path.join(packageRoot, 'locales/manifest.json');
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  manifest.catalogs.push({ locale: 'fr', file: 'fr.json' });
+  fs.writeFileSync(manifestPath, JSON.stringify(manifest));
+
+  const unrelated = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-i18n-cwd-'));
+  // A decoy catalog in the working directory must never be picked up.
+  fs.mkdirSync(path.join(unrelated, 'locales'));
+  fs.writeFileSync(path.join(unrelated, 'locales/manifest.json'), '{"catalogs":[]}');
+  for (const [locale, legend] of [['fr', 'Légende'], ['ko', '범례']]) {
+    const input = path.join(unrelated, `${locale}.json`);
+    const output = path.join(unrelated, `${locale}.html`);
+    fs.writeFileSync(input, JSON.stringify(localeDocument('architecture', { locale })));
+    const result = spawnSync(process.execPath, [path.join(packageRoot, 'bin/archify.mjs'), 'render', 'architecture', input, output], {
+      cwd: unrelated,
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 0, `${locale}: ${result.stderr || result.stdout}`);
+    const html = fs.readFileSync(output, 'utf8');
+    assert.match(html, new RegExp(`^<!DOCTYPE html>\\n<html lang="${locale}"`));
+    assert.match(html, new RegExp(`<text\\b[^>]*>${legend}</text>`));
+    if (locale === 'fr') assert.match(result.stderr, /meta\.locale "fr" resolves \d+\/\d+ renderer-owned messages \(\d+%\) from the bundled fr catalog; \d+ fall back to English\./);
+  }
 });
 
 const BROWSER_LOCALES = {
@@ -562,7 +827,6 @@ async function assertLocalizedViewer(browser, locale, expected) {
   for (const type of Object.keys(EXAMPLES)) {
     const document = example(type);
     document.meta.locale = locale;
-    if (locale === 'es') document.meta.translations = ES_TRANSLATIONS;
     const authoredTitle = expected.title(type);
     document.meta.title = authoredTitle;
     const result = run(type, document);
@@ -700,7 +964,6 @@ test('real Chrome keeps ko Finder, Route, Export, and accessibility UI localized
     for (const type of Object.keys(EXAMPLES)) {
       const document = example(type);
       document.meta.locale = 'ko';
-      document.meta.translations = KO_TRANSLATIONS;
       document.meta.title = `브라우저 로케일-${type}`;
       const result = run(type, document);
       assert.equal(result.status, 0, `${type}: ${result.stderr || result.stdout}`);
@@ -845,11 +1108,7 @@ test('every supported catalog is complete and preserves interpolation variables'
   }
 });
 
-// ko is no longer a built-in catalog (SUPPORTED_LOCALES), so its full-coverage
-// guarantee now lives here as a data test on examples/locales/ko.json, the
-// worked example, instead of the module-load assertion i18n.mjs used to run
-// over a hard-coded third tuple slot.
-test('the checked-in Korean example catalog is complete and preserves interpolation variables for every canonical key', () => {
+test('the bundled Korean catalog is complete and preserves interpolation variables for every canonical key', () => {
   const report = validateTranslations(KO_TRANSLATIONS);
   assert.equal(report.missingKeys.length, 0, `missing: ${report.missingKeys.join(', ')}`);
   assert.equal(report.unknownKeys.length, 0, `unknown: ${report.unknownKeys.join(', ')}`);
@@ -884,7 +1143,7 @@ for (const locale of ['fr', 'pt', 'ja', 'de', 'it', 'ru']) {
     assert.match(result.html, new RegExp(`^<!DOCTYPE html>\\n<html lang="${locale}"`));
     assert.match(result.html, new RegExp(`"locale":"${locale}"`));
     assert.doesNotMatch(result.html, /\{\{i18n:/);
-    assert.doesNotMatch(result.stderr, /has no built-in catalog/, `${locale}: unexpectedly fell back to English`);
+    assert.doesNotMatch(result.stderr, /has no bundled catalog/, `${locale}: unexpectedly fell back to English`);
 
     // Check the actual embedded runtime catalog, not raw HTML/CSS source
     // (which can contain incidental English substrings, e.g. template

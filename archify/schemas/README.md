@@ -12,11 +12,12 @@ against one of the schemas in this folder before any layout work happens.
 | `dataflow.schema.json` | `diagram_type: "dataflow"` | `stages`, `nodes`, `flows` |
 | `lifecycle.schema.json` | `diagram_type: "lifecycle"` | `lanes`, `states`, `transitions` |
 | `architecture.schema.json` | `diagram_type: "architecture"` | `components`, `boundaries`, `connections` |
+| `erd.schema.json` | `diagram_type: "erd"` | `entities`, `relationships` |
 | `common.schema.json` | shared `$defs` only (no top-level document) | — |
 
 Every diagram schema requires `schema_version`, `diagram_type`, `meta` (with
-`title` and a durable portable `output`), and its structural arrays — except `segments`, `activations`, and
-`cards`, which are optional — and sets `additionalProperties: false` at every
+`title` and a durable portable `output`), and its structural arrays — except `segments`, `activations`, ERD
+`relationships`, and `cards`, which are optional — and sets `additionalProperties: false` at every
 level, so unknown fields are rejected rather than silently ignored.
 
 Every `meta` object also accepts `animation: "trace"` for opt-in SVG/CSS motion
@@ -24,22 +25,22 @@ in generated HTML. Omit it, or set `"none"`, for the default static output.
 It also accepts `locale`, any well-formed language tag (schema pattern
 `^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$`). The field selects the fixed Viewer UI,
 renderer-owned default legend and accessibility copy, document-title suffix,
-and `<html lang>` value; it does not translate authored strings. `en` and
-`zh-CN` are built-in catalogs; any other tag needs a matching `translations`
-object (see below) or the renderer falls back to English and discloses it.
+and `<html lang>` value; it does not translate authored strings. The bundled
+catalogs enrolled in `locales/manifest.json` (`en`, `zh-CN`, `es`, `ko`) are
+selected by tag, case-insensitively; region and script variants are distinct
+tags. Any other tag needs a matching `translations` object (see below) or the
+renderer falls back to English and discloses it.
 Omitting `locale` preserves legacy behavior and resolves to English.
 Malformed locale tags fail schema validation instead of being guessed or
 silently rewritten.
 
-`meta.translations` supplies the Viewer message catalog for a `locale` with no
-built-in catalog, as data: an object mapping canonical message keys (see
-`catalogKeys()` in `renderers/shared/i18n.mjs`) to translated strings whose
-`{placeholder}` tokens match the English source. A key that is missing,
-unrecognized, or has mismatched placeholders falls back to English rather than
-failing the render; `validate`/`render`/`deliver` report the resulting
-coverage to stderr. Spanish uses the reusable `examples/locales/es.json`
-catalog; dev inputs that previously used only `locale: "es"` now need this
-object in `meta.translations` to retain Spanish UI.
+`meta.translations` is an optional per-key override, as data: an object mapping
+canonical message keys (`locales/en.json`) to translated strings whose
+`{placeholder}` tokens match the English source. Each message resolves as:
+valid `translations` value → bundled catalog for `locale` → English. An
+unrecognized key or mismatched placeholders never replaces a valid
+lower-priority message and fails no render; `validate`/`render`/`deliver`
+report rejected entries and the final resolved coverage to stderr.
 `visual_preset` accepts `classic` (the stable default), `signal-flow` (luminous
 motion-forward presentation), `blueprint` (high-contrast engineering review),
 or `editorial` (warm publication-style design review and documentation).
@@ -94,6 +95,7 @@ Supported keys are renderer-owned:
 | Sequence | `emphasis`, `return`, `security`, `dashed`, `default` |
 | Dataflow | `emphasis`, `security`, `dashed`, `database`, `default` |
 | Lifecycle | `start`, `active`, `waiting`, `decision`, `success`, `failure`, `neutral`, `external` |
+| ERD | `pk`, `fk`, `uk`, `one`, `many`, `optional` |
 
 Labels are presentation only: they do not rename the stable kind, change
 nodes/relationships, or create Semantic Lens edge facts. Sequence message and
@@ -168,10 +170,10 @@ The five diagram schemas reference `common.schema.json#/$defs/...`:
 - `point` — an `[x, y]` pair of numbers (used by `via` and `labelAt`)
 - `componentType` — `frontend`, `backend`, `database`, `cloud`, `security`,
   `messagebus`, `external`
-- `locale` — a well-formed renderer locale tag (`en` and `zh-CN` are built in;
-  any other tag needs a matching `translations` object)
-- `translations` — canonical message key → translated string, for a `locale`
-  with no built-in catalog
+- `locale` — a well-formed renderer locale tag (bundled catalogs are listed in
+  `locales/manifest.json`; any other tag needs a matching `translations` object)
+- `translations` — canonical message key → translated string, layered over the
+  bundled catalog for `locale`, then English
 - `portableOutputPath` — the portable POSIX-relative `.html` path used by
   `meta.output`; see the two output-path boundaries in the
   [delivery contract](../references/delivery-contract.md#output-path-contracts)

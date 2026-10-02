@@ -411,6 +411,20 @@ function iconCandidates(html, pageUrl) {
   return [...unique.values()].slice(0, 5).concat({ url: fallback, score: -1 });
 }
 
+function validIcoImageRanges(buffer) {
+  if (buffer.length < 6 || buffer.readUInt16LE(0) !== 0 || buffer.readUInt16LE(2) !== 1) return false;
+  const count = buffer.readUInt16LE(4);
+  const directoryEnd = 6 + count * 16;
+  if (count === 0 || directoryEnd > buffer.length) return false;
+  for (let index = 0; index < count; index += 1) {
+    const entry = 6 + index * 16;
+    const size = buffer.readUInt32LE(entry + 8);
+    const offset = buffer.readUInt32LE(entry + 12);
+    if (size === 0 || offset < directoryEnd || offset + size > buffer.length) return false;
+  }
+  return true;
+}
+
 async function imageData(response) {
   const contentType = (response.headers.get('content-type') || '').split(';')[0].trim().toLocaleLowerCase('en-US');
   const allowed = new Set([
@@ -442,10 +456,7 @@ async function imageData(response) {
           && buffer.toString('ascii', 0, 4) === 'RIFF'
           && buffer.toString('ascii', 8, 12) === 'WEBP'
           && buffer.readUInt32LE(4) + 8 <= buffer.length
-        : buffer.length >= 22
-          && buffer[0] === 0 && buffer[1] === 0 && buffer[2] === 1 && buffer[3] === 0
-          && buffer.readUInt16LE(4) > 0
-          && 6 + buffer.readUInt16LE(4) * 16 <= buffer.length));
+        : validIcoImageRanges(buffer)));
   if (!signatureMatches) throw new Error(`brand asset bytes do not match ${contentType}`);
   return {
     dataUrl: `data:${contentType};base64,${buffer.toString('base64')}`,

@@ -173,6 +173,7 @@ if (svgMatches.length === 1) {
     svgAttrs, fragment: beforeLegend, nodeRects, frames: compositionFrames,
     arrows, labels: relationshipLabels,
   });
+  const sequenceColumnSpace = collectSequenceColumnSpace({ svgAttrs, fragment: beforeLegend, nodeRects, arrows });
   const labelClearanceThreshold = qualityProfile === 'showcase' ? 4 : 2;
   const labelRouteMeasurements = collectLabelRouteClearance({
     labels: relationshipLabels,
@@ -264,6 +265,7 @@ if (svgMatches.length === 1) {
       }),
     },
     leadingSpace,
+    ...(sequenceColumnSpace ? { sequenceColumnSpace } : {}),
     desktopReadability: desktopReadability.evidence,
     issues: [
       ...containerBorderRuns.map((hit) => ({
@@ -784,6 +786,76 @@ function collectArchitectureLeadingSpace({ svgAttrs, fragment, nodeRects, frames
     canvasHeight: height,
     typicalNodeHeight,
     reviewSuggested: gap > 2 * typicalNodeHeight && ratio > 0.2,
+  };
+}
+
+// Advisory only: fixed columns are a compatibility contract. Measure semantic
+// content, including long labels/notes, rather than treating every wide canvas
+// as wasted space. Auto-sized segment frames do not add a participant column.
+function collectSequenceColumnSpace({ svgAttrs, fragment, nodeRects, arrows }) {
+  const columnFit = svgAttrs['data-sequence-column-fit'];
+  if (!['fixed', 'spread'].includes(columnFit)) return null;
+  const evidence = { measured: false, reviewSuggested: false, columnFit };
+  if (svgAttrs.transform || /<tspan\b/i.test(fragment)) return evidence;
+  // Brand badges stay inside their participant box. Ignore only that subtree's
+  // transforms, including the preset path or nested fallback icon's scale.
+  const brandGroups = [];
+  for (const token of fragment.matchAll(SVG_TAG_TOKEN)) {
+    if (!token[2]) continue;
+    const name = token[2].toLowerCase();
+    if (token[1]) {
+      if (name === 'g') brandGroups.pop();
+      continue;
+    }
+    const attrs = parseAttrs(token[0]);
+    const inBrand = brandGroups.at(-1) === true || (name === 'g'
+      && Boolean(attrs['data-brand-mark'])
+      && String(attrs.class || '').split(/\s+/).includes('brand-mark'));
+    if (!inBrand && attrs.transform && ['g', 'path', 'line', 'rect', 'text'].includes(name)
+        && !(name === 'g' && attrs['data-semantic-sigil'])) return evidence;
+    if (name === 'g' && !/\/\s*>$/.test(token[0])) brandGroups.push(inBrand);
+  }
+  const [originX, , width, height] = viewBoxRect(svgAttrs);
+  if (![originX, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return evidence;
+  const nodeCount = [...fragment.matchAll(/<g\b[^>]*\bdata-node-id=/gi)].length;
+  if (!nodeRects.length || nodeCount !== nodeRects.length) return evidence;
+  const semanticArrows = arrows.filter((arrow) => arrow.from && arrow.to);
+  if (semanticArrows.some((arrow) => !arrow.routePoints.length)) return evidence;
+  const rightEdges = nodeRects.map((node) => node.box[0] + node.box[2]);
+  for (const arrow of semanticArrows) {
+    for (const point of arrow.routePoints) rightEdges.push(point[0]);
+  }
+  // Label plates, activations and segment titles also reserve horizontal room.
+  for (const match of fragment.matchAll(/<rect\b[^>]*>/gi)) {
+    const attrs = parseAttrs(match[0]);
+    if (!String(attrs.class || '').split(/\s+/).includes('c-mask')) continue;
+    rightEdges.push(numberAttr(attrs, 'x') + numberAttr(attrs, 'width'));
+  }
+  for (const match of fragment.matchAll(/<text\b([^>]*)>([\s\S]*?)<\/text>/gi)) {
+    const box = textBox(parseAttrs(match[1]), stripTags(match[2]).trim());
+    if (!box) return evidence;
+    rightEdges.push(box.x2);
+  }
+  if (!rightEdges.every(Number.isFinite)) return evidence;
+  const occupiedRight = Math.max(...rightEdges);
+  const gap = Math.max(0, originX + width - occupiedRight);
+  const ratio = gap / width;
+  const widths = nodeRects.map((node) => node.box[2]).sort((a, b) => a - b);
+  const typicalParticipantWidth = widths[Math.floor(widths.length / 2)];
+  return {
+    measured: true,
+    columnFit,
+    participantCount: nodeCount,
+    occupiedRight: Math.round(occupiedRight * 10) / 10,
+    viewBoxLeft: originX,
+    canvasWidth: width,
+    emptyRightPx: Math.round(gap * 10) / 10,
+    emptyRightRatio: Math.round(ratio * 1000) / 1000,
+    typicalParticipantWidth,
+    // Avoid stretching a small conversation merely to fill its canvas. These
+    // conservative review thresholds never contribute errors or warnings.
+    reviewSuggested: columnFit === 'fixed' && nodeCount >= 4
+      && gap > 2 * typicalParticipantWidth && ratio > 0.25,
   };
 }
 

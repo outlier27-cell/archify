@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(__dirname, '..');
 
-const TYPES = new Set(['architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle']);
+const TYPES = new Set(['architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle', 'erd']);
 const DELIVERY_SIDECAR_SUFFIXES = Object.freeze([
   '.delivery.json',
   '.delivery-pending.json',
@@ -1871,6 +1871,21 @@ function recordDeliveryFailure(options) {
   return recorded;
 }
 
+// Locale warnings for a successfully rendered candidate. The renderer prints
+// them to stderr; receipts carry the same diagnostics from the same pure
+// resolver so an agent can repair a translation gap from structured output.
+async function specificationLocaleDiagnostics(type, specification) {
+  let meta;
+  try {
+    meta = JSON.parse(String(specification)).meta;
+  } catch {
+    return [];
+  }
+  if (!meta?.locale) return [];
+  const { localeDiagnostics } = await import('../renderers/shared/i18n.mjs');
+  return localeDiagnostics(type, meta);
+}
+
 function deliverySuccessProvenance(receipt) {
   return {
     schemaVersion: 1,
@@ -2194,7 +2209,7 @@ function usage() {
   archify demo [output-directory]
 
 Types:
-  architecture, workflow, sequence, dataflow, lifecycle
+  architecture, workflow, sequence, dataflow, lifecycle, erd
 `;
 }
 
@@ -4163,7 +4178,7 @@ function commandRender(args) {
   if (result.status !== 0) exitFrom(result);
 }
 
-function reportArtifactFailure({ command, json, stage, type, input, output, error, diagnostics = [], status = 1, checker, receiptId, provenance }) {
+function reportArtifactFailure({ command, json, stage, type, input, output, error, diagnostics = [], status = 1, checker, receiptId, provenance, update }) {
   const receipt = {
     schemaVersion: 1,
     ok: false,
@@ -4177,9 +4192,13 @@ function reportArtifactFailure({ command, json, stage, type, input, output, erro
     diagnostics,
     ...(provenance ? { provenance } : {}),
     ...(checker ? { checker } : {}),
+    ...(update ? { update } : {}),
   };
   if (json) console.log(JSON.stringify(receipt, null, 2));
-  else console.error(formatDiagnostics(error, diagnostics));
+  else {
+    console.error(formatDiagnostics(error, diagnostics));
+    if (update?.noticeRequired) console.log(update.noticeText);
+  }
   process.exitCode = status;
 }
 
@@ -4319,16 +4338,18 @@ async function commandDeliver(args) {
     releaseRegularFileBinding,
   };
   const receiptId = randomUUID();
+  let updateCheck;
   let deliveryOwnership;
   let recoveryRequired = false;
   let stagingDirectory;
   let stagingIdentity;
   let deliveryAliasOutput;
-  const reportDeliveryFailure = (options) => {
+  const reportDeliveryFailure = async (options) => {
     const ownership = deliveryOwnership;
     deliveryOwnership = undefined;
     const recorded = writeDeliveryFailureReceipt({
       ...options,
+      ...(updateCheck ? { update: await updateCheck } : {}),
       pathsAlias,
       receiptId,
       ownership,
@@ -4343,6 +4364,10 @@ async function commandDeliver(args) {
       recoveryRequired = true;
     }
   };
+  const reportPreparedArtifactFailure = async (options) => reportArtifactFailure({
+    ...options,
+    ...(updateCheck ? { update: await updateCheck } : {}),
+  });
   const inputPath = path.resolve(input);
   let specification;
   let diagram;
@@ -4351,7 +4376,7 @@ async function commandDeliver(args) {
     diagram = JSON.parse(specification.toString('utf8'));
   } catch (error) {
     const repair = inputDiagnostic(error, inputPath);
-    reportDeliveryFailure({
+    await reportDeliveryFailure({
       json,
       stage: 'input',
       type,
@@ -4402,9 +4427,9 @@ async function commandDeliver(args) {
       })],
     };
     if (outputPath) {
-      reportDeliveryFailure(failure);
+      await reportDeliveryFailure(failure);
     } else {
-      reportArtifactFailure({ ...failure, command: 'deliver', receiptId });
+      await reportPreparedArtifactFailure({ ...failure, command: 'deliver', receiptId });
     }
     return;
   }
@@ -4413,7 +4438,7 @@ async function commandDeliver(args) {
     fs.mkdirSync(outputDirectory, { recursive: true });
   } catch (error) {
     const message = `Could not create delivery directory "${outputDirectory}": ${error.message}`;
-    reportDeliveryFailure({
+    await reportDeliveryFailure({
       json,
       stage: 'prepare',
       type,
@@ -4466,9 +4491,9 @@ async function commandDeliver(args) {
       })],
     };
     if (error?.code === 'ARCHIFY_SIDECAR_NAMESPACE_INDETERMINATE') {
-      reportArtifactFailure({ ...failure, command: 'deliver', receiptId });
+      await reportPreparedArtifactFailure({ ...failure, command: 'deliver', receiptId });
     } else {
-      reportDeliveryFailure(failure);
+      await reportDeliveryFailure(failure);
     }
     return;
   }
@@ -4506,8 +4531,10 @@ async function commandDeliver(args) {
     outputPath = artifactCapture.commitPath;
     provenancePath = provenanceCapture.commitPath;
     outputDirectory = path.dirname(outputPath);
+    const { startDeliveryUpdateCheck } = await import('./delivery-update.mjs');
+    updateCheck = startDeliveryUpdateCheck();
   } catch (error) {
-    reportArtifactFailure({
+    await reportPreparedArtifactFailure({
       command: 'deliver', json, stage: 'prepare', type, input: inputPath, output: outputPath, receiptId,
       error: error.message,
       diagnostics: error.archifyDiagnostics || [diagnostic({
@@ -4532,7 +4559,7 @@ async function commandDeliver(args) {
     stagingIdentity = staging.identity;
   } catch (error) {
     const message = `Could not create a delivery candidate beside "${outputPath}": ${error.message}`;
-    reportDeliveryFailure({
+    await reportDeliveryFailure({
       json,
       stage: 'prepare',
       type,
@@ -4586,7 +4613,7 @@ async function commandDeliver(args) {
     } catch (error) {
       const message = `Could not start delivery for "${outputPath}": ${error.message}`;
       const recorded = error.deliveryFailureRecord;
-      reportArtifactFailure({
+      await reportPreparedArtifactFailure({
         command: 'deliver', json, stage: 'prepare', type, input: inputPath, output: outputPath, receiptId,
         error: message,
         ...(recorded ? { provenance: recorded.status } : {}),
@@ -4625,7 +4652,7 @@ async function commandDeliver(args) {
         releaseError = cause;
       }
       deliveryOwnership = undefined;
-      reportArtifactFailure({
+      await reportPreparedArtifactFailure({
         command: 'deliver', json, stage: 'prepare', type, input: inputPath, output: outputPath, receiptId,
         error: error.message,
         diagnostics: [
@@ -4653,7 +4680,7 @@ async function commandDeliver(args) {
         // The lock is the remaining fail-closed barrier. Do not write failure
         // provenance or release it after journal rollback itself became unsafe.
         deliveryOwnership = undefined;
-        reportArtifactFailure({
+        await reportPreparedArtifactFailure({
           command: 'deliver', json, stage: 'prepare', type, input: inputPath, output: outputPath, receiptId,
           error: `Could not persist the delivery attempt before rendering: ${error.message}`,
           diagnostics: [deliveryJournalRecoveryDiagnostic(outputPath, error)],
@@ -4668,14 +4695,14 @@ async function commandDeliver(args) {
           recoveryDirectory: stagingDirectory,
           recoverableBackups: [],
         };
-        reportArtifactFailure({
+        await reportPreparedArtifactFailure({
           command: 'deliver', json, stage: 'prepare', type, input: inputPath, output: outputPath, receiptId,
           error: `Could not persist the delivery attempt before rendering: ${error.message}`,
           diagnostics: [deliveryLockFailureDiagnostic(outputPath, error)],
         });
         return;
       }
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json, stage: 'prepare', type, input: inputPath, output: outputPath,
         error: 'Could not persist the delivery attempt before rendering.',
         diagnostics: [diagnostic({
@@ -4700,7 +4727,7 @@ async function commandDeliver(args) {
       );
     } catch (error) {
       const message = `Could not freeze the delivery specification: ${error.message}`;
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json,
         stage: 'prepare',
         type,
@@ -4724,7 +4751,7 @@ async function commandDeliver(args) {
     });
     if (render.status !== 0) {
       const failure = rendererFailure(render);
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json,
         stage: 'render',
         type,
@@ -4760,7 +4787,7 @@ async function commandDeliver(args) {
       } catch {
         checker = { ok: false, file: outputPath, diagnostic: check.stdout.trim() };
       }
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json,
         stage: 'check',
         type,
@@ -4779,7 +4806,7 @@ async function commandDeliver(args) {
       result = JSON.parse(check.stdout);
     } catch (error) {
       const message = `Could not parse the successful artifact-check receipt: ${error.message}`;
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json,
         stage: 'receipt',
         type,
@@ -4800,7 +4827,7 @@ async function commandDeliver(args) {
       artifact = fs.readFileSync(candidatePath);
     } catch (error) {
       const message = `Could not read the verified delivery candidate: ${error.message}`;
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json,
         stage: 'receipt',
         type,
@@ -4821,7 +4848,7 @@ async function commandDeliver(args) {
       sourceEvidence = sourceEvidenceFromArtifact(artifact);
     } catch (error) {
       const message = `Could not read the repository evidence receipt: ${error.message}`;
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json,
         stage: 'receipt',
         type,
@@ -4838,6 +4865,7 @@ async function commandDeliver(args) {
       return;
     }
     const engineeringProfile = engineeringProfileFromArtifact(artifact);
+    const localeWarnings = await specificationLocaleDiagnostics(type, specification);
     const receipt = {
       schemaVersion: 1,
       receiptId,
@@ -4875,6 +4903,7 @@ async function commandDeliver(args) {
           ...(sourceEvidence.repository.linkMode ? { linkMode: sourceEvidence.repository.linkMode } : {}),
         },
       } : {}),
+      ...(localeWarnings.length ? { diagnostics: localeWarnings } : {}),
     };
 
     const provenanceBytes = Buffer.from(`${JSON.stringify(deliverySuccessProvenance(receipt), null, 2)}\n`);
@@ -4893,7 +4922,7 @@ async function commandDeliver(args) {
         // cleanup must not claim a candidate that could not be bound here.
       }
     } catch (error) {
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json,
         stage: 'commit',
         type,
@@ -4928,7 +4957,7 @@ async function commandDeliver(args) {
         otherOutputPaths: [currentOutputPath],
       });
     } catch (error) {
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json,
         stage: 'commit',
         type,
@@ -4974,7 +5003,7 @@ async function commandDeliver(args) {
         // barrier around retained backups and any claimant we did not create.
         // Do not write failure provenance or release ownership here.
         deliveryOwnership = undefined;
-        reportArtifactFailure({
+        await reportPreparedArtifactFailure({
           command: 'deliver', json, stage: 'commit', type, input: inputPath, output: outputPath, receiptId,
           error: message,
           diagnostics: [
@@ -4995,7 +5024,7 @@ async function commandDeliver(args) {
           releaseError = cause;
         }
         deliveryOwnership = undefined;
-        reportArtifactFailure({
+        await reportPreparedArtifactFailure({
           command: 'deliver', json, stage: 'commit', type, input: inputPath, output: outputPath, receiptId,
           error: message,
           diagnostics: [
@@ -5007,14 +5036,14 @@ async function commandDeliver(args) {
       }
       if (error.deliveryOwnershipCode === 'delivery/ownership-lost') {
         deliveryOwnership = undefined;
-        reportArtifactFailure({
+        await reportPreparedArtifactFailure({
           command: 'deliver', json, stage: 'commit', type, input: inputPath, output: outputPath, receiptId,
           error: message,
           diagnostics: [deliveryLockFailureDiagnostic(outputPath, error)],
         });
         return;
       }
-      reportDeliveryFailure({
+      await reportDeliveryFailure({
         json,
         stage: 'commit',
         type,
@@ -5050,7 +5079,7 @@ async function commandDeliver(args) {
         };
       }
       const message = `Delivery committed, but its lock could not be released for "${outputPath}": ${error.message}`;
-      reportArtifactFailure({
+      await reportPreparedArtifactFailure({
         command: 'deliver', json, stage: 'release', type, input: inputPath, output: outputPath, receiptId,
         error: message,
         diagnostics: [deliveryLockFailureDiagnostic(outputPath, error)],
@@ -5075,6 +5104,8 @@ async function commandDeliver(args) {
       }
     }
 
+    receipt.update = await updateCheck;
+
     if (json) {
       console.log(JSON.stringify(receipt, null, 2));
     } else {
@@ -5084,6 +5115,7 @@ async function commandDeliver(args) {
         : '';
       console.log(`${receipt.validation.checksPassed}/${receipt.validation.checkCount} artifact checks; composition ${receipt.validation.compositionProfile}: ${receipt.validation.compositionStatus}${engineering}; sha256 ${receipt.artifact.sha256.slice(0, 12)}`);
       if (receipt.open?.status === 'opened') console.log(`opened ${outputPath}`);
+      if (receipt.update.noticeRequired) console.log(receipt.update.noticeText);
     }
   } finally {
     if (deliveryOwnership) {
@@ -5718,6 +5750,10 @@ async function commandFinalize(rawArgs) {
     console.log(`gates ${Object.entries(result.summary.gates).map(([stage, status]) => `${stage}:${status}`).join(' ')}`);
     console.log(`receipt ${result.summary.evidence.receipt}`);
     console.log(`perceptual visual review ${result.summary.visualReview}`);
+    for (const entry of result.summary.diagnostics || []) {
+      if (entry.severity === 'warning') console.error(`warning [${entry.code}] ${entry.message}`);
+    }
+    if (result.summary.update?.noticeRequired) console.log(result.summary.update.noticeText);
   }
   process.exitCode = result.exitCode;
 }
@@ -5869,6 +5905,7 @@ async function commandDoctor(args) {
     sequence: 'cache-miss-request.sequence.json',
     dataflow: 'product-analytics.dataflow.json',
     lifecycle: 'agent-run.lifecycle.json',
+    erd: 'orders.erd.json',
   };
 
   for (const type of TYPES) {
@@ -6805,6 +6842,7 @@ async function commandValidate(args) {
             ...artifactIdentity(specification),
           };
           const resolvedQuality = quality || result.composition.profile || 'standard';
+          const localeWarnings = await specificationLocaleDiagnostics(type, specification);
           console.log(JSON.stringify({
             schemaVersion: 1,
             ok: true,
@@ -6830,6 +6868,7 @@ async function commandValidate(args) {
             checks: result.checks,
             composition: result.composition,
             ...(engineeringProfile ? { engineeringProfile } : {}),
+            ...(localeWarnings.length ? { diagnostics: localeWarnings } : {}),
           }, null, 2));
         } else {
           const engineering = engineeringProfile

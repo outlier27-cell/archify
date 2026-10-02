@@ -684,6 +684,8 @@ canonicalZipTest('built archives contain the embedded notifier runtime', () => {
     const entries = new Set(listing.stdout.trim().split('\n'));
     assert.ok(entries.has('archify/skill-release.json'));
     assert.ok(entries.has('archify/scripts/check-update.mjs'));
+    assert.ok(entries.has('archify/scripts/delivery-update-child.mjs'));
+    assert.ok(entries.has('archify/bin/delivery-update.mjs'));
     assert.ok(entries.has('archify/scripts/update-contract.mjs'));
     assert.ok(entries.has('archify/renderers/shared/atomic-output.mjs'));
     assert.ok(entries.has('archify/renderers/shared/sidecar-path.mjs'));

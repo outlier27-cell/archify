@@ -47,6 +47,7 @@ test('non-architecture sources reach real Viewer beacons, Focus and Finder', {
     ['lifecycle', 'states', 'deployment-release.lifecycle.json', false, 'light', {
       label: '等待人工审批确认', sublabel: '来源已核验', tag: '等待中', step: '02',
     }],
+    ['erd', 'entities', 'orders.erd.json', true, 'light'],
   ];
   for (const [type, collection, example, local, theme, extra = {}, nodeId] of cases) {
     const url = local ? 'http://git.internal/Team/repo' : 'https://github.com/example/evidence-repo';
