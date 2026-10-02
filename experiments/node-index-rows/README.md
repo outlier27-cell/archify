@@ -51,3 +51,23 @@ long-text narrow candidate. Group membership is clear; desktop whitespace is
 used better, and narrow labels wrap. Exact spacing remains open for review.
 
 Related issue: https://github.com/tt-a1i/archify/issues/664
+
+## Checked-in comparisons
+
+These unselected, default-camera screenshots use light theme and ordinary
+mode. Matching dark-theme captures are also in `screenshots/`.
+
+| Fixture / width | Columns | Group rows |
+| --- | --- | --- |
+| Sample Web App / 1440 | [Before](screenshots/sample-web-app-1440-light-columns.png) | [After](screenshots/sample-web-app-1440-light-rows.png) |
+| Sample Web App / 390 | [Before](screenshots/sample-web-app-390-light-columns.png) | [After](screenshots/sample-web-app-390-light-rows.png) |
+| 26 bilingual nodes / 1440 | [Before](screenshots/stress-1440-light-columns.png) | [After](screenshots/stress-1440-light-rows.png) |
+| 26 bilingual nodes / 390 | [Before](screenshots/stress-390-light-columns.png) | [After](screenshots/stress-390-light-rows.png) |
+
+Before:
+
+![Sample Web App bottom index with columns](screenshots/sample-web-app-1440-light-columns.png)
+
+After:
+
+![Sample Web App bottom index with grouped rows](screenshots/sample-web-app-1440-light-rows.png)
