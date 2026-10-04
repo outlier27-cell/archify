@@ -94,6 +94,7 @@ try {
             })()` });
             assert.equal(interaction.exceptionDetails, undefined);
             assert.equal(interaction.result.value.focused, true);
+            assert.equal(interaction.result.value.hoverPreview, interaction.result.value.id, `${label}: pointer-enter preview did not activate the hovered node`);
             assert.equal(interaction.result.value.selected, 'true');
             if (!candidate) baselineInteraction = interaction.result.value;
             else assert.deepEqual(interaction.result.value, baselineInteraction, `${label}: interaction changed`);
