@@ -38,7 +38,7 @@ test('architecture typography scale keeps real-browser text inside the SVG in or
       { from: 'ledger', to: 'warehouse', label: 'replicate' },
     ],
   }));
-  execFileSync(process.execPath, [path.join(root, 'bin/archify.mjs'), 'render', 'architecture', input, output]);
+  execFileSync(process.execPath, [path.join(root, 'archify/bin/archify.mjs'), 'render', 'architecture', input, output]);
   const browser = new ChromeVisualBrowser(chrome);
   try {
     const session = await browser.sessionPromise;

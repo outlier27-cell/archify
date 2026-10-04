@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const cli = path.join(root, 'bin', 'archify.mjs');
+const cli = path.join(root, 'archify', 'bin', 'archify.mjs');
 
 function specimen(typographyScale) {
   return {
