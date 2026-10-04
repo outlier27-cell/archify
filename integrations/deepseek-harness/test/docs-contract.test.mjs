@@ -39,7 +39,9 @@ test('DSH documentation identifies the published release and pinned candidate sn
   assert.ok(integration.includes(candidate.sourceCommit));
   assert.ok(integration.includes(`@deepseek-ai/dsh@${candidate.dshVersion}`));
   assert.match(integration, /not published or available as an npm install yet/);
-  assert.match(integration, /not an Archify 2\.17 stable release/);
+  assert.match(integration, /pinned to stable `main` commit/);
+  assert.match(integration, /landed after the `v3\.0\.1` tag/);
+  assert.match(integration, /not a byte-for-byte copy of that tag/);
   assert.match(integration, /notification-only/);
   assert.match(integration, /does not update an already installed plugin/);
   assert.match(integration, /repository root is not a DSH package/);

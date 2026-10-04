@@ -10538,6 +10538,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         Array.prototype.forEach.call(clone.querySelectorAll(&#39;[data-node-id][aria-pressed]&#39;), function (el) {
           el.setAttribute(&#39;aria-pressed&#39;, &#39;false&#39;);
         });
+        // A downloaded tree is always the complete hierarchy: collapsing is a
+        // reading aid, never a silent change to what the artifact contains.
+        clone.removeAttribute(&#39;data-tree-any-collapsed&#39;);
+        Array.prototype.forEach.call(clone.querySelectorAll(&#39;[data-tree-hidden], [data-tree-collapsed]&#39;), function (el) {
+          el.removeAttribute(&#39;data-tree-hidden&#39;);
+          el.removeAttribute(&#39;data-tree-collapsed&#39;);
+        });
+        Array.prototype.forEach.call(clone.querySelectorAll(&#39;[data-tree-toggle]&#39;), function (el) {
+          el.setAttribute(&#39;aria-expanded&#39;, &#39;true&#39;);
+          el.setAttribute(&#39;aria-label&#39;, el.getAttribute(&#39;data-tree-label-collapse&#39;) || &#39;&#39;);
+        });
         return !clone.hasAttribute(&#39;data-view-scale&#39;) &amp;&amp;
           !clone.hasAttribute(&#39;data-focus-active&#39;) &amp;&amp;
           !clone.hasAttribute(&#39;data-reach-active&#39;) &amp;&amp;
@@ -10553,9 +10564,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           !clone.hasAttribute(&#39;data-route-journey&#39;) &amp;&amp;
           !clone.hasAttribute(&#39;data-share-route&#39;) &amp;&amp;
           !clone.hasAttribute(&#39;data-share-reach&#39;) &amp;&amp;
+          !clone.hasAttribute(&#39;data-tree-any-collapsed&#39;) &amp;&amp;
           !clone.style.getPropertyValue(&#39;transform&#39;) &amp;&amp;
           !clone.style.getPropertyValue(&#39;clip-path&#39;) &amp;&amp;
-          clone.querySelectorAll(&#39;[data-focus-match], [data-focus-selected], [data-reach-match], [data-reach-origin], [data-reach-depth], [data-semantic-lens-overlay], [data-lens-match], [data-lens-selected], [data-lens-peer], [data-legend-bridge], [data-legend-kind], [data-legend-bridge-runtime], [data-legend-count], [data-legend-zero], [data-legend-selected], [data-legend-preview-match], [data-legend-preview-selected], [data-legend-preview-peer], [data-relationship-hit-overlay], [data-relationship-pulse-overlay], [data-relationship-preview], [data-relationship-preview-node], [data-relationship-preview-source], [data-relationship-preview-target], [data-intent-trace-overlay], [data-intent-trace-match], [data-intent-trace-selected], [data-route-probe-overlay], [data-route-journey-overlay], [data-route-match], [data-route-start], [data-route-end], [data-route-step], [data-route-candidate], [data-route-journey-state], [data-route-journey-current], [data-share-route-match], [data-share-route-step], [data-share-route-start], [data-share-route-end], [data-share-route-middle], [data-share-reach-match], [data-share-reach-origin], [data-share-reach-depth], [data-source-evidence-beacon], [data-source-evidence-count], [data-source-evidence-original-label], [data-detail], [data-detail-anchor]&#39;).length === 0;
+          clone.querySelectorAll(&#39;[data-focus-match], [data-focus-selected], [data-reach-match], [data-reach-origin], [data-reach-depth], [data-semantic-lens-overlay], [data-lens-match], [data-lens-selected], [data-lens-peer], [data-legend-bridge], [data-legend-kind], [data-legend-bridge-runtime], [data-legend-count], [data-legend-zero], [data-legend-selected], [data-legend-preview-match], [data-legend-preview-selected], [data-legend-preview-peer], [data-relationship-hit-overlay], [data-relationship-pulse-overlay], [data-relationship-preview], [data-relationship-preview-node], [data-relationship-preview-source], [data-relationship-preview-target], [data-intent-trace-overlay], [data-intent-trace-match], [data-intent-trace-selected], [data-route-probe-overlay], [data-route-journey-overlay], [data-route-match], [data-route-start], [data-route-end], [data-route-step], [data-route-candidate], [data-route-journey-state], [data-route-journey-current], [data-share-route-match], [data-share-route-step], [data-share-route-start], [data-share-route-end], [data-share-route-middle], [data-share-reach-match], [data-share-reach-origin], [data-share-reach-depth], [data-source-evidence-beacon], [data-source-evidence-count], [data-source-evidence-original-label], [data-detail], [data-detail-anchor], [data-tree-hidden], [data-tree-collapsed]&#39;).length === 0;
       }
 
 
@@ -11331,13 +11343,18 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
           function samplesFor(element) {
             if (typeof element.getTotalLength !== &#39;function&#39; || typeof element.getPointAtLength !== &#39;function&#39;) return [];
+            var geometry = element;
+            if (element.getAttribute(&#39;data-motion-path&#39;)) {
+              geometry = element.cloneNode(false);
+              geometry.setAttribute(&#39;d&#39;, element.getAttribute(&#39;data-motion-path&#39;));
+            }
             var length;
-            try { length = element.getTotalLength(); } catch (_) { return []; }
+            try { length = geometry.getTotalLength(); } catch (_) { return []; }
             if (!Number.isFinite(length) || length &lt;= 0) return [];
             var count = Math.max(12, Math.min(72, Math.ceil(length / 12)));
             var points = [];
             for (var i = 0; i &lt;= count; i++) {
-              points.push(pointInRoot(element, element.getPointAtLength(length * i / count)));
+              points.push(pointInRoot(element, geometry.getPointAtLength(length * i / count)));
             }
             return points;
           }
@@ -12230,6 +12247,137 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     Archify.sourceEvidence.installBeacons();
 
     /* ============================================================
+       Tree Branches — expand/collapse for hierarchy diagrams. The renderer
+       lays out the complete tree once and tags every node, link, and toggle
+       with its ancestors; collapsing only hides descendants, so visible nodes
+       never move and the reader keeps their place. Selecting a hidden node
+       through Finder, Outline, or a shared link expands its ancestors. Export
+       always writes the complete tree (see Export Cleanup).
+       ============================================================ */
+    Archify.treeBranches = (function () {
+      var svg = document.querySelector(&#39;.diagram-container &gt; svg[data-tree-ui]&#39;);
+      if (!svg) return { active: false };
+      var collapsed = Object.create(null);
+      var toggles = Object.create(null);
+      Array.prototype.forEach.call(svg.querySelectorAll(&#39;[data-tree-toggle]&#39;), function (toggle) {
+        toggles[toggle.getAttribute(&#39;data-tree-toggle&#39;)] = toggle;
+      });
+      var tagged = svg.querySelectorAll(&#39;[data-tree-ancestors]&#39;);
+      var expandAll = svg.querySelector(&#39;[data-tree-expand-all]&#39;);
+
+      function ancestors(el) {
+        return (el.getAttribute(&#39;data-tree-ancestors&#39;) || &#39;&#39;).split(&#39; &#39;).filter(Boolean);
+      }
+
+      function apply() {
+        Array.prototype.forEach.call(tagged, function (el) {
+          var hidden = ancestors(el).some(function (id) { return collapsed[id]; });
+          if (hidden) el.setAttribute(&#39;data-tree-hidden&#39;, &#39;&#39;);
+          else el.removeAttribute(&#39;data-tree-hidden&#39;);
+        });
+        var any = false;
+        Object.keys(toggles).forEach(function (id) {
+          var toggle = toggles[id];
+          var isCollapsed = Boolean(collapsed[id]);
+          any = any || isCollapsed;
+          toggle.setAttribute(&#39;aria-expanded&#39;, isCollapsed ? &#39;false&#39; : &#39;true&#39;);
+          toggle.setAttribute(&#39;aria-label&#39;, toggle.getAttribute(isCollapsed ? &#39;data-tree-label-expand&#39; : &#39;data-tree-label-collapse&#39;) || &#39;&#39;);
+          var node = svg.querySelector(&#39;[data-node-id=&quot;&#39; + id + &#39;&quot;]&#39;);
+          if (node) {
+            if (isCollapsed) node.setAttribute(&#39;data-tree-collapsed&#39;, &#39;&#39;);
+            else node.removeAttribute(&#39;data-tree-collapsed&#39;);
+          }
+        });
+        if (any) svg.setAttribute(&#39;data-tree-any-collapsed&#39;, &#39;&#39;);
+        else svg.removeAttribute(&#39;data-tree-any-collapsed&#39;);
+      }
+
+      function setCollapsed(id, value) {
+        if (!toggles[id]) return false;
+        if (value) collapsed[id] = true;
+        else delete collapsed[id];
+        apply();
+        return true;
+      }
+
+      function toggle(id) { return setCollapsed(id, !collapsed[id]); }
+
+      // Reveal a node by expanding every collapsed ancestor; nothing else moves.
+      function reveal(id) {
+        var node = svg.querySelector(&#39;[data-node-id=&quot;&#39; + id + &#39;&quot;]&#39;);
+        if (!node) return false;
+        var changed = false;
+        ancestors(node).forEach(function (ancestor) {
+          if (collapsed[ancestor]) { delete collapsed[ancestor]; changed = true; }
+        });
+        if (changed) apply();
+        return changed;
+      }
+
+      function restoreAll() {
+        collapsed = Object.create(null);
+        apply();
+      }
+
+      function activate(event) {
+        var target = event.target.closest(&#39;[data-tree-toggle], [data-tree-expand-all]&#39;);
+        if (!target || !svg.contains(target)) return false;
+        event.preventDefault();
+        event.stopPropagation();
+        if (target.hasAttribute(&#39;data-tree-expand-all&#39;)) {
+          restoreAll();
+          var root = svg.querySelector(&#39;[data-tree-toggle]:not([data-tree-ancestors])&#39;);
+          if (root) root.focus();
+        } else {
+          toggle(target.getAttribute(&#39;data-tree-toggle&#39;));
+          target.focus();
+        }
+        return true;
+      }
+
+      // Capture phase so the canvas focus handler never treats a toggle press
+      // as a background click that clears the current focus.
+      svg.addEventListener(&#39;click&#39;, activate, true);
+      svg.addEventListener(&#39;keydown&#39;, function (event) {
+        if (event.key === &#39;Enter&#39; || event.key === &#39; &#39;) { activate(event); return; }
+        var node = event.target.closest(&#39;[data-node-id]&#39;);
+        if (!node || !svg.contains(node)) return;
+        var id = node.getAttribute(&#39;data-node-id&#39;);
+        // Arrow keys follow the tree convention: left collapses, right expands.
+        if (event.key === &#39;ArrowLeft&#39; &amp;&amp; toggles[id] &amp;&amp; !collapsed[id]) { event.preventDefault(); setCollapsed(id, true); }
+        else if (event.key === &#39;ArrowRight&#39; &amp;&amp; collapsed[id]) { event.preventDefault(); setCollapsed(id, false); }
+      }, true);
+
+      // Focus reveals ancestors synchronously before positioning its lens.
+      // The observer also covers paths that change pressed state directly.
+      new MutationObserver(function (records) {
+        records.forEach(function (record) {
+          var el = record.target;
+          if (el.hasAttribute &amp;&amp; el.hasAttribute(&#39;data-tree-hidden&#39;) &amp;&amp; el.getAttribute(&#39;aria-pressed&#39;) === &#39;true&#39;) {
+            reveal(el.getAttribute(&#39;data-node-id&#39;));
+          }
+        });
+      }).observe(svg, { subtree: true, attributes: true, attributeFilter: [&#39;aria-pressed&#39;] });
+
+      Object.keys(toggles).forEach(function (id) {
+        if (toggles[id].hasAttribute(&#39;data-tree-initially-collapsed&#39;)) collapsed[id] = true;
+      });
+      apply();
+
+      return {
+        active: true,
+        toggle: toggle,
+        collapse: function (id) { return setCollapsed(id, true); },
+        expand: function (id) { return setCollapsed(id, false); },
+        reveal: reveal,
+        restoreAll: restoreAll,
+        collapsedIds: function () { return Object.keys(collapsed); },
+        expandAllControl: expandAll
+      };
+    })();
+
+
+    /* ============================================================
        Explore — stable-ID neighborhood focus + dependency-free pan/zoom.
        Renderer IDs become deep-linkable semantic hooks without turning the
        standalone artifact into a canvas editor.
@@ -12754,6 +12902,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function relationshipPulseGeometry(shape) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, relationshipTokenPath(shape));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -12798,7 +12948,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       function relationshipTokenPath(shape) {
         if (!shape) return &#39;&#39;;
         var tagName = String(shape.tagName || &#39;&#39;).toLowerCase();
-        if (tagName === &#39;path&#39;) return shape.getAttribute(&#39;d&#39;) || &#39;&#39;;
+        if (tagName === &#39;path&#39;) return shape.getAttribute(&#39;data-motion-path&#39;) || shape.getAttribute(&#39;d&#39;) || &#39;&#39;;
         if (tagName === &#39;line&#39;) {
           return &#39;M &#39; + shape.getAttribute(&#39;x1&#39;) + &#39; &#39; + shape.getAttribute(&#39;y1&#39;) +
             &#39; L &#39; + shape.getAttribute(&#39;x2&#39;) + &#39; &#39; + shape.getAttribute(&#39;y2&#39;);
@@ -13559,6 +13709,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           if (byId[id] &amp;&amp; normalized.indexOf(id) === -1) normalized.push(id);
         });
         if (!normalized.length) return false;
+        // Hash restoration and internal selections use this path too. Reveal
+        // tree ancestors before measuring the selected node for its lens.
+        if (Archify.treeBranches &amp;&amp; Archify.treeBranches.active) {
+          normalized.forEach(function (id) { Archify.treeBranches.reveal(id); });
+        }
         if (normalized.length === activeIds.length &amp;&amp; normalized.every(function (id, index) { return activeIds[index] === id; }) &amp;&amp; options.toggle !== false) {
           clear();
           return true;
@@ -13908,6 +14063,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function traceGeometry(shape, direction) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, shape.getAttribute(&#39;data-motion-path&#39;));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -14054,6 +14211,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         active: function () { return activeId; }
       };
     })();
+
 
     /* ============================================================
        Adaptive Reader Shell — one diagram across laptop and monitor.
@@ -16505,6 +16663,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     })();
 
 
+
     /* ============================================================
        Route Probe — shortest directed path over compiled semantics.
        The graph is read from renderer-owned stable IDs and relationship
@@ -16841,6 +17000,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function traceGeometry(shape, step) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, shape.getAttribute(&#39;data-motion-path&#39;));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -16941,6 +17102,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function journeyGeometry(shape) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, shape.getAttribute(&#39;data-motion-path&#39;));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -17537,6 +17700,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       };
     })();
 
+
     /* ============================================================
        Semantic Lens — a counted, viewer-only legend over data-node-kind.
        One selected kind reveals every authored relationship touching it.
@@ -17773,6 +17937,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function flowGeometry(shape, direction, step) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, shape.getAttribute(&#39;data-motion-path&#39;));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -18209,6 +18375,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         kinds: function () { return collectKinds().map(function (kind) { return { id: kind.id, count: kind.nodes.length }; }); }
       };
     })();
+
 
     /* ============================================================
        Diagram Guide — a factual command deck over existing interactions.
@@ -24599,6 +24766,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         Array.prototype.forEach.call(clone.querySelectorAll(&#39;[data-node-id][aria-pressed]&#39;), function (el) {
           el.setAttribute(&#39;aria-pressed&#39;, &#39;false&#39;);
         });
+        // A downloaded tree is always the complete hierarchy: collapsing is a
+        // reading aid, never a silent change to what the artifact contains.
+        clone.removeAttribute(&#39;data-tree-any-collapsed&#39;);
+        Array.prototype.forEach.call(clone.querySelectorAll(&#39;[data-tree-hidden], [data-tree-collapsed]&#39;), function (el) {
+          el.removeAttribute(&#39;data-tree-hidden&#39;);
+          el.removeAttribute(&#39;data-tree-collapsed&#39;);
+        });
+        Array.prototype.forEach.call(clone.querySelectorAll(&#39;[data-tree-toggle]&#39;), function (el) {
+          el.setAttribute(&#39;aria-expanded&#39;, &#39;true&#39;);
+          el.setAttribute(&#39;aria-label&#39;, el.getAttribute(&#39;data-tree-label-collapse&#39;) || &#39;&#39;);
+        });
         return !clone.hasAttribute(&#39;data-view-scale&#39;) &amp;&amp;
           !clone.hasAttribute(&#39;data-focus-active&#39;) &amp;&amp;
           !clone.hasAttribute(&#39;data-reach-active&#39;) &amp;&amp;
@@ -24614,9 +24792,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           !clone.hasAttribute(&#39;data-route-journey&#39;) &amp;&amp;
           !clone.hasAttribute(&#39;data-share-route&#39;) &amp;&amp;
           !clone.hasAttribute(&#39;data-share-reach&#39;) &amp;&amp;
+          !clone.hasAttribute(&#39;data-tree-any-collapsed&#39;) &amp;&amp;
           !clone.style.getPropertyValue(&#39;transform&#39;) &amp;&amp;
           !clone.style.getPropertyValue(&#39;clip-path&#39;) &amp;&amp;
-          clone.querySelectorAll(&#39;[data-focus-match], [data-focus-selected], [data-reach-match], [data-reach-origin], [data-reach-depth], [data-semantic-lens-overlay], [data-lens-match], [data-lens-selected], [data-lens-peer], [data-legend-bridge], [data-legend-kind], [data-legend-bridge-runtime], [data-legend-count], [data-legend-zero], [data-legend-selected], [data-legend-preview-match], [data-legend-preview-selected], [data-legend-preview-peer], [data-relationship-hit-overlay], [data-relationship-pulse-overlay], [data-relationship-preview], [data-relationship-preview-node], [data-relationship-preview-source], [data-relationship-preview-target], [data-intent-trace-overlay], [data-intent-trace-match], [data-intent-trace-selected], [data-route-probe-overlay], [data-route-journey-overlay], [data-route-match], [data-route-start], [data-route-end], [data-route-step], [data-route-candidate], [data-route-journey-state], [data-route-journey-current], [data-share-route-match], [data-share-route-step], [data-share-route-start], [data-share-route-end], [data-share-route-middle], [data-share-reach-match], [data-share-reach-origin], [data-share-reach-depth], [data-source-evidence-beacon], [data-source-evidence-count], [data-source-evidence-original-label], [data-detail], [data-detail-anchor]&#39;).length === 0;
+          clone.querySelectorAll(&#39;[data-focus-match], [data-focus-selected], [data-reach-match], [data-reach-origin], [data-reach-depth], [data-semantic-lens-overlay], [data-lens-match], [data-lens-selected], [data-lens-peer], [data-legend-bridge], [data-legend-kind], [data-legend-bridge-runtime], [data-legend-count], [data-legend-zero], [data-legend-selected], [data-legend-preview-match], [data-legend-preview-selected], [data-legend-preview-peer], [data-relationship-hit-overlay], [data-relationship-pulse-overlay], [data-relationship-preview], [data-relationship-preview-node], [data-relationship-preview-source], [data-relationship-preview-target], [data-intent-trace-overlay], [data-intent-trace-match], [data-intent-trace-selected], [data-route-probe-overlay], [data-route-journey-overlay], [data-route-match], [data-route-start], [data-route-end], [data-route-step], [data-route-candidate], [data-route-journey-state], [data-route-journey-current], [data-share-route-match], [data-share-route-step], [data-share-route-start], [data-share-route-end], [data-share-route-middle], [data-share-reach-match], [data-share-reach-origin], [data-share-reach-depth], [data-source-evidence-beacon], [data-source-evidence-count], [data-source-evidence-original-label], [data-detail], [data-detail-anchor], [data-tree-hidden], [data-tree-collapsed]&#39;).length === 0;
       }
 
 
@@ -25392,13 +25571,18 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
           function samplesFor(element) {
             if (typeof element.getTotalLength !== &#39;function&#39; || typeof element.getPointAtLength !== &#39;function&#39;) return [];
+            var geometry = element;
+            if (element.getAttribute(&#39;data-motion-path&#39;)) {
+              geometry = element.cloneNode(false);
+              geometry.setAttribute(&#39;d&#39;, element.getAttribute(&#39;data-motion-path&#39;));
+            }
             var length;
-            try { length = element.getTotalLength(); } catch (_) { return []; }
+            try { length = geometry.getTotalLength(); } catch (_) { return []; }
             if (!Number.isFinite(length) || length &lt;= 0) return [];
             var count = Math.max(12, Math.min(72, Math.ceil(length / 12)));
             var points = [];
             for (var i = 0; i &lt;= count; i++) {
-              points.push(pointInRoot(element, element.getPointAtLength(length * i / count)));
+              points.push(pointInRoot(element, geometry.getPointAtLength(length * i / count)));
             }
             return points;
           }
@@ -26291,6 +26475,137 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     Archify.sourceEvidence.installBeacons();
 
     /* ============================================================
+       Tree Branches — expand/collapse for hierarchy diagrams. The renderer
+       lays out the complete tree once and tags every node, link, and toggle
+       with its ancestors; collapsing only hides descendants, so visible nodes
+       never move and the reader keeps their place. Selecting a hidden node
+       through Finder, Outline, or a shared link expands its ancestors. Export
+       always writes the complete tree (see Export Cleanup).
+       ============================================================ */
+    Archify.treeBranches = (function () {
+      var svg = document.querySelector(&#39;.diagram-container &gt; svg[data-tree-ui]&#39;);
+      if (!svg) return { active: false };
+      var collapsed = Object.create(null);
+      var toggles = Object.create(null);
+      Array.prototype.forEach.call(svg.querySelectorAll(&#39;[data-tree-toggle]&#39;), function (toggle) {
+        toggles[toggle.getAttribute(&#39;data-tree-toggle&#39;)] = toggle;
+      });
+      var tagged = svg.querySelectorAll(&#39;[data-tree-ancestors]&#39;);
+      var expandAll = svg.querySelector(&#39;[data-tree-expand-all]&#39;);
+
+      function ancestors(el) {
+        return (el.getAttribute(&#39;data-tree-ancestors&#39;) || &#39;&#39;).split(&#39; &#39;).filter(Boolean);
+      }
+
+      function apply() {
+        Array.prototype.forEach.call(tagged, function (el) {
+          var hidden = ancestors(el).some(function (id) { return collapsed[id]; });
+          if (hidden) el.setAttribute(&#39;data-tree-hidden&#39;, &#39;&#39;);
+          else el.removeAttribute(&#39;data-tree-hidden&#39;);
+        });
+        var any = false;
+        Object.keys(toggles).forEach(function (id) {
+          var toggle = toggles[id];
+          var isCollapsed = Boolean(collapsed[id]);
+          any = any || isCollapsed;
+          toggle.setAttribute(&#39;aria-expanded&#39;, isCollapsed ? &#39;false&#39; : &#39;true&#39;);
+          toggle.setAttribute(&#39;aria-label&#39;, toggle.getAttribute(isCollapsed ? &#39;data-tree-label-expand&#39; : &#39;data-tree-label-collapse&#39;) || &#39;&#39;);
+          var node = svg.querySelector(&#39;[data-node-id=&quot;&#39; + id + &#39;&quot;]&#39;);
+          if (node) {
+            if (isCollapsed) node.setAttribute(&#39;data-tree-collapsed&#39;, &#39;&#39;);
+            else node.removeAttribute(&#39;data-tree-collapsed&#39;);
+          }
+        });
+        if (any) svg.setAttribute(&#39;data-tree-any-collapsed&#39;, &#39;&#39;);
+        else svg.removeAttribute(&#39;data-tree-any-collapsed&#39;);
+      }
+
+      function setCollapsed(id, value) {
+        if (!toggles[id]) return false;
+        if (value) collapsed[id] = true;
+        else delete collapsed[id];
+        apply();
+        return true;
+      }
+
+      function toggle(id) { return setCollapsed(id, !collapsed[id]); }
+
+      // Reveal a node by expanding every collapsed ancestor; nothing else moves.
+      function reveal(id) {
+        var node = svg.querySelector(&#39;[data-node-id=&quot;&#39; + id + &#39;&quot;]&#39;);
+        if (!node) return false;
+        var changed = false;
+        ancestors(node).forEach(function (ancestor) {
+          if (collapsed[ancestor]) { delete collapsed[ancestor]; changed = true; }
+        });
+        if (changed) apply();
+        return changed;
+      }
+
+      function restoreAll() {
+        collapsed = Object.create(null);
+        apply();
+      }
+
+      function activate(event) {
+        var target = event.target.closest(&#39;[data-tree-toggle], [data-tree-expand-all]&#39;);
+        if (!target || !svg.contains(target)) return false;
+        event.preventDefault();
+        event.stopPropagation();
+        if (target.hasAttribute(&#39;data-tree-expand-all&#39;)) {
+          restoreAll();
+          var root = svg.querySelector(&#39;[data-tree-toggle]:not([data-tree-ancestors])&#39;);
+          if (root) root.focus();
+        } else {
+          toggle(target.getAttribute(&#39;data-tree-toggle&#39;));
+          target.focus();
+        }
+        return true;
+      }
+
+      // Capture phase so the canvas focus handler never treats a toggle press
+      // as a background click that clears the current focus.
+      svg.addEventListener(&#39;click&#39;, activate, true);
+      svg.addEventListener(&#39;keydown&#39;, function (event) {
+        if (event.key === &#39;Enter&#39; || event.key === &#39; &#39;) { activate(event); return; }
+        var node = event.target.closest(&#39;[data-node-id]&#39;);
+        if (!node || !svg.contains(node)) return;
+        var id = node.getAttribute(&#39;data-node-id&#39;);
+        // Arrow keys follow the tree convention: left collapses, right expands.
+        if (event.key === &#39;ArrowLeft&#39; &amp;&amp; toggles[id] &amp;&amp; !collapsed[id]) { event.preventDefault(); setCollapsed(id, true); }
+        else if (event.key === &#39;ArrowRight&#39; &amp;&amp; collapsed[id]) { event.preventDefault(); setCollapsed(id, false); }
+      }, true);
+
+      // Focus reveals ancestors synchronously before positioning its lens.
+      // The observer also covers paths that change pressed state directly.
+      new MutationObserver(function (records) {
+        records.forEach(function (record) {
+          var el = record.target;
+          if (el.hasAttribute &amp;&amp; el.hasAttribute(&#39;data-tree-hidden&#39;) &amp;&amp; el.getAttribute(&#39;aria-pressed&#39;) === &#39;true&#39;) {
+            reveal(el.getAttribute(&#39;data-node-id&#39;));
+          }
+        });
+      }).observe(svg, { subtree: true, attributes: true, attributeFilter: [&#39;aria-pressed&#39;] });
+
+      Object.keys(toggles).forEach(function (id) {
+        if (toggles[id].hasAttribute(&#39;data-tree-initially-collapsed&#39;)) collapsed[id] = true;
+      });
+      apply();
+
+      return {
+        active: true,
+        toggle: toggle,
+        collapse: function (id) { return setCollapsed(id, true); },
+        expand: function (id) { return setCollapsed(id, false); },
+        reveal: reveal,
+        restoreAll: restoreAll,
+        collapsedIds: function () { return Object.keys(collapsed); },
+        expandAllControl: expandAll
+      };
+    })();
+
+
+    /* ============================================================
        Explore — stable-ID neighborhood focus + dependency-free pan/zoom.
        Renderer IDs become deep-linkable semantic hooks without turning the
        standalone artifact into a canvas editor.
@@ -26815,6 +27130,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function relationshipPulseGeometry(shape) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, relationshipTokenPath(shape));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -26859,7 +27176,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       function relationshipTokenPath(shape) {
         if (!shape) return &#39;&#39;;
         var tagName = String(shape.tagName || &#39;&#39;).toLowerCase();
-        if (tagName === &#39;path&#39;) return shape.getAttribute(&#39;d&#39;) || &#39;&#39;;
+        if (tagName === &#39;path&#39;) return shape.getAttribute(&#39;data-motion-path&#39;) || shape.getAttribute(&#39;d&#39;) || &#39;&#39;;
         if (tagName === &#39;line&#39;) {
           return &#39;M &#39; + shape.getAttribute(&#39;x1&#39;) + &#39; &#39; + shape.getAttribute(&#39;y1&#39;) +
             &#39; L &#39; + shape.getAttribute(&#39;x2&#39;) + &#39; &#39; + shape.getAttribute(&#39;y2&#39;);
@@ -27620,6 +27937,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           if (byId[id] &amp;&amp; normalized.indexOf(id) === -1) normalized.push(id);
         });
         if (!normalized.length) return false;
+        // Hash restoration and internal selections use this path too. Reveal
+        // tree ancestors before measuring the selected node for its lens.
+        if (Archify.treeBranches &amp;&amp; Archify.treeBranches.active) {
+          normalized.forEach(function (id) { Archify.treeBranches.reveal(id); });
+        }
         if (normalized.length === activeIds.length &amp;&amp; normalized.every(function (id, index) { return activeIds[index] === id; }) &amp;&amp; options.toggle !== false) {
           clear();
           return true;
@@ -27969,6 +28291,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function traceGeometry(shape, direction) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, shape.getAttribute(&#39;data-motion-path&#39;));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -28115,6 +28439,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         active: function () { return activeId; }
       };
     })();
+
 
     /* ============================================================
        Adaptive Reader Shell — one diagram across laptop and monitor.
@@ -30566,6 +30891,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     })();
 
 
+
     /* ============================================================
        Route Probe — shortest directed path over compiled semantics.
        The graph is read from renderer-owned stable IDs and relationship
@@ -30902,6 +31228,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function traceGeometry(shape, step) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, shape.getAttribute(&#39;data-motion-path&#39;));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -31002,6 +31330,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function journeyGeometry(shape) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, shape.getAttribute(&#39;data-motion-path&#39;));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -31598,6 +31928,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       };
     })();
 
+
     /* ============================================================
        Semantic Lens — a counted, viewer-only legend over data-node-kind.
        One selected kind reveals every authored relationship touching it.
@@ -31834,6 +32165,8 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       }
       function flowGeometry(shape, direction, step) {
         var clone = shape.cloneNode(false);
+        if (shape.getAttribute(&#39;data-motion-path&#39;)) clone.setAttribute(&#39;d&#39;, shape.getAttribute(&#39;data-motion-path&#39;));
+        clone.removeAttribute(&#39;data-motion-path&#39;);
         clone.removeAttribute(&#39;id&#39;);
         clone.removeAttribute(&#39;class&#39;);
         clone.removeAttribute(&#39;style&#39;);
@@ -32270,6 +32603,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         kinds: function () { return collectKinds().map(function (kind) { return { id: kind.id, count: kind.nodes.length }; }); }
       };
     })();
+
 
     /* ============================================================
        Diagram Guide — a factual command deck over existing interactions.

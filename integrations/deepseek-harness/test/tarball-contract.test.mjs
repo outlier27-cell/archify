@@ -114,6 +114,22 @@ test('packed Skill payload remains byte-identical to the declared immutable sour
     }
     const skillPackage = JSON.parse(fs.readFileSync(path.join(skillRoot, 'package.json'), 'utf8'));
     assert.equal(skillPackage.version, release.skillVersion);
+    const sourceManifest = spawnSync('git', ['show', `${DSH_RELEASE_REF}:archify/package.json`], {
+      cwd: repoRoot,
+      encoding: 'utf8',
+    });
+    assert.equal(sourceManifest.status, 0, sourceManifest.stderr);
+    const cleanManifest = JSON.parse(sourceManifest.stdout);
+    delete cleanManifest.scripts;
+    delete cleanManifest.devDependencies;
+    assert.deepEqual(skillPackage, cleanManifest, 'only development metadata is stripped from the source manifest');
+    for (const field of ['scripts', 'dependencies', 'devDependencies', 'optionalDependencies',
+      'peerDependencies', 'bundledDependencies', 'bundleDependencies']) {
+      assert.equal(Object.hasOwn(skillPackage, field), false, `packaged Skill must not declare ${field}`);
+    }
+    const skillRelease = JSON.parse(fs.readFileSync(path.join(skillRoot, 'skill-release.json'), 'utf8'));
+    assert.equal(skillRelease.version, release.skillVersion);
+    assert.equal(skillRelease.channel, 'stable');
     assert.match(fs.readFileSync(path.join(skillRoot, 'SKILL.md'), 'utf8'), /## Update awareness/);
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });

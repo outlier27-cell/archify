@@ -37,7 +37,7 @@ Use [the PR template](.github/PULL_REQUEST_TEMPLATE.md); link existing receipts 
 
 Skill instructions, authored examples, build inputs, and generated-site sources are behavioral inputs even when they look like documentation. Policy changes need process review; runtime evidence depends on whether they affect runtime inputs.
 
-Start with focused checks for the affected behavior. Use the full `npm test` suite from `archify/` when shared behavior, broad changes, or findings require wider coverage. Final review needs sufficient evidence for the impact above; relevant CI results can supply that coverage without repeating the same run locally. Identify the revision and coverage of reused results, and explain material gaps. Required remote CI and branch protection still apply.
+Start with focused checks for the affected behavior. Use the full `npm test` suite from the repository root when shared behavior, broad changes, or findings require wider coverage. Final review needs sufficient evidence for the impact above; relevant CI results can supply that coverage without repeating the same run locally. Identify the revision and coverage of reused results, and explain material gaps. Required remote CI and branch protection still apply.
 
 ### Documentation-only CI
 
@@ -56,11 +56,11 @@ Any other changed path (including tests, Skill instructions, templates, generate
 
 ## Local setup and verification
 
-The renderer package is in `archify/`; its Node range and commands are defined in `archify/package.json`.
+The renderer package is in `archify/`; repository tests and their dependencies live at the root. Install both dependency sets before running tests. The supported Node range is defined in both package manifests.
 
 ```sh
-cd archify
 npm ci
+npm --prefix archify ci
 npm test
 ```
 
@@ -73,7 +73,6 @@ A visual PR must provide enough evidence to evaluate whether the intended user v
 Static SVG/XML checks cannot establish browser layout, font settling, or interaction behavior. When the adaptive reader or Viewer layout changes, run the real browser test with Chrome available:
 
 ```sh
-cd archify
 ARCHIFY_CHROME="/path/to/chrome" node --test test/desktop-reader-browser.test.mjs
 ```
 
@@ -82,7 +81,6 @@ A browser test skipped because Chrome was unavailable is **skipped**, not passed
 PR CI and tag releases run the same browser regression gate:
 
 ```sh
-cd archify
 ARCHIFY_CHROME="/path/to/chrome" npm run test:browser
 ```
 
@@ -117,6 +115,16 @@ Skill runtime, schema, renderer, and published Skill-instruction changes require
 List regenerated files and explain freshness when an affected output is left unchanged. Changes that do not affect generated outputs may omit that PR section. Resolve generated conflicts by rebuilding from combined source. Keep unrelated generated output out of the diff.
 
 Treat published versions as immutable. Ordinary feature PRs do not change versions, tags, or distribution identities unless release work is explicitly in scope.
+
+### Release checklist: DSH synchronization
+
+For every Archify release, record the DSH decision in the release PR or its linked follow-up. The Skill source is pinned: releasing Archify or updating `main` does not update the DSH package or existing installations. Use the [DSH release maintenance procedure](integrations/deepseek-harness/README.md#release-maintenance) for commands and host requirements.
+
+- [ ] Assess whether the release needs a DSH update. Record the selected Archify source/version and plugin version, or an explicit deferral with its reason and follow-up. The plugin has its own version sequence; it need not match Archify's version.
+- [ ] If syncing, update `integrations/deepseek-harness/release.json` to a full immutable `sourceCommit` and matching `skillVersion`; retain or deliberately update the exact tested DSH host version. Check both `archify/package.json` and `archify/skill-release.json` at that source. Identify any fixes included after the Archify version tag.
+- [ ] Commit the adapter inputs before packing. Inspect the actual `.tgz`, including `release.json`, the bundled Skill version/content, license notices, and dependency exclusions; run the package contracts and real distribution acceptance (isolated install, discovery/load, installed Skill smoke, and uninstall). Before plugin publication, complete the DSH workflow's three-platform adapter release gate on the candidate commit and retain its receipts.
+- [ ] Record publication separately from PR completion: verify the tested npm tarball/version and `archify-dsh-v<plugin-version>` tag, then align the integration README, public README install commands, and `community/packages/archify-dsh.json` with what users can actually obtain. Keep published and pending versions distinct while unpublished; never describe a prepared bundle as publicly available.
+- [ ] Treat plugin publication and updates to users' live installations as separate authorized actions. Do not replace an existing version/tag or silently publish as part of the Archify release.
 
 ## Final integration and follow-up
 

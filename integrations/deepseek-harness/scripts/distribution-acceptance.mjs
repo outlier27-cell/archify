@@ -383,14 +383,37 @@ pass('resource-base', { resourcePath: resourceReal });
 const skillRoot = fs.existsSync(path.join(resourceReal, 'SKILL.md'))
   ? resourceReal
   : path.join(resourceReal, 'archify');
+// Exercise the installed CLI without writing into the package manager's store.
+const installedCli = path.join(skillRoot, 'bin', 'archify.mjs');
+for (const args of [['doctor'], ['demo', path.join(workspace, 'installed-smoke')]]) {
+  const installedSmoke = run(process.execPath, [installedCli, ...args], {
+    cwd: workspace,
+    timeout: 120_000,
+  });
+  requireStatus('installed-skill-smoke', installedSmoke, { command: `installed archify ${args[0]}` });
+}
+pass('installed-skill-smoke', { skillRoot, commands: ['doctor', 'demo'] });
+
 const sourceSnapshot = path.join(scratch, 'release-source');
 releaseSnapshot(sourceSnapshot);
-const smoke = run(process.execPath, [path.join(sourceSnapshot, 'scripts', 'package-smoke.mjs'), skillRoot], {
+// The source's full package smoke rewrites bundled example HTML. pnpm may
+// hard-link those files to its content store, and Archify correctly refuses
+// to replace a multiply linked output. Copy the installed bytes into an owned
+// scratch tree for this mutating suite; keep the actual installation intact.
+const smokeRoot = path.join(scratch, 'smoke-skill');
+fs.cpSync(skillRoot, smokeRoot, { recursive: true, errorOnExist: true, force: false });
+const smoke = run(process.execPath, [path.join(sourceSnapshot, 'scripts', 'package-smoke.mjs'), smokeRoot], {
   cwd: sourceSnapshot,
   timeout: 120_000,
 });
-requireStatus('package-smoke', smoke, { command: `${DSH_RELEASE_REF} package-smoke.mjs <installed-skill-root>` });
-pass('package-smoke', { skillRoot, source: DSH_RELEASE_REF, output: smoke.stdout.trim() });
+requireStatus('package-smoke', smoke, { command: `${DSH_RELEASE_REF} package-smoke.mjs <installed-skill-copy>` });
+pass('package-smoke', {
+  skillRoot,
+  smokeRoot,
+  source: DSH_RELEASE_REF,
+  mutatingExamples: 'isolated-copy-of-installed-skill',
+  output: smoke.stdout.trim(),
+});
 
 const remove = dsh(['plugin', '--profile', PROFILE, 'remove', PACKAGE_NAME], { timeout: PLUGIN_MUTATION_TIMEOUT });
 requireStatus('uninstall', remove, { command: `dsh plugin --profile ${PROFILE} remove ${PACKAGE_NAME}` });

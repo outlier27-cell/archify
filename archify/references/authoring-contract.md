@@ -391,6 +391,86 @@ capacity instead of dropping the key; see
 [`../renderers/erd/README.md`](../renderers/erd/README.md) for the band, port, and
 reader contract.
 
+### Tree
+
+A tree answers "how is this decomposed?": one root, and every other node names
+exactly one `parent`. Links mean containment only; do not use a tree for calls,
+data movement, or cross-branch dependencies. Nothing is inferred: a missing
+parent (`tree/missing-parent`), zero or several roots (`tree/root-count`), a
+parent cycle (`tree/cycle`, which also covers every node stranded beneath it),
+and duplicate ids are refused. Children read in declaration order.
+
+Use `layout.direction: "down"` (default) for a shallow, balanced breakdown and
+`"right"` for a deep or leaf-heavy tree such as a repository layout; a rightward
+tree aligns each parent with its first child and scrolls vertically in the
+reader. Labels wrap between words. `collapsed: true` makes a branch start
+collapsed in the Viewer; it never removes content from the artifact, and every
+export is the complete tree. For a real codebase, ground each node in the
+observed path and attach `sources`. See
+[`../renderers/tree/README.md`](../renderers/tree/README.md).
+
+### Class
+
+A class diagram explains the contracts inside one module: which types exist,
+which members matter to the explanation, and how the types relate. Choose the
+members the question needs; a type may show none. Each type states its `kind`
+(`class`, `abstract`, `interface`, `enum`, `record`); every kind except `class`
+draws its UML keyword, so an interface never reads as an empty class. For a real
+codebase, ground every type, member, and relationship in repository evidence and
+attach `sources`.
+
+Every relationship reads `from` -> `to` and its `kind` owns the notation:
+`dependency` (`from` uses `to`, dashed open arrow), `association` (`from` holds a
+`to`, solid open arrow), `inheritance` (`from` extends `to`, solid hollow
+triangle), `realization` (`from` implements interface `to`, dashed hollow
+triangle), `composition` and `aggregation` (`from` is the whole, filled or
+hollow diamond at `from`). Realization must target an interface from a
+non-interface; inheritance must not cross the interface boundary; an
+inheritance cycle is rejected.
+
+Place types on the `row`/`col` grid with supertypes above their subtypes. Two
+or more automatic generalizations into one supertype draw as one hierarchy bus
+with a single triangle. Members never truncate: a type grows to its widest
+member up to `layout.typeMaxW` and longer members wrap at parameter boundaries.
+See [`../renderers/class/README.md`](../renderers/class/README.md).
+
+### Timeline
+
+A timeline answers "when did what happen, and how far apart?". Every event
+needs an ISO 8601 `at` with an explicit `Z` or `±HH:MM` offset; a timestamp
+without one is rejected rather than guessed. `meta.timezone` (IANA, default
+`UTC`) is the display clock for ticks and labels, and the axis caption states
+it. `meta.evidence` is required: `observed` for recorded events (logs, git
+history, pager records) and `illustrative` for explanatory input. Never mark
+invented or approximate times as observed, and never fill gaps with events the
+input does not contain.
+
+Use `lanes` for sources or categories (release, monitoring, response); every
+event then names one. `kind` (`change`, `alert`, `action`, `recovery`) only
+colours the card. Events are drawn in time order whatever the authored order;
+simultaneous and close events stack. By default a quiet period longer than 8×
+the median gap and 10% of the span is drawn as a fixed-width break labelled
+with the omitted duration; `layout.breaks: "none"` keeps one proportional axis.
+See [`../renderers/timeline/README.md`](../renderers/timeline/README.md).
+
+### Waterfall
+
+A waterfall answers "where did the time go?" for one request, job, or agent
+run. Each span has `id`, `name`, `start`, and `end` or `duration` in
+`meta.unit` (`us`, `ms`, `s`; default `ms`), plus optional `parent`, `status`,
+`service`, and `detail`. Bar position and length come only from these numbers.
+`meta.evidence` is required: `measured` only for recorded timing (trace export,
+logs, profiler, timed run); otherwise `illustrative`. Never infer a duration
+from code structure, and never present estimated numbers as measured.
+
+A span with no recorded end must be `status: "incomplete"`; it is drawn as an
+open lower bound to the last recorded instant. Contradictory end/duration,
+an end before the start, a missing parent, or a parent cycle is refused.
+Percentages are always "of the wall-clock total"; parent and child durations
+are inclusive and never summed. Do not mark a critical path or waiting time
+unless the input states the dependency. See
+[`../renderers/waterfall/README.md`](../renderers/waterfall/README.md).
+
 ### Lifecycle
 
 Schema v2 (new diagrams): each populated lane is one row, `main` first,
