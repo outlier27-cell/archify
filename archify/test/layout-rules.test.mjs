@@ -2053,6 +2053,18 @@ test('sequence: self-messages render bounded orthogonal loops', () => {
   assert.match(html, /d="M 163 420 L 136 420 L 136 444 L 163 444 L 163 420"/);
 });
 
+test('sequence: long self-message labels diagnose adjacent lifeline clearance', () => {
+  const diagram = {
+    schema_version: 1, diagram_type: 'sequence',
+    meta: { title: 'Self message label clearance', output: 'self-label.html', quality_profile: 'showcase', viewBox: [920, 620] },
+    participants: [{ id: 'cache', type: 'backend', label: 'Cache' }, { id: 'worker', type: 'backend', label: 'Worker' }],
+    messages: [{ id: 'evict', from: 'worker', to: 'worker', y: 210, label: 'a very long self-message label' }],
+  };
+  const { code, stderr } = render('sequence', diagram);
+  assert.notEqual(code, 0);
+  assert.match(stderr, /Self-message "a very long self-message label" label crosses the "Cache" lifeline/);
+});
+
 test('sequence: a message cannot masquerade as a time-segment border', () => {
   const d = load('sequence');
   d.messages.find((message) => message.id === 'cache-read').y = d.segments[1].from;

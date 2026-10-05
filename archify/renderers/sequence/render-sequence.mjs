@@ -311,6 +311,17 @@ function validateSequence() {
   const labelRects = asArray(sequence.messages)
     .map((m, messageIndex) => messageLabelBox(m, messageIndex))
     .filter(Boolean);
+  for (const label of labelRects) {
+    if (label.relation.from !== label.relation.to) continue;
+    const selfParticipant = participants.get(label.relation.from);
+    const right = label.x + label.width;
+    const adjacent = [...participants.values()]
+      .filter((participant) => participant.id !== label.relation.from)
+      .find((participant) => participant.cx >= label.x && participant.cx <= right);
+    if (adjacent) {
+      problems.push(`Self-message "${label.label}" label crosses the "${adjacent.label}" lifeline — shorten the label, move the participant, or increase the participant spacing.`);
+    }
+  }
   for (let i = 0; i < labelRects.length; i += 1) {
     for (let j = i + 1; j < labelRects.length; j += 1) {
       if (rectsOverlap(labelRects[i], labelRects[j], -2)) {
