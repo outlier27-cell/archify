@@ -128,10 +128,17 @@ function messageGeometry(message) {
   const from = participants.get(message.from);
   const to = participants.get(message.to);
   if (!from || !to || typeof message.y !== 'number') return null;
+  if (message.from === message.to) {
+    const direction = from.index === participantCount - 1 ? -1 : 1;
+    const start = from.cx + direction * 7;
+    const loopX = from.cx + direction * 34;
+    const loopY = message.y + 24;
+    return { start, end: start, center: (start + loopX) / 2, self: true, points: [[start, message.y], [loopX, message.y], [loopX, loopY], [start, loopY], [start, message.y]] };
+  }
   const direction = to.cx > from.cx ? 1 : -1;
   const start = from.cx + direction * 7;
   const end = to.cx - direction * 7;
-  return { start, end, center: (start + end) / 2 };
+  return { start, end, center: (start + end) / 2, points: [[start, message.y], [end, message.y]] };
 }
 
 function messageLabelBox(message, relationIndex = null) {
@@ -185,10 +192,9 @@ const compositionFrames = asArray(sequence.segments).map((segment, index) => ({
 }));
 
 function messagePath(message) {
+  const geometry = messageGeometry(message);
   return {
-    points: participants.has(message.from) && participants.has(message.to)
-      ? [[participants.get(message.from).cx, message.y], [participants.get(message.to).cx, message.y]]
-      : []
+    points: geometry?.points || []
   };
 }
 
@@ -227,7 +233,7 @@ function validateSequence() {
     }
     if (participants.has(message.from) && participants.has(message.to)) {
       const distance = Math.abs(participants.get(message.to).cx - participants.get(message.from).cx);
-      if (distance < 60) problems.push(`Message "${message.label}" spans ${Math.round(distance)}px (minimum 60px) — give its participants more column distance.`);
+      if (message.from !== message.to && distance < 60) problems.push(`Message "${message.label}" spans ${Math.round(distance)}px (minimum 60px) — give its participants more column distance.`);
     }
   }
 
@@ -442,7 +448,8 @@ function messageLabel(message, x1, x2) {
 }
 
 function renderMessage(message, index) {
-  const { start, end } = messageGeometry(message);
+  const geometry = messageGeometry(message);
+  const { start, end } = geometry;
   const [cls, marker] = arrowClass[message.variant || 'default'] || arrowClass.default;
   const strokeWidth = message.variant === 'emphasis' ? 1.8 : 1.4;
   const dash = message.variant === 'return' ? ' stroke-dasharray="3,5"' : '';
@@ -450,7 +457,7 @@ function renderMessage(message, index) {
     ? `\n        <text data-detail="fine" x="${Math.min(start, end) + 12}" y="${message.y + 18}" class="t-dim" font-size="7">${esc(message.note)}</text>`
     : '';
   return `        <g ${focusEdgeAttrs(message.from, message.to, message.label, index, message.id)}>
-          <path data-composition-edge-from="${esc(message.from)}" data-composition-edge-to="${esc(message.to)}"${message.id ? ` data-composition-edge-id="${esc(message.id)}"` : ''} data-composition-points="${routePointsValue([[start, message.y], [end, message.y]])}" d="M ${start} ${message.y} L ${end} ${message.y}" class="${cls}"${animateAttr(sequence.meta, 'edge', index)} stroke-width="${strokeWidth}"${dash} marker-end="url(#${marker})"/>
+          <path data-composition-edge-from="${esc(message.from)}" data-composition-edge-to="${esc(message.to)}"${message.id ? ` data-composition-edge-id="${esc(message.id)}"` : ''} data-composition-points="${routePointsValue(geometry.points)}" d="${geometry.points.map(([x, y], pointIndex) => `${pointIndex ? 'L' : 'M'} ${x} ${y}`).join(' ')}" class="${cls}"${animateAttr(sequence.meta, 'edge', index)} stroke-width="${strokeWidth}"${dash} marker-end="url(#${marker})"/>
 ${messageLabel(message, start, end)}${note}
         </g>`;
 }

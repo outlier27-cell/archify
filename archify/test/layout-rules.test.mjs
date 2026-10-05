@@ -2030,6 +2030,29 @@ test('dataflow: stage border run is blocking and the inter-stage gutter passes',
   assert.equal(passed.code, 0, passed.stderr);
 });
 
+test('sequence: self-messages render bounded orthogonal loops', () => {
+  const diagram = {
+    schema_version: 1, diagram_type: 'sequence',
+    meta: { title: 'Self message', output: 'self.html', quality_profile: 'showcase', viewBox: [920, 620] },
+    participants: [{ id: 'cache', type: 'backend', label: 'Cache' }, { id: 'worker', type: 'backend', label: 'Worker' }],
+    messages: [
+      { id: 'evict', from: 'cache', to: 'cache', y: 210, label: 'evict(key)' },
+      { id: 'notify', from: 'cache', to: 'worker', y: 330, label: 'notify(key)' },
+      { id: 'retry', from: 'worker', to: 'worker', y: 420, label: 'retry()' },
+    ],
+  };
+  const { code, stderr, outPath } = render('sequence', diagram);
+  assert.equal(code, 0, stderr);
+  const html = fs.readFileSync(outPath, 'utf8');
+  const evict = html.match(/data-composition-edge-id="evict"[^>]*data-composition-points="([^"]+)"/);
+  const retry = html.match(/data-composition-edge-id="retry"[^>]*data-composition-points="([^"]+)"/);
+  assert.ok(evict && retry);
+  assert.match(evict[1], /;.*;.*;/);
+  assert.match(retry[1], /;.*;.*;/);
+  assert.match(html, /d="M 69 210 L 96 210 L 96 234 L 69 234 L 69 210"/);
+  assert.match(html, /d="M 163 420 L 136 420 L 136 444 L 163 444 L 163 420"/);
+});
+
 test('sequence: a message cannot masquerade as a time-segment border', () => {
   const d = load('sequence');
   d.messages.find((message) => message.id === 'cache-read').y = d.segments[1].from;
