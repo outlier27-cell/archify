@@ -2246,6 +2246,7 @@ function runNode(args, options = {}) {
     cwd: options.cwd || process.cwd(),
     encoding: 'utf8',
     stdio: options.stdio || 'inherit',
+    maxBuffer: options.maxBuffer || 64 * 1024 * 1024,
     env: options.env ? { ...process.env, ...options.env } : process.env,
   });
 }

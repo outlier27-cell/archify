@@ -18,6 +18,7 @@ function run(script, args, options = {}) {
     cwd: skillRoot,
     encoding: 'utf8',
     timeout: 30_000,
+    maxBuffer: 64 * 1024 * 1024,
     ...options,
   });
 }
@@ -65,7 +66,7 @@ for (const profile of ['standard', 'showcase']) {
 }
 
 function denseArchitecture() {
-  const count = 20;
+    const count = 50;
   const components = [];
   const connections = [];
   for (let index = 0; index < count; index += 1) {
@@ -113,7 +114,7 @@ for (const command of ['validate', 'deliver', 'compare']) {
     assert.equal(receipt.ok, true);
     assert.equal(receipt.command, command);
     if (command === 'validate') {
-      assert.ok(Buffer.byteLength(result.stdout) > 64 * 1024);
+      assert.ok(Buffer.byteLength(result.stdout) > 1024 * 1024);
       assert.ok(receipt.checks.every((check) => check.ok));
       assert.ok(receipt.composition.issues.length > 100);
     } else {
