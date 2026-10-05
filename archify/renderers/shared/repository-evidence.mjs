@@ -25,6 +25,7 @@ function runGit(repoRoot, args) {
   const result = spawnSync('git', ['--no-replace-objects', '-C', repoRoot, ...args], {
     encoding: 'utf8',
     maxBuffer: MAX_SOURCE_BYTES,
+    env: { ...process.env, GIT_NO_LAZY_FETCH: '1' },
   });
   if (result.error) evidenceFailure('repository-evidence/git-unavailable', `Could not run Git: ${result.error.message}`, {
     evidence: { reason: result.error.message },
@@ -55,6 +56,7 @@ function readBatchObjects(repoRoot, objects, includeContent) {
   const result = spawnSync('git', ['--no-replace-objects', '-C', repoRoot, 'cat-file', mode], {
     input: objects.join('\n') + '\n',
     maxBuffer: 64 * 1024 * 1024,
+    env: { ...process.env, GIT_NO_LAZY_FETCH: '1' },
   });
   if (result.error || result.status !== 0 || !Buffer.isBuffer(result.stdout)) return null;
   const buffer = result.stdout;
