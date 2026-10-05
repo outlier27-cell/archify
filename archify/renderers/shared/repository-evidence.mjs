@@ -8,6 +8,7 @@ import { parseRepositoryRemote, redactRepositoryRemote, repositorySourceHref, re
 const FULL_SHA_RE = /^[a-f0-9]{40}$/i;
 const CONTROL_CHARACTER_RE = /[\u0000-\u001f\u007f]/;
 const MAX_SOURCE_BYTES = 16 * 1024 * 1024;
+const verifiedNoLazyFetchRoots = new Set();
 
 function evidenceFailure(code, message, { subject = {}, evidence = {}, supportedFixes = [] } = {}) {
   throwDiagnosticError(message, [{
@@ -20,7 +21,25 @@ function evidenceFailure(code, message, { subject = {}, evidence = {}, supported
   }]);
 }
 
+function requireNoLazyFetch(repoRoot) {
+  if (verifiedNoLazyFetchRoots.has(repoRoot)) return;
+  const probe = spawnSync('git', ['--no-lazy-fetch', '-C', repoRoot, 'rev-parse', '--git-dir'], {
+    encoding: 'utf8',
+    env: { ...process.env, GIT_NO_LAZY_FETCH: '1' },
+  });
+  if (probe.error || probe.status !== 0) evidenceFailure(
+    'repository-evidence/lazy-fetch-unsupported',
+    'The local Git version cannot disable lazy fetching for repository evidence.',
+    {
+      evidence: { exitCode: probe.status, reason: probe.error?.message || probe.stderr?.trim() },
+      supportedFixes: ['upgrade Git to a version supporting --no-lazy-fetch before validating pinned repository evidence'],
+    },
+  );
+  verifiedNoLazyFetchRoots.add(repoRoot);
+}
+
 function runGit(repoRoot, args) {
+  requireNoLazyFetch(repoRoot);
   // 固定 SHA 的来源必须读取原始对象，不能使用本地 replacement refs 的替换内容。
   const result = spawnSync('git', ['--no-replace-objects', '-C', repoRoot, ...args], {
     encoding: 'utf8',
@@ -52,6 +71,7 @@ function prefetchBlobs(repoRoot, objectNeedsContent) {
 
 function readBatchObjects(repoRoot, objects, includeContent) {
   if (!objects.length) return new Map();
+  requireNoLazyFetch(repoRoot);
   const mode = includeContent ? '--batch' : '--batch-check';
   const result = spawnSync('git', ['--no-replace-objects', '-C', repoRoot, 'cat-file', mode], {
     input: objects.join('\n') + '\n',
