@@ -336,6 +336,51 @@ recovery journal, or delivery lock makes every checker fail before accepting
 the preserved HTML; report the diagnostics and complete a successful recovery
 delivery before collecting new browser evidence.
 
+Static `check` uses the same SVG path analysis for inspected relationships and
+structural frames. It supports `M/L/H/V/Q/Z`, their lowercase relative forms,
+repeated parameters, and finite numbers. Each `M` starts an independent subpath;
+`Z` closes only the current subpath. Separate subpaths never create connecting
+segments that are absent from the drawing. Straight segments separated by a
+non-collinear `Q` also remain separate in route analysis; curve sample points
+do not become micro-segments in straight-route budgets or rhythm checks.
+Segment lengths and stretch are measured per continuous piece, while actual
+bends are summed per relationship. A relationship exceeding a budget is counted
+once, and internal piece boundaries do not receive the short shared-trunk
+exception reserved for semantic endpoints.
+
+This is not a promise of full SVG command support: `A/C/S/T` produce
+`artifact/svg-path-unsupported`; missing parameters, invalid numbers, and other
+syntax errors produce `artifact/svg-path-malformed`. The checker exits non-zero
+instead of skipping a bad path or waiting indefinitely. Path failures append a
+`svg_path_data` check; normal valid artifacts retain the existing nine checks.
+Diagnostics carry the inspected `pathIndex`, `role`, available relationship/frame
+`id`, parsing `tokenOffset`, available `command`, and `reason` so the generating
+source can be located and repaired. `pathIndex` is one-based; `tokenOffset` is a
+zero-based UTF-16 offset in `d` after numeric character references are decoded.
+Apparent tags in comments, CDATA, and attribute text are ignored. Passing static
+path checks does not establish browser or perceptual visual acceptance.
+
+<details>
+<summary>中文说明</summary>
+
+静态 `check` 对受检关系线和结构边界的 SVG 路径使用同一解析结果，支持
+`M/L/H/V/Q/Z` 及其小写相对形式、重复参数和有限数值。每个 `M` 开始独立
+子路径，`Z` 只闭合当前子路径；子路径之间不会被拼接成图中不存在的线段。
+非共线 `Q` 前后的直线也保持分离，不会把曲线采样点计为直线路由预算或
+节奏检查中的微线段。线段长度和伸长率按连续片段测量，真实转弯数汇总到原关系；超预算关系
+只计一次，内部子路径断点不享有语义起终点的短共享线例外。
+这不是完整 SVG 命令集的支持承诺：`A/C/S/T` 返回
+`artifact/svg-path-unsupported`；缺少参数、非法数值等格式错误返回
+`artifact/svg-path-malformed`，检查以非零状态结束，不跳过坏路径或无限等待。
+路径失败时追加 `svg_path_data` 检查；普通有效产物仍保留原来的 9 项检查。
+诊断携带受检路径的 `pathIndex`、`role`、可用的关系/边界 `id`，以及解析位置
+`tokenOffset`、可用的 `command` 和 `reason`，用于定位并修复生成路径的来源。
+`pathIndex` 从 1 开始；`tokenOffset` 是数字字符引用解码后的 `d` 字符串中
+从 0 开始的 UTF-16 位置。注释、CDATA 和属性文本中的伪标签不参与检查。
+静态路径检查通过仍不代表浏览器或感知视觉验收通过。
+
+</details>
+
 The delivery interface exposes four separate claims:
 
 1. `deliver` proves deterministic artifact checks and byte identity.

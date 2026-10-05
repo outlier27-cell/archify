@@ -7,18 +7,30 @@ motion mode and ownership, `node-finder.js` for node search and endpoint picking
 `intent-trace.js` for hover/focus previews, `semantic-lens.js` for type selection
 and legend previews, `route-probe.js` for directed paths and Route Journey,
 `focus.js` for semantic selection, relationships, reachability and shared flow tokens,
+`tree-branches.js` for hierarchy expand/collapse (active only on tree diagrams),
 `export.js` for export menus, serialization, images, cards, clipboard and WebM,
 `export-cleanup.js` for its private SVG clone cleanup, `viewer.css` for the
 main Viewer stylesheet, and `template.source.html` for the remaining shell.
 `viewer.css` owns the complete main `<style>` block; the font-face block remains
 in the shell because it carries its license notice and embedded font data.
 `archify/assets/template.html` is the committed generated artifact, consumed
-unchanged by all five renderers and the installed Skill. These maintainer
+unchanged by all ten renderers and the installed Skill. These maintainer
 sources live outside the packaged `archify/` directory.
 
 From `archify/`, run `npm run generate:viewer` after editing any source.
 `npm run check:viewer` verifies freshness without writing; `npm test` includes
-that check. Assembly inserts JavaScript fragments verbatim at fixed markers.
+that check. Shared Viewer changes also require rebuilding the checked-in
+Checkout comparison from its tracked snapshots. From the repository root, run:
+
+```sh
+node archify/bin/archify.mjs compare architecture archify/examples/checkout-platform.base.architecture.json archify/examples/checkout-platform.head.architecture.json examples/checkout-platform-delta.html --receipt examples/checkout-platform-delta.receipt.json --quality showcase --json
+```
+
+`test/architecture-delta.test.mjs` verifies those artifact and receipt
+bytes. Rebuild other affected examples and distribution outputs according to
+[Contributing](../CONTRIBUTING.md#packages-and-generated-artifacts).
+
+Assembly inserts JavaScript fragments verbatim at fixed markers.
 The CSS fragment is authored at column zero and reindented four spaces when it
 is inserted into the shell's `<style>` block; this preserves the delivered
 template bytes while keeping the standalone source easy to edit.
@@ -199,7 +211,9 @@ provider is part of Focus ownership, not a second initialization step.
 - flowTokens consumes existing shape geometry, edge classes and node kinds. Kind
   priority remains security, event, data, state, call. create produces a detached
   token with the existing path, duration/class options and null behavior. Motion
-  ownership remains in its existing module.
+  ownership remains in its existing module. If the visual `d` runs in reverse,
+  `data-motion-path` supplies the canonical from→to semantic path shared by
+  Focus, Intent Trace, Semantic Lens, Route Probe and WebM.
 - Relationship pulse removes any previous pulse, clones existing shape geometry
   and installs at most one flow token, retaining overlay placement and animation
   end/cancel removal. Embed, hidden, paused Motion and reduced motion prevent new
