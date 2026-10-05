@@ -244,6 +244,28 @@ test('compare reports locale-only changes as presentation changes', () => {
   assert.deepEqual(receipt.changes, { components: [], connections: [], boundaries: [] });
 });
 
+test('compare reports authored translation changes as presentation changes', () => {
+  const base = read(baseFixture);
+  base.meta.translations = { 'legend.architecture.backend': 'Backend' };
+  const head = structuredClone(base);
+  head.meta.translations['legend.architecture.backend'] = 'Service';
+  const headPath = path.join(tmp, 'translations-head.json');
+  const output = path.join(tmp, 'translations-delta.html');
+  fs.writeFileSync(headPath, JSON.stringify(head));
+
+  const result = run(['compare', 'architecture', baseFixture, headPath, output, '--json']);
+  assert.equal(result.status, 0, result.stderr);
+  const receipt = JSON.parse(result.stdout);
+  assert.equal(receipt.summary.presentationChanged, true);
+  assert.deepEqual(receipt.changes, { components: [], connections: [], boundaries: [] });
+
+  const reordered = structuredClone(head);
+  reordered.meta.translations = { 'legend.architecture.backend': 'Service', 'legend.architecture.frontend': 'Frontend' };
+  const reorderedAgain = structuredClone(reordered);
+  reorderedAgain.meta.translations = { 'legend.architecture.frontend': 'Frontend', 'legend.architecture.backend': 'Service' };
+  assert.equal(canonicalArchitectureJson(reorderedAgain), canonicalArchitectureJson(reordered));
+});
+
 test('change navigator order is exact-ID based, complete, unique, and stable', () => {
   const receipt = compareArchitecture(read(baseFixture), read(headFixture));
   const rows = architectureDeltaChangeRows(receipt);
