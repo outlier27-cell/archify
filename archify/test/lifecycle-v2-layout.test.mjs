@@ -277,6 +277,30 @@ test('v2 start states get an initial marker and final states a double border', (
   assert.match(svg, /data-legend-semantic-kind="final"/, 'final structural legend entry must be present');
 });
 
+test('v2 outer loops stay inside the automatic canvas for stacked lanes', () => {
+  const doc = {
+    schema_version: 2, diagram_type: 'lifecycle',
+    meta: { title: 'Outer loop containment', output: 'outer-loop.html', quality_profile: 'standard' },
+    lanes: ['main', 'wait', 'retry', 'terminal'].map((id) => ({ id, label: id })),
+    states: ['a', 'b', 'c', 'd'].map((id, index) => ({ id, type: 'active', label: id.toUpperCase(), lane: ['main', 'wait', 'retry', 'terminal'][index], col: 0 })),
+    transitions: [
+      { id: 'ac', from: 'a', to: 'c' }, { id: 'ad', from: 'a', to: 'd' }, { id: 'bd', from: 'b', to: 'd' },
+      { id: 'ca', from: 'c', to: 'a' }, { id: 'da', from: 'd', to: 'a' }, { id: 'db', from: 'd', to: 'b' },
+    ],
+  };
+  const rendered = render('outer-loop', doc);
+  assert.equal(rendered.code, 0, rendered.stderr);
+  const svg = svgOf(rendered.output);
+  const [, width, height] = svg.match(/viewBox="0 0 (\d+) (\d+)"/).map(Number);
+  const points = [...svg.matchAll(/data-edge-id="(?:ac|ad|bd|ca|da|db)"[^>]*data-composition-points="([^"]+)"/g)]
+    .flatMap((match) => match[1].split(';').map((point) => point.split(',').map(Number)));
+  assert.ok(points.length > 0);
+  for (const [x, y] of points) {
+    assert.ok(x >= 0 && x <= width, `x=${x} must stay inside 0..${width}`);
+    assert.ok(y >= 0 && y <= height, `y=${y} must stay inside 0..${height}`);
+  }
+});
+
 test('nodeLabelLayout reserves the source badge footprint on the right rail', () => {
   // 12 units at 10px is ~72px: centred it fits a 144px box, but it would run
   // under a 38px source badge at the right rail.
