@@ -54,7 +54,7 @@ const contentBottom = Math.max(
 );
 function legendRequiredHeight(width) {
   const entries = legendEntries();
-  if (!entries.length) return 0;
+  if (!entries.length) return Math.ceil(contentBottom + 65);
   return Math.ceil(contentBottom + LEGEND_CONTENT_GAP + LEGEND_BLOCK_HEIGHT
     + legendFootprint(entries, { width: width - 80 }).extraHeight);
 }

@@ -170,6 +170,27 @@ test('sequence legend stays below a late message with a note', () => {
   assert.ok(Number(fs.readFileSync(automatic.output, 'utf8').match(/<svg viewBox="0 0 920 (\d+)"/)[1]) > 760);
 });
 
+test('hidden sequence legends still size automatic canvases around late activations', () => {
+  const source = {
+    schema_version: 1, diagram_type: 'sequence',
+    meta: { title: 'Hidden legend activation', output: 'hidden.html', quality_profile: 'showcase', legend: { mode: 'hidden' } },
+    participants: [{ id: 'client', type: 'frontend', label: 'Client' }, { id: 'api', type: 'backend', label: 'API' }],
+    messages: [{ from: 'client', to: 'api', y: 200, label: 'request' }],
+    activations: [{ participant: 'api', from: 180, to: 1200 }],
+  };
+  const input = path.join(tmp, 'hidden-legend-activation.json');
+  const output = path.join(tmp, 'hidden-legend-activation.html');
+  fs.writeFileSync(input, JSON.stringify(source));
+  const result = spawnSync(process.execPath, [cli, 'render', 'sequence', input, output], { cwd: skillRoot, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const html = fs.readFileSync(output, 'utf8');
+  const height = Number(html.match(/<svg viewBox="0 0 920 (\d+)"/)[1]);
+  const activation = html.match(/<rect[^>]*y="([\d.]+)"[^>]*width="10"[^>]*height="([\d.]+)"[^>]*class="c-backend"/);
+  assert.ok(activation, 'activation bar rendered');
+  assert.ok(Number(activation[1]) + Number(activation[2]) <= height, 'activation stays inside the automatic canvas');
+  assert.ok(height >= 1265, `automatic height ${height} preserves the 65px bottom margin`);
+});
+
 test('sequence repair height also holds a wrapped legend', () => {
   // A narrow canvas with all five variants wraps the legend to two rows; the
   // suggested height must make that legend actually render below the content.
