@@ -586,12 +586,14 @@ The source split narrows maintenance scope while preserving runtime dependencies
   `data-reader-fit="width-first"` selects available desktop reading width;
   `data-reader-fit="intrinsic-height"` selects height fitting. Both declare
   automatic canvases and share the existing readability and enlargement limits.
-  Automatic Sequence and Waterfall canvases declare `width-first` and retain
+  Automatic Sequence and Waterfall canvases, and intrinsic v2 Workflow canvases
+  with expanded vertical stacks, declare `width-first` and retain
   vertical page scroll;
   overflow settling must not shrink them back to fit the viewport height.
   Undeclared SVGs retain the ordinary ratio-based eligibility and fit; UI or
-  column attributes alone do not opt into either automatic fit. Other diagram
-  families retain height fitting. All automatic canvases cap
+  column attributes alone do not opt into either automatic fit. Other automatic
+  canvases retain height fitting. Explicit Workflow canvases retain their existing
+  fitting behavior. All automatic canvases cap
   enlargement at 1.5 times the authored SVG width without reducing the outer
   reading area. Capped SVGs are centered inside that area; uncapped diagrams
   retain their existing natural flow. In a capped reader area, the original

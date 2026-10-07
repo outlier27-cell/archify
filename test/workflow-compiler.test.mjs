@@ -481,27 +481,31 @@ test('absolute route pins retain shared-height readable-v2 geometry', () => {
   assert.deepEqual([0, 1, 2].map((index) => laneFrameRect(result.svg, index).height), [276, 270, 270]);
 });
 
-test('a measured intrinsic readable-v2 tall lane opts into height-aware reader fitting', () => {
+test('an automatic readable-v2 vertical stack opts into width-first reader fitting', () => {
   const result = compileSuccessfully(stackedGroupWorkflow({
     schemaVersion: 2,
     offsets: [-90, 0, 90],
   }));
   const svgRoot = result.svg.match(/<svg\b[^>]*>/)?.[0];
   assert.ok(svgRoot, 'expected an SVG root');
-  assert.equal(attribute(svgRoot, 'data-reader-fit'), 'intrinsic-height');
+  assert.equal(attribute(svgRoot, 'data-reader-fit'), 'width-first');
 });
 
-test('height-aware reader fitting stays off for authored canvases, fixed-v1, and baseline lanes', () => {
+test('stack reader fitting stays off for authored canvases, fixed-v1, and workflows without a vertical stack', () => {
   const authoredCanvas = stackedGroupWorkflow({ schemaVersion: 2, offsets: [-90, 0, 90] });
   authoredCanvas.meta.viewBox = [768, 452];
+  const tallWithoutStack = adjacentWorkflow();
+  tallWithoutStack.nodes.forEach((node) => { node.height = 130; });
 
   const cases = [
     ['authored readable-v2 canvas', authoredCanvas],
     ['fixed-v1 workflow', stackedGroupWorkflow({ offsets: [0] })],
     ['baseline readable-v2 lane', adjacentWorkflow()],
+    ['tall readable-v2 lane without a vertical stack', tallWithoutStack],
   ];
   for (const [description, workflow] of cases) {
     const result = compileSuccessfully(workflow);
+    if (workflow === tallWithoutStack) assert.ok(laneFrameRect(result.svg, 0).height > 104);
     const svgRoot = result.svg.match(/<svg\b[^>]*>/)?.[0];
     assert.ok(svgRoot, `${description}: expected an SVG root`);
     assert.equal(

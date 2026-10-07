@@ -414,7 +414,7 @@ test('offline intrinsic workflows fit while authored overflow still identifies l
   }
 });
 
-test('issue #250 tall intrinsic workflow fits every required desktop viewport', {
+test('issue #250 tall intrinsic workflow uses reading width and permits readable page scroll', {
   skip: chromePath ? false : 'Set ARCHIFY_CHROME to run the real browser regression.',
 }, async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-issue-250-reader-'));
@@ -440,8 +440,10 @@ test('issue #250 tall intrinsic workflow fits every required desktop viewport', 
     assert.equal(result.receipt.containment.viewports.length, 4);
     for (const viewport of result.receipt.containment.viewports) {
       assert.equal(viewport.overflowX, false, JSON.stringify(viewport, null, 2));
-      assert.equal(viewport.overflowY, false, JSON.stringify(viewport, null, 2));
-      assert.equal(viewport.scrollHeight, viewport.height, JSON.stringify(viewport, null, 2));
+      assert.equal(viewport.readerFit, 'width-first');
+      assert.equal(viewport.overflowY, viewport.verticalScrollAccepted, JSON.stringify(viewport, null, 2));
+      assert.ok(viewport.scrollHeight >= viewport.height, JSON.stringify(viewport, null, 2));
+      assert.ok(viewport.diagramWidth <= viewport.viewBoxWidth * 1.5 + 1);
       assert.ok(viewport.minimumProjectedNodeTextPx >= MIN_PROJECTED_NODE_TEXT_PX);
     }
     assert.deepEqual(
@@ -460,7 +462,7 @@ test('issue #250 tall intrinsic workflow fits every required desktop viewport', 
   }
 });
 
-test('issue #250 five-stage stack fits below source scale without crossing the readability floor', {
+test('issue #250 five-stage stack retains reading scale within the automatic enlargement cap', {
   skip: chromePath ? false : 'Set ARCHIFY_CHROME to run the real browser regression.',
 }, async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-issue-250-five-stage-'));
@@ -481,15 +483,18 @@ test('issue #250 five-stage stack fits below source scale without crossing the r
     const result = await runVisualCheck({ artifactPath: artifact, chromePath });
     assert.equal(result.exitCode, 0, JSON.stringify(result.receipt, null, 2));
     for (const viewport of result.receipt.containment.viewports) {
-      assert.equal(viewport.overflowY, false, JSON.stringify(viewport, null, 2));
-      assert.equal(viewport.scrollHeight, viewport.height, JSON.stringify(viewport, null, 2));
+      assert.equal(viewport.overflowX, false, JSON.stringify(viewport, null, 2));
+      assert.equal(viewport.readerFit, 'width-first');
+      assert.equal(viewport.overflowY, viewport.verticalScrollAccepted, JSON.stringify(viewport, null, 2));
+      assert.ok(viewport.scrollHeight >= viewport.height, JSON.stringify(viewport, null, 2));
+      assert.ok(viewport.diagramWidth <= viewport.viewBoxWidth * 1.5 + 1);
       assert.ok(viewport.minimumProjectedNodeTextPx >= MIN_PROJECTED_NODE_TEXT_PX);
     }
     const desktop = result.receipt.containment.viewports.find(({ width, height }) => (
       width === DESKTOP_READABILITY_VIEWPORT.width && height === DESKTOP_READABILITY_VIEWPORT.height
     ));
     assert.ok(desktop);
-    assert.ok(desktop.diagramWidth < desktop.viewBoxWidth, JSON.stringify(desktop, null, 2));
+    assert.ok(desktop.diagramWidth >= desktop.viewBoxWidth, 'use available reading width instead of shrinking the stack: ' + JSON.stringify(desktop, null, 2));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
