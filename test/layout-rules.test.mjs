@@ -2069,7 +2069,7 @@ test('sequence: self-message at timeline boundary diagnoses loop overflow', () =
   const diagram = {
     schema_version: 1, diagram_type: 'sequence',
     meta: { title: 'Self message boundary', output: 'self-boundary.html', quality_profile: 'showcase', viewBox: [920, 620] },
-    participants: [{ id: 'worker', type: 'backend', label: 'Worker' }],
+    participants: [{ id: 'worker', type: 'backend', label: 'Worker' }, { id: 'cache', type: 'backend', label: 'Cache' }],
     messages: [{ id: 'retry', from: 'worker', to: 'worker', y: 537, label: 'retry()' }],
   };
   const { code, stderr } = render('sequence', diagram);
