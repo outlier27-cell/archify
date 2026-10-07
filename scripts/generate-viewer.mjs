@@ -21,6 +21,7 @@ const fragments = [
   ['/* ARCHIFY:MOTION_GOVERNOR */', 'motion-governor.js'],
   ['/* ARCHIFY:NODE_FINDER */', 'node-finder.js'],
   ['/* ARCHIFY:NODE_OUTLINE */', 'node-outline.js'],
+  ['/* ARCHIFY:TREE_BRANCHES */', 'tree-branches.js'],
   ['/* ARCHIFY:FOCUS */', 'focus.js'],
   ['/* ARCHIFY:INTENT_TRACE */', 'intent-trace.js'],
   ['/* ARCHIFY:SEMANTIC_LENS */', 'semantic-lens.js'],
