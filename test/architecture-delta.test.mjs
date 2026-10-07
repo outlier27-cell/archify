@@ -249,15 +249,30 @@ test('compare reports authored translation changes as presentation changes', () 
   base.meta.translations = { 'legend.architecture.backend': 'Backend' };
   const head = structuredClone(base);
   head.meta.translations['legend.architecture.backend'] = 'Service';
+  const basePath = path.join(tmp, 'translations-base.json');
   const headPath = path.join(tmp, 'translations-head.json');
   const output = path.join(tmp, 'translations-delta.html');
+  fs.writeFileSync(basePath, JSON.stringify(base));
   fs.writeFileSync(headPath, JSON.stringify(head));
 
-  const result = run(['compare', 'architecture', baseFixture, headPath, output, '--json']);
+  const result = run(['compare', 'architecture', basePath, headPath, output, '--json']);
   assert.equal(result.status, 0, result.stderr);
   const receipt = JSON.parse(result.stdout);
   assert.equal(receipt.summary.presentationChanged, true);
   assert.deepEqual(receipt.changes, { components: [], connections: [], boundaries: [] });
+
+  for (const [baseTranslations, headTranslations] of [
+    [{ 'legend.architecture.backend': 'Backend' }, { ...head.meta.translations, 'legend.architecture.frontend': 'Frontend' }],
+    [{ ...head.meta.translations, 'legend.architecture.frontend': 'Frontend' }, { 'legend.architecture.backend': 'Service' }],
+  ]) {
+    const before = structuredClone(base); before.meta.translations = baseTranslations;
+    const after = structuredClone(base); after.meta.translations = headTranslations;
+    fs.writeFileSync(basePath, JSON.stringify(before));
+    fs.writeFileSync(headPath, JSON.stringify(after));
+    const variant = JSON.parse(run(['compare', 'architecture', basePath, headPath, output, '--json']).stdout);
+    assert.equal(variant.summary.presentationChanged, true);
+    assert.deepEqual(variant.changes, { components: [], connections: [], boundaries: [] });
+  }
 
   const reordered = structuredClone(head);
   reordered.meta.translations = { 'legend.architecture.backend': 'Service', 'legend.architecture.frontend': 'Frontend' };
