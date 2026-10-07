@@ -4896,7 +4896,7 @@ function renderSvg() {
     && !workflow.meta?.viewBox
     && hasVerticalStack(workflow)
     && asArray(layout.laneHeights).some((height) => height > 104)
-    ? ' data-reader-fit="intrinsic-height"'
+    ? ' data-reader-fit="width-first"'
     : '';
   const contract = workflow.schema_version === 2 ? ' data-layout-contract="readable-v2"' : '';
   return `      <svg viewBox="0 0 ${viewBox[0]} ${viewBox[1]}"${readerFit}${contract} ${svgRootAttrs(workflow.meta, resolvedQualityProfile)}>
