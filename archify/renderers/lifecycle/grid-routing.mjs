@@ -164,12 +164,12 @@ export function createLifecycleGridRouter(states, transitions, { rowOf, columnXs
   for (const side of ['left', 'right']) {
     const loops = [...plans.values()].filter((plan) => plan.kind === 'loop' && plan.side === side)
       .sort((a, b) => Math.abs(rowOf(a.from) - rowOf(a.to)) - Math.abs(rowOf(b.from) - rowOf(b.to)));
+    const leftTrackStart = Math.max(0, gridLeft - 18 - Math.max(0, loops.length - 1) * CORRIDOR_SPACING);
     loops.forEach((plan, index) => {
-      // Keep automatic outer loops inside the renderer's minimum canvas inset.
-      // The v2 auto viewBox is sized from state bounds, so a left loop must not
-      // assume that `gridLeft - 18` is still positive.
+      // Keep nested automatic outer loops inside the canvas while retaining a
+      // distinct track for each route, even when the state grid is narrow.
       plan.loopX = side === 'left'
-        ? Math.max(28, gridLeft - 18 - index * CORRIDOR_SPACING)
+        ? leftTrackStart + index * CORRIDOR_SPACING
         : gridRight + 18 + index * CORRIDOR_SPACING;
     });
   }

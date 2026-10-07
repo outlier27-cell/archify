@@ -294,11 +294,17 @@ test('v2 outer loops stay inside the automatic canvas for stacked lanes', () => 
   const [, width, height] = svg.match(/viewBox="0 0 (\d+) (\d+)"/).map(Number);
   const points = [...svg.matchAll(/data-edge-id="(?:ac|ad|bd|ca|da|db)"[^>]*data-composition-points="([^"]+)"/g)]
     .flatMap((match) => match[1].split(';').map((point) => point.split(',').map(Number)));
+  const edgeIds = [...svg.matchAll(/data-edge-id="([^"]+)"[^>]*data-composition-points=/g)]
+    .map((match) => match[1]);
+  assert.deepEqual(new Set(edgeIds), new Set(['ac', 'ad', 'bd', 'ca', 'da', 'db']));
   assert.ok(points.length > 0);
   for (const [x, y] of points) {
     assert.ok(x >= 0 && x <= width, `x=${x} must stay inside 0..${width}`);
     assert.ok(y >= 0 && y <= height, `y=${y} must stay inside 0..${height}`);
   }
+  const leftLoopXs = [...svg.matchAll(/data-edge-id="(?:ca|da|db)"[^>]*data-composition-points="([^"]+)"/g)]
+    .map((match) => Number(match[1].split(';')[1].split(',')[0]));
+  assert.equal(new Set(leftLoopXs).size, leftLoopXs.length, 'indexed left outer loops must keep distinct tracks');
 });
 
 test('nodeLabelLayout reserves the source badge footprint on the right rail', () => {
