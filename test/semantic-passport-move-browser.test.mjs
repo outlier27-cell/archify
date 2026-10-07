@@ -342,6 +342,55 @@ test('Semantic Passport pointer movement honors threshold, capture, four-edge cl
   }
 });
 
+test('compact ERD Passport reclamps to the settled container when the reader cap stops binding', {
+  skip: chromePath ? false : 'Set ARCHIFY_CHROME to run the real browser regression.',
+}, async () => {
+  const artifact = path.join(tmp, 'compact-erd-passport.html');
+  execFileSync(process.execPath, [
+    path.join(skillRoot, 'renderers/erd/render-erd.mjs'),
+    path.join(skillRoot, '../test/fixtures/reader-readability/compact-table.erd.json'), artifact,
+  ]);
+  const browser = desktopBrowser(chromePath);
+  try {
+    const sessionId = await loadArtifact(browser, artifact);
+    await focusNode(browser, sessionId, 'record');
+    const geometry = await evaluate(browser, sessionId, `(() => {
+      const svg = document.querySelector('.diagram-container > svg');
+      return [svg.getAttribute('viewBox'), ...Array.from(svg.querySelectorAll('[data-node-id]')).map(node =>
+        [node.getAttribute('data-node-id'), node.getAttribute('transform')])];
+    })()`);
+    async function resize(width, height, area) {
+      await browser.cdp.send('Emulation.setDeviceMetricsOverride', {
+        width, height, deviceScaleFactor: 1, mobile: false,
+      }, sessionId);
+      await evaluate(browser, sessionId, `Archify.layoutStability.whenStable()`, true);
+      await settle(browser, sessionId, 300);
+      await evaluate(browser, sessionId, `Archify.layoutStability.whenStable()`, true);
+      const state = await passportState(browser, sessionId);
+      assert.equal(state.manual, 'true', JSON.stringify(state));
+      assert.ok(state.container.height >= state.chip.height + 32, 'panel fits inside the normal container');
+      assertBounded(state, 16);
+      assert.equal(await evaluate(browser, sessionId,
+        `document.documentElement.getAttribute('data-reader-area')`), area);
+      assert.deepEqual(await evaluate(browser, sessionId, `(() => {
+        const svg = document.querySelector('.diagram-container > svg');
+        return [svg.getAttribute('viewBox'), ...Array.from(svg.querySelectorAll('[data-node-id]')).map(node =>
+          [node.getAttribute('data-node-id'), node.getAttribute('transform')])];
+      })()`), geometry);
+    }
+    await dragHandleTo(browser, sessionId, { x: 1435, y: 895 });
+    await resize(1440, 360, null);
+    await resize(1440, 900, 'true');
+    await dragHandleTo(browser, sessionId, { x: 1435, y: 895 });
+    await resize(940, 640, null);
+    await resize(1440, 900, 'true');
+    await dragHandleTo(browser, sessionId, { x: 1435, y: 895 });
+    await resize(1440, 400, null);
+  } finally {
+    await browser.close();
+  }
+});
+
 test('Semantic Passport keyboard movement uses coarse/fine steps, Home reset, and resize reclamping', {
   skip: chromePath ? false : 'Set ARCHIFY_CHROME to run the real browser regression.',
 }, async () => {

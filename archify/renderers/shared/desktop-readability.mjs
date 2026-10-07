@@ -88,7 +88,7 @@ export function declaredWideReadabilityBudget({
 export const DESKTOP_FIXED_VERTICAL_CHROME_PX = Object.freeze({ body: 12, header: 39, diagram: 75 });
 
 // A canvas the Reader can neither narrow (viewBox ratio below the wide
-// threshold) nor scroll readably (no intrinsic-height fit) renders at the full
+// threshold) nor scroll readably (no automatic Reader fit) renders at the full
 // reader width, so its page height is a function of the viewBox alone. Returns
 // null when the Reader has a way to fit the page; otherwise the certain
 // overflow at 1440x900 before any cards are counted.
@@ -104,7 +104,7 @@ export function predictedFixedWidthOverflow({
 } = {}) {
   if (![viewBoxWidth, viewBoxHeight].every(Number.isFinite) || viewBoxWidth <= 0 || viewBoxHeight <= 0) return null;
   const ratio = viewBoxWidth / viewBoxHeight;
-  if (readerFit === 'intrinsic-height'
+  if (readerFit === 'intrinsic-height' || readerFit === 'width-first'
       || (readerFit === 'authored-height' && diagramType === 'architecture')
       || ratio >= DECLARED_WIDE_READER_RATIO) return null;
   const svgWidthPx = viewport.width - bodyHorizontalPx - diagramHorizontalPx;

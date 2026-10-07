@@ -406,59 +406,6 @@ test('dataflow: automatic fan-out spreads flows without changing their authored 
   assert.deepEqual(connectionPoints(html, 'to-lower')[0], [156, 398]);
 });
 
-test('lifecycle: automatic fan-out spreads transitions across lifecycle bands', () => {
-  const html = render('lifecycle', {
-    schema_version: 1,
-    diagram_type: 'lifecycle',
-    meta: { title: 'Lifecycle port spread' },
-    lanes: [
-      { id: 'main', label: 'Main' },
-      { id: 'event', label: 'Events' },
-      { id: 'terminal', label: 'Outcomes' },
-    ],
-    states: [
-      { id: 'hub', type: 'active', label: 'Hub', lane: 'event', col: 0 },
-      { id: 'upper', type: 'waiting', label: 'Upper', lane: 'main', col: 4 },
-      { id: 'middle', type: 'success', label: 'Middle', lane: 'event', col: 2 },
-      { id: 'lower', type: 'failure', label: 'Lower', lane: 'terminal', col: 2 },
-    ],
-    transitions: [
-      { id: 'to-upper', from: 'hub', to: 'upper' },
-      { id: 'to-middle', from: 'hub', to: 'middle' },
-      { id: 'to-lower', from: 'hub', to: 'lower' },
-    ],
-  });
-
-  assert.deepEqual(connectionPoints(html, 'to-upper')[0], [465, 294]);
-  assert.deepEqual(connectionPoints(html, 'to-middle')[0], [465, 307]);
-  assert.deepEqual(connectionPoints(html, 'to-lower')[0], [465, 320]);
-});
-
-test('lifecycle: same-band port spread remains orthogonal', () => {
-  const html = render('lifecycle', {
-    schema_version: 1,
-    diagram_type: 'lifecycle',
-    meta: { title: 'Orthogonal same-band spread' },
-    lanes: [{ id: 'main', label: 'Main' }],
-    states: [
-      { id: 'hub', type: 'active', label: 'Hub', lane: 'main', col: 0 },
-      { id: 'upper', type: 'waiting', label: 'Upper', lane: 'main', col: 2, yOffset: -50 },
-      { id: 'lower', type: 'success', label: 'Lower', lane: 'main', col: 4, yOffset: 50 },
-    ],
-    transitions: [
-      { id: 'to-upper', from: 'hub', to: 'upper' },
-      { id: 'to-lower', from: 'hub', to: 'lower' },
-    ],
-  });
-
-  assert.deepEqual(connectionPoints(html, 'to-upper'), [
-    [153, 150], [248, 150], [248, 107], [343, 107],
-  ]);
-  assert.deepEqual(connectionPoints(html, 'to-lower'), [
-    [153, 164], [402, 164], [402, 207], [651, 207],
-  ]);
-});
-
 test('authoring defaults point to the bounded automatic port rules and READMEs describe the default', () => {
   const defaults = fs.readFileSync(path.join(skillRoot, 'references/authoring-defaults.md'), 'utf8');
   assert.match(defaults, /Start with automatic routes and endpoint sides/);

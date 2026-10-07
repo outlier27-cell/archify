@@ -61,14 +61,14 @@ const FIXTURES = {
     ],
   },
   lifecycle: {
-    schema_version: 1,
+    schema_version: 3,
     diagram_type: 'lifecycle',
-    meta: { title: 'No Waiting or Failure', viewBox: [720, 566] },
-    lanes: [{ id: 'main', label: 'Lifecycle' }],
+    meta: { title: 'No Waiting or Failure' },
+    mainPath: ['started', 'running', 'completed'],
     states: [
-      { id: 'started', type: 'start', label: 'Started', lane: 'main', col: 0 },
-      { id: 'running', type: 'active', label: 'Running', lane: 'main', col: 1 },
-      { id: 'completed', type: 'success', label: 'Completed', lane: 'main', col: 2 },
+      { id: 'started', type: 'start', label: 'Started' },
+      { id: 'running', type: 'active', label: 'Running' },
+      { id: 'completed', type: 'success', label: 'Completed' },
     ],
     transitions: [
       { from: 'started', to: 'running' },

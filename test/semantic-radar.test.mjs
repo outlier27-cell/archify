@@ -183,7 +183,7 @@ test('Semantic Radar tracks desktop camera and mobile contained scroll', () => {
   const html = render('sequence', CASES.sequence);
   assert.match(html, /function logicalViewport\(\)/);
   assert.match(html, /x = viewBox\.x \+ container\.scrollLeft \/ metrics\.scale/);
-  assert.match(html, /x = viewBox\.x \+ \(\(-state\.x \/ state\.scale\) - metrics\.offsetX\) \/ metrics\.scale/);
+  assert.match(html, /var visible = Archify\.view\.logicalViewport\(\)/);
   assert.match(html, /viewport\.setAttribute\('width', String\(visible\.width\)\)/);
   assert.match(html, /viewerText\('viewer\.radar\.viewport\.width'/);
   assert.match(html, /function centerAt\(logicalX, logicalY, options\)/);

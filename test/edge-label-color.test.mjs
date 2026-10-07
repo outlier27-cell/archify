@@ -33,9 +33,6 @@ const CASES = {
     input: 'examples/deployment-release.lifecycle.json',
     relations: 'transitions',
     relationIndexes: [0, 5, 1, 4],
-    // v2 layout: pin labels into the free corridor between the main and
-    // waiting rows so they clear every state rect.
-    labelPoints: [[200, 175], [200, 195], [200, 215], [200, 235]],
   },
 };
 

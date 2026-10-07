@@ -19,8 +19,8 @@ test('Tree branches collapse in place, follow the keyboard, reveal selections, a
 }, async (t) => {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-tree-browser-'));
   t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
-  // Verified evidence on a root, branch and leaf exercises the shared beacon
-  // installer against both hidden stack decorations and actual node cards.
+  // Verified evidence on root, branch and leaf stays available without adding
+  // source badges or mutating node accessibility labels.
   const git = (...args) => execFileSync('git', ['-C', scratch, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
   fs.writeFileSync(path.join(scratch, 'source.js'), 'export const source = true;\n');
   git('init');
@@ -75,26 +75,12 @@ test('Tree branches collapse in place, follow the keyboard, reveal selections, a
 
   await load(small);
   assert.equal(await run('Archify.treeBranches.active'), true);
-  async function checkBeacons() {
-    assert.deepEqual(await run(`(() => ['platform', 'payments', 'card_payment'].map(id => {
-      const node = document.querySelector('[data-node-id="' + id + '"]');
-      const beacon = node.querySelector('[data-source-evidence-beacon]');
-      const card = node.querySelector('rect.c-mask').getBoundingClientRect();
-      const box = beacon && beacon.getBoundingClientRect();
-      const texts = [...node.querySelectorAll('text:not(.source-evidence-beacon text)')];
-      texts.forEach(text => {
-        text.style.setProperty('display', 'inline', 'important');
-        text.style.setProperty('opacity', '1', 'important');
-      });
-      const textCollisions = texts.filter(text => {
-        const other = text.getBoundingClientRect();
-        return box && box.left < other.right && other.left < box.right && box.top < other.bottom && other.top < box.bottom;
-      }).map(text => text.textContent);
-      return { id, exists: !!beacon, onCard: !!box && box.x >= card.x && box.x + box.width <= card.x + card.width
-        && box.y >= card.y && box.y + box.height <= card.y + card.height, textCollisions };
-    }))()`), ['platform', 'payments', 'card_payment'].map(id => ({ id, exists: true, onCard: true, textCollisions: [] })));
+  async function checkSources() {
+    assert.equal(await run(`document.querySelectorAll('[data-source-evidence-beacon]').length`), 0);
+    assert.deepEqual(await run(`['platform', 'payments', 'card_payment'].map(id => Archify.sourceEvidence.node(id).map(source => source.path))`), [['source.js'], ['source.js'], ['source.js']]);
+    assert.deepEqual(await run(`['platform', 'payments', 'card_payment'].map(id => document.querySelector('[data-node-id="' + id + '"]').getAttribute('data-source-evidence-count'))`), ['1', '1', '1']);
   }
-  await checkBeacons();
+  await checkSources();
   const before = await run(box('operations'));
   const started = await run('performance.now()');
   await run(`document.querySelector('[data-tree-toggle="payments"]').dispatchEvent(new MouseEvent('click', { bubbles: true }))`);
@@ -174,5 +160,5 @@ test('Tree branches collapse in place, follow the keyboard, reveal selections, a
   assert.deepEqual(await run('Archify.treeBranches.collapsedIds()'), []);
 
   await load(small, '', 'dark');
-  await checkBeacons();
+  await checkSources();
 });

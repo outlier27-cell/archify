@@ -431,7 +431,8 @@ The receipt binds the artifact SHA-256 and byte count, identifies
 
 Horizontal overflow always fails. Normal document-level vertical scrolling is
 accepted only with a renderer-declared contract and measured readable text.
-Automatic canvases declare `data-reader-fit="intrinsic-height"`; their adaptive
+Automatic canvases declare `data-reader-fit="intrinsic-height"` (height fitting)
+or `data-reader-fit="width-first"` (Sequence and Waterfall reading width); their adaptive
 Reader must reach its readable width and expose `data-reader-overflow="authored"`.
 Architecture with an explicit `meta.viewBox` instead declares
 `data-diagram-type="architecture"` and `data-reader-fit="authored-height"`:
@@ -469,7 +470,7 @@ A passing `finalize` may report `layoutReviewRecommendation.action: "inspect-seq
 
 A passing `validate --json`, `deliver`, or `finalize` receipt may carry `diagnostics[]` entries with `severity: "warning"` for Viewer locale fallbacks (`i18n/*`). They fail no gate. When the artifact should be fully localized, repair the listed keys from their `evidence` and rerun `finalize`.
 
-For a newly authored candidate with omitted `meta.column_fit` and no user-fixed column geometry, save the candidate, set only `meta.column_fit` to `"spread"`, and rerun the complete `finalize` once with `--out-dir <folder>/width-review`. Keep participant order, messages and their y positions, labels, notes, sources and canvas dimensions. If that attempt fails, restore the candidate and finalize it with `--out-dir <folder>/width-restore`; report the remaining layout suggestion rather than iterating. Preserve an explicitly fixed layout or a supplied legacy candidate and disclose the suggestion without changing it. This review is about horizontal composition; a passing receipt still does not claim perceptual approval.
+Sequence canvases with omitted `meta.column_fit` use `spread`, whether or not `meta.viewBox` is supplied. An authored viewBox remains authoritative; infeasible participant capacity fails without silently enlarging it. Explicit `meta.column_fit: "fixed"` preserves historical fixed columns. For a candidate whose fixed-column width suggestion remains, first check whether the fixed geometry is intentional. Only when a change to that geometry is authorized, save the candidate, set only `meta.column_fit` to `"spread"`, and rerun the complete `finalize` once with `--out-dir <folder>/width-review`. Keep participant order, messages and their y positions, labels, notes, sources and canvas dimensions. If that attempt fails, restore the candidate and finalize it with `--out-dir <folder>/width-restore`; report the remaining layout suggestion rather than iterating. Preserve intentional fixed geometry and disclose the suggestion when a change is not authorized. To retain historical fixed coordinates for an older omitted-fit input, set `meta.column_fit: "fixed"` explicitly. This review is about horizontal composition; a passing receipt still does not claim perceptual approval.
 
 ## Optional capture evidence
 

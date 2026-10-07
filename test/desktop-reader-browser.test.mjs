@@ -74,7 +74,9 @@ test('default sequence and dataflow canvases fit the real desktop reader without
         } else {
           assert.equal(result.exitCode, 0, `${type}: ${JSON.stringify(result.receipt.diagnostics)}`);
           assert.equal(result.receipt.readability.status, 'pass');
-          assert.ok(result.receipt.containment.viewports.every((v) => v.ok && v.readerFit === 'intrinsic-height'));
+          const readerFit = type === 'sequence' ? 'width-first' : 'intrinsic-height';
+          assert.ok(result.receipt.containment.viewports.every((v) => v.ok && v.readerFit === readerFit),
+            `${type}: ${JSON.stringify(result.receipt.containment.viewports)}`);
         }
       }
     }

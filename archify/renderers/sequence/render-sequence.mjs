@@ -65,16 +65,24 @@ const viewBox = sequence.meta?.viewBox || [920, Math.max(760, legendRequiredHeig
 // a shorter one shrinks the readable band (validated below) instead of clipping.
 // `column_fit: "spread"` widens the lanes with the viewBox instead of keeping
 // the fixed 108px gap, so a wide canvas gains column distance and label room
-// rather than dead space on the right. The default stays "fixed" so existing
-// diagrams keep their coordinates.
-const columnFit = sequence.meta?.column_fit === 'spread' ? 'spread' : 'fixed';
+// rather than dead space on the right. Spread is the default on both automatic
+// and authored canvases; explicit fixed retains historical coordinates.
+const columnFit = sequence.meta?.column_fit || 'spread';
 const participantCount = Math.max(1, asArray(sequence.participants).length);
-const sideMargin = 62;
+const preferredSideMargin = 62;
 const participantW = columnFit === 'spread'
-  ? Math.max(86, Math.min(190, Math.round((viewBox[0] - sideMargin * 2) / participantCount) - 24))
+  ? Math.max(86, Math.min(190, Math.round((viewBox[0] - preferredSideMargin * 2) / participantCount) - 24))
   : 86;
+// Narrow feasible frames can reduce the left margin, while ordinary frames
+// keep 62px. Compute card width first so this does not change its sizing rule.
+const minimumParticipantSpan = participantCount * participantW + (participantCount - 1) * 16;
+const sideMargin = columnFit === 'spread'
+  ? Math.max(40, Math.min(preferredSideMargin, viewBox[0] - 40 - minimumParticipantSpan))
+  : preferredSideMargin;
+// Fit the authored width when feasible, preserving a real 16px card gutter.
+// Infeasible frames retain that minimum and fail the capacity check below.
 const colGap = columnFit === 'spread' && participantCount > 1
-  ? Math.max(108, (viewBox[0] - 40 - sideMargin - participantW) / (participantCount - 1))
+  ? Math.max(participantW + 16, (viewBox[0] - 40 - sideMargin - participantW) / (participantCount - 1))
   : 108;
 
 // Showcase is the fast-authoring default; standard retains legacy label geometry.
@@ -194,6 +202,7 @@ function messagePath(message) {
 
 function validateSequence() {
   const problems = [];
+  const diagnostics = [];
   if (participants.size !== asArray(sequence.participants).length) problems.push('Participant ids must be unique.');
 
   if (layout.lifelineBottom - layout.lifelineTop < 120) {
@@ -203,7 +212,7 @@ function validateSequence() {
   for (const participant of participants.values()) {
     const estLabelW = textUnits(participant.label) * 6.8;
     if (estLabelW > layout.participantW + 6) {
-      problems.push(`Label "${participant.label}" (~${Math.round(estLabelW)}px) is wider than the ${layout.participantW}px participant box — shorten it.`);
+      problems.push(`Label "${participant.label}" (~${Math.round(estLabelW)}px) is wider than component "${participant.id}" (${layout.participantW}px) — shorten the label or widen the participant box.`);
     }
     const brandRailProblem = brandTopRailProblem(participant, layout.participantW, 8, 'Participant');
     if (brandRailProblem) problems.push(brandRailProblem);
@@ -218,16 +227,67 @@ function validateSequence() {
     }
   }
 
-  for (const message of asArray(sequence.messages)) {
-    if (!participants.has(message.from)) problems.push(`Message "${message.label}" references unknown source "${message.from}".`);
-    if (!participants.has(message.to)) problems.push(`Message "${message.label}" references unknown target "${message.to}".`);
+  const messageList = asArray(sequence.messages);
+  const participantList = asArray(sequence.participants);
+  const participantOrder = new Map(participantList.map((p, index) => [p.id, index]));
+  for (const message of messageList) {
+    const messageIndex = messageList.indexOf(message);
+    for (const [field, endpoint] of [['from', 'source'], ['to', 'target']]) {
+      if (participants.has(message[field])) continue;
+      const problem = `Message "${message.label}" references unknown ${endpoint} "${message[field]}".`;
+      const otherField = field === 'from' ? 'to' : 'from';
+      const anchorOrder = participantOrder.get(message[otherField]) ?? 0;
+      const candidates = [...participantOrder.keys()]
+        .filter((id) => id !== message[otherField])
+        .sort((a, b) => Math.abs(participantOrder.get(a) - anchorOrder) - Math.abs(participantOrder.get(b) - anchorOrder));
+      diagnostics.push({
+        code: 'sequence/unknown-endpoint', severity: 'error', message: problem,
+        subject: {
+          diagramType: 'sequence',
+          message: message.label ?? null,
+          path: `/messages/${messageIndex}/${field}`,
+          from: message.from,
+          to: message.to,
+        },
+        evidence: { endpoint, unknownNodeId: message[field], availableNodeIds: candidates },
+        supportedFixes: candidates.slice(0, 3).map((id) => `set /messages/${messageIndex}/${field} to verified node id "${id}"`),
+      });
+      problems.push(problem);
+    }
     if (typeof message.y !== 'number') problems.push(`Message "${message.label}" must provide a numeric y.`);
     if (message.y < layout.lifelineTop + 18 || message.y > layout.lifelineBottom - 18) {
       problems.push(`Message "${message.label}" sits outside the readable timeline — keep y between ${layout.lifelineTop + 18} and ${layout.lifelineBottom - 18}.`);
     }
     if (participants.has(message.from) && participants.has(message.to)) {
-      const distance = Math.abs(participants.get(message.to).cx - participants.get(message.from).cx);
-      if (distance < 60) problems.push(`Message "${message.label}" spans ${Math.round(distance)}px (minimum 60px) — give its participants more column distance.`);
+      if (message.from === message.to) {
+        const problem = `Message "${message.label}" is a self-message on participant "${message.from}"; this Sequence renderer supports only messages between distinct participants. Participant spacing cannot repair it. Preserve the internal step's meaning and order in a supported representation such as a note on a real message or a card; do not invent a participant.`;
+        diagnostics.push({
+          code: 'sequence/self-message-unsupported', severity: 'error', message: problem,
+          subject: {
+            diagramType: 'sequence',
+            message: message.label,
+            collection: 'messages',
+            index: messageIndex,
+            path: `/messages/${messageIndex}`,
+            ...(message.id ? { id: message.id } : {}),
+            from: message.from,
+            to: message.to,
+            fromPath: `/messages/${messageIndex}/from`,
+            toPath: `/messages/${messageIndex}/to`,
+          },
+          evidence: {
+            participant: message.from,
+            participantPath: `/participants/${participantOrder.get(message.from)}`,
+            y: message.y,
+            supportedMessageGeometry: 'horizontal-between-distinct-participants',
+          },
+          supportedFixes: [],
+        });
+        problems.push(problem);
+      } else {
+        const distance = Math.abs(participants.get(message.to).cx - participants.get(message.from).cx);
+        if (distance < 60) problems.push(`Message "${message.label}" spans ${Math.round(distance)}px (minimum 60px) — give its participants more column distance.`);
+      }
     }
   }
 
@@ -368,6 +428,7 @@ function validateSequence() {
   if (problems.length) {
     throwDiagnosticProblems('Sequence layout validation failed', problems, {
       subject: { diagramType: 'sequence' },
+      diagnostics,
     });
   }
 }
@@ -483,7 +544,7 @@ function renderSvg() {
   // Same default-canvas contract as lifecycle: 920x760 is below the 1.55 wide
   // ratio, so without intrinsic-height the desktop Reader can neither narrow
   // nor scroll it and every default sequence fails the browser gate.
-  const readerFit = sequence.meta?.viewBox ? '' : ' data-reader-fit="intrinsic-height"';
+  const readerFit = sequence.meta?.viewBox ? '' : ' data-reader-fit="width-first"';
   return `      <svg viewBox="0 0 ${viewBox[0]} ${viewBox[1]}" data-sequence-column-fit="${columnFit}"${readerFit} ${svgRootAttrs(sequence.meta)}>
 ${svgAccessibleText(sequence.meta, 'sequence')}
 ${renderDefinitions()}

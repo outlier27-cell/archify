@@ -86,7 +86,7 @@ test('a short fixed box fits only the decorative sigil while retaining text and 
 });
 test('lifecycle clears its right-hand sigil and retains the step and text details', () => {
   const doc = load('examples/agent-run.lifecycle.json');
-  const first = doc.states[0]; Object.assign(first, { label: 'Prompt Compiler', step: '01', sublabel: 'context', tag: 'tag' });
+  const first = doc.states[0]; Object.assign(first, { label: 'Prompt Compiler', step: '01', sublabel: 'context', tag: 'tag', icon: 'start' });
   delete first.brand;
   const p = parts(deliver('lifecycle', doc), first.id); checkLabel(p, 'Prompt Compiler');
   for (const value of ['01', 'context', 'tag']) assert.ok(find(p.group, n => n.tagName === 'text' && text(n) === value).length);
