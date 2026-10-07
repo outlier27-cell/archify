@@ -134,7 +134,8 @@ jobs:
       - name: Record stable notifier publication follow-up
         if: steps.release-kind.outputs.prerelease == 'false'
         run: |
+          echo '[Complete the central release checklist](https://github.com/tt-a1i/archify/blob/main/CONTRIBUTING.md#release-checklist), including final-head evidence and public acceptance.' >> "$GITHUB_STEP_SUMMARY"
           echo 'After the repository Pages source is set to GitHub Actions, publish docs/skill-updates/archify/stable.json in a follow-up commit; the gated deploy job will verify this Release, its archify.zip digest, and the tagged Skill tree before exposure.' >> "$GITHUB_STEP_SUMMARY"
       - name: Record DSH synchronization follow-up
         run: |
-          echo 'Review CONTRIBUTING.md#release-checklist-dsh-synchronization: record the pinned DSH bundle update and verification, or an explicit deferral. Archify release publication does not publish the independently versioned DSH plugin; keep npm/tag/README/community status accurate until that separate release is verified.' >> "$GITHUB_STEP_SUMMARY"
+          echo '[Central release checklist](https://github.com/tt-a1i/archify/blob/main/CONTRIBUTING.md#release-checklist), including [DSH synchronization](https://github.com/tt-a1i/archify/blob/main/CONTRIBUTING.md#release-checklist-dsh-synchronization): record the pinned DSH bundle update and verification, or an explicit deferral. Archify release publication does not publish the independently versioned DSH plugin; keep npm/tag/README/community status accurate until that separate release is verified.' >> "$GITHUB_STEP_SUMMARY"

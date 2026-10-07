@@ -162,7 +162,7 @@ test('MCO public proof is source-backed, valid, and linked from every README', (
   assert.equal(evidence.repository.revision, source.meta.repository.revision);
   assert.equal(evidence.repository.shortRevision, source.meta.repository.revision.slice(0, 7));
   assert.equal(evidence.referenceCount, references);
-  assert.match(checkedInHtml, /Archify\.sourceEvidence\.installBeacons\(\)/);
+  assert.doesNotMatch(checkedInHtml, /Archify\.sourceEvidence\.installBeacons\(\)|classList\.add\('source-evidence-beacon'\)/);
   execFileSync(process.execPath, [cli, 'check', artifactPath], { encoding: 'utf8' });
 
   const noRootTmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-mco-proof-no-root-'));

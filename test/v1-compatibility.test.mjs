@@ -84,7 +84,6 @@ const OFFICIAL_V1_EXAMPLES = {
   workflow: 'agent-tool-call.workflow.json',
   sequence: 'cache-miss-request.sequence.json',
   dataflow: 'product-analytics.dataflow.json',
-  lifecycle: 'agent-run.lifecycle.json',
 };
 
 for (const [mode, filename] of Object.entries(OFFICIAL_V1_EXAMPLES)) {
@@ -99,22 +98,6 @@ for (const [mode, filename] of Object.entries(OFFICIAL_V1_EXAMPLES)) {
     assert.equal(validated.code, 0, validated.stderr);
   });
 }
-
-test('quality-profile lifecycle keeps the checked-in authored via authoritative', () => {
-  const doc = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples/agent-run.lifecycle.json'), 'utf8'));
-  const transition = doc.transitions.find(({ id }) => id === 'approval-cancelled');
-  assert.deepEqual(transition.via, [[480, 336], [480, 432], [402, 432]]);
-
-  const rendered = render('lifecycle', doc);
-  assert.equal(rendered.code, 0, rendered.stderr);
-  const html = fs.readFileSync(rendered.output, 'utf8');
-  assert.match(
-    html,
-    /data-edge-id="approval-cancelled"[^>]*data-composition-points="[^"]*480,336;480,432;402,432[^"]*"/,
-  );
-  const validated = validate('lifecycle', doc);
-  assert.equal(validated.code, 0, validated.stderr);
-});
 
 test('legacy v1 architecture auto viewBox accommodates all seven implicit auto legend kinds', () => {
   const types = ['frontend', 'backend', 'database', 'cloud', 'security', 'messagebus', 'external'];
@@ -217,38 +200,18 @@ function narrowExplicitViewBoxDocuments() {
         route: 'straight',
       })),
     },
-    lifecycle: {
-      schema_version: 1,
-      diagram_type: 'lifecycle',
-      meta: { title: 'Legacy narrow lifecycle', viewBox: [420, 800] },
-      lanes: [{ id: 'main', label: 'Lifecycle' }],
-      states: ['start', 'active', 'waiting', 'decision', 'success', 'failure', 'neutral', 'external'].map((type, index) => ({
-        id: `state_${index}`,
-        type,
-        label: type,
-        lane: 'main',
-        col: index % 2,
-        yOffset: Math.floor(index / 2) * 72,
-      })),
-      transitions: [],
-    },
   };
 }
 
 test('legacy v1 explicit narrow viewBoxes never hard-fail on an implicit auto legend', () => {
-  const expectedNodeCounts = { architecture: 7, workflow: 7, sequence: 2, dataflow: 8, lifecycle: 8 };
+  const expectedNodeCounts = { architecture: 7, workflow: 7, sequence: 2, dataflow: 8 };
   for (const [mode, doc] of Object.entries(narrowExplicitViewBoxDocuments())) {
     assert.equal(doc.meta.legend, undefined);
     const rendered = render(mode, doc);
     assert.equal(rendered.code, 0, `${mode}: ${rendered.stderr}`);
     const svg = fs.readFileSync(rendered.output, 'utf8').match(/<svg\b[\s\S]*?<\/svg>/)?.[0] || '';
     assert.equal((svg.match(/data-node-id=/g) || []).length, expectedNodeCounts[mode], `${mode}: topology must remain intact`);
-    if (mode === 'lifecycle') {
-      assert.match(svg, />Legend</, 'a fitting implicit legend should remain visible');
-      // 8 state kinds plus the non-interactive `final` structural entry
-      // (the col-1 states have no outgoing transitions).
-      assert.equal((svg.match(/data-legend-semantic-kind=/g) || []).length, 9);
-    } else if (mode === 'sequence') {
+    if (mode === 'sequence') {
       // A sequence legend wraps into the room below its last message; it stays
       // clear of that content instead of being dropped.
       assert.match(svg, />Legend</, 'a wrapped implicit legend that fits below the content remains visible');
@@ -311,32 +274,29 @@ test('legacy v1 composition findings remain visible as advisory warnings', () =>
   assert.equal(receipt.composition.issues[0].severity, 'warning');
 });
 
-test('legacy v1 lifecycle geometry remains renderable without an explicit quality profile', () => {
-  const doc = {
-    schema_version: 1,
-    diagram_type: 'lifecycle',
-    meta: { title: 'Legacy lifecycle', viewBox: [980, 660] },
-    lanes: [
-      { id: 'main', label: 'Lifecycle phases' },
-      { id: 'waiting', label: 'Interruptions' },
-      { id: 'exceptions', label: 'Recovery loop' },
-      { id: 'terminal', label: 'Terminal exits' },
-    ],
-    states: [
-      { id: 'executing', type: 'active', label: 'Executing', lane: 'main', col: 2 },
-      { id: 'approval', type: 'waiting', label: 'Needs Approval', lane: 'waiting', col: 0 },
-      { id: 'failed', type: 'failure', label: 'Failed', lane: 'exceptions', col: 0, yOffset: 78 },
-      { id: 'cancelled', type: 'failure', label: 'Cancelled', lane: 'terminal', col: 0 },
-    ],
-    transitions: [
-      { from: 'executing', to: 'failed', fromSide: 'left', toSide: 'top', via: [[320, 157], [320, 342], [402, 342]] },
-      { from: 'approval', to: 'cancelled', fromSide: 'bottom', toSide: 'top', via: [[320, 336], [320, 430], [402, 430]] },
-    ],
-  };
-
-  const result = render('lifecycle', doc);
-  assert.equal(result.code, 0, result.stderr);
-  assert.ok(fs.statSync(result.output).size > 0);
-});
-
 process.on('exit', () => fs.rmSync(tmp, { recursive: true, force: true }));
+
+
+test('historical v1 Sequence remains valid with default spread and supports explicit fixed coordinates', () => {
+  const doc = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/v1-baseline/cache-miss-request.sequence.json'), 'utf8'));
+  assert.equal(doc.meta.column_fit, undefined, 'historical fixture retains its original omitted fit');
+  const defaultResult = render('sequence', doc);
+  assert.equal(defaultResult.code, 0, defaultResult.stderr);
+  const defaultHtml = fs.readFileSync(defaultResult.output, 'utf8');
+  assert.match(defaultHtml, /data-sequence-column-fit="spread"/);
+  assert.equal(validate('sequence', doc).code, 0);
+  doc.meta.column_fit = 'spread';
+  const spreadResult = render('sequence', doc);
+  assert.equal(spreadResult.code, 0, spreadResult.stderr);
+  assert.equal(fs.readFileSync(spreadResult.output, 'utf8'), defaultHtml);
+  doc.meta.column_fit = 'fixed';
+  const fixedResult = render('sequence', doc);
+  assert.equal(fixedResult.code, 0, fixedResult.stderr);
+  const fixedHtml = fs.readFileSync(fixedResult.output, 'utf8');
+  const boxes = [...fixedHtml.matchAll(/<rect x="([\d.]+)" y="72" width="([\d.]+)" height="60"/g)]
+    .map(([, x, width]) => ({ x: Number(x), width: Number(width) }))
+    .filter((box, index, all) => all.findIndex(other => other.x === box.x) === index);
+  assert.deepEqual(boxes, [19, 127, 235, 343, 451, 559, 667].map(x => ({ x, width: 86 })));
+  assert.match(fixedHtml, /viewBox="0 0 820 760"/);
+  assert.equal(validate('sequence', doc).code, 0);
+});

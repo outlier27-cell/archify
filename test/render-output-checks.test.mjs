@@ -84,6 +84,19 @@ test('render output check: predicts the certain 1440x900 overflow of a fixed-wid
   const declaredFit = checkHtml('viewport-height-fit', node, 'showcase', '0 0 1080 780', '', ' data-reader-fit="intrinsic-height"');
   assert.equal(declaredFit.result.composition.issues.some((item) => item.code === 'composition/viewport-height'), false, 'a Reader-declared fit can scroll readably');
 
+  // Long automatic rows already have readable document scrolling; declaration
+  // changes must not invent fixed-canvas warnings for the same geometry.
+  for (const fit of ['intrinsic-height', 'width-first']) {
+    const tallAutomatic = checkHtml(`viewport-tall-${fit}`, node, 'showcase', '0 0 920 2400', '', ` data-reader-fit="${fit}"`);
+    assert.equal(tallAutomatic.result.composition.issues.some(item => item.code === 'composition/viewport-height'), false);
+  }
+  for (const attributes of ['', ' data-reader-fit="unknown"', ' data-sequence-column-fit="fixed"', ' data-waterfall-ui=""']) {
+    const tallUndeclared = checkHtml('viewport-tall-undeclared', node, 'showcase', '0 0 920 2400', '', attributes);
+    const warning = tallUndeclared.result.composition.issues.find(item => item.code === 'composition/viewport-height');
+    assert.equal(warning?.severity, 'warning');
+    assert.ok(warning?.pageHeightPx > 3000);
+  }
+
   for (const type of ['architecture', 'workflow', '']) {
     const fixed = checkHtml(`viewport-authored-${type}`, node, 'showcase', '0 0 1080 780', '',
       ` data-reader-fit="authored-height" data-diagram-type="${type}"`);
@@ -168,6 +181,19 @@ test('render output check: recognized declared-wide Reader admits the hard floor
   assert.equal(result.composition.desktopReadability.requestedTargetPx, 7.5);
   assert.equal(result.composition.desktopReadability.requestedTargetMet, false);
   assert.ok(result.composition.desktopReadability.minimumProjectedTextPx < 7.5);
+});
+
+test('render output check: width-first preserves the intrinsic declared-wide readability budget', () => {
+  const body = '<g data-node-id="node"><text data-node-label x="160" y="126" class="t-primary" font-size="8">Node</text></g>';
+  const head = '<meta name="archify-reader-contract" content="declared-wide-v1">';
+  const intrinsic = checkHtml('intrinsic-budget', body, 'showcase', '0 0 1438 800', head, ' data-reader-fit="intrinsic-height" data-reader-min-text="7.5"');
+  const widthFirst = checkHtml('width-first-budget', body, 'showcase', '0 0 1438 800', head, ' data-reader-fit="width-first" data-reader-min-text="7.5"');
+  assert.equal(widthFirst.code, intrinsic.code);
+  assert.deepEqual(widthFirst.result.composition.desktopReadability, intrinsic.result.composition.desktopReadability);
+  for (const marker of ['data-sequence-column-fit="fixed"', 'data-waterfall-ui=""', 'data-reader-fit="unknown"']) {
+    const undeclared = checkHtml('undeclared-budget', body, 'showcase', '0 0 1438 800', head, ` ${marker} data-reader-min-text="7.5"`);
+    assert.equal(undeclared.result.composition.desktopReadability.budgetBasis, 'legacy-930');
+  }
 });
 
 test('render output check: ordinary metadata preserves legacy readability and bare semantic markers', () => {

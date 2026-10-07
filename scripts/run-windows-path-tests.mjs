@@ -537,6 +537,7 @@ const fullSuites = [
   'test/skill-installation.test.mjs',
   'test/copy-site-assets.test.mjs',
   'test/path-boundary-contract.test.mjs',
+  'test/temp-cleanup.test.mjs',
   'test/path-semantics.test.mjs',
   'test/portable-path.test.mjs',
   'test/native-output-path.test.mjs',

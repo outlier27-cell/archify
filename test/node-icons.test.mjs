@@ -12,9 +12,10 @@ const cases = {
   workflow: ['agent-tool-call.workflow.json', 'nodes'],
   sequence: ['cache-miss-request.sequence.json', 'participants'],
   dataflow: ['product-analytics.dataflow.json', 'nodes'],
-  lifecycle: ['agent-run.lifecycle.json', 'states'],
+  // The first lifecycle state is a start state, which has no default sigil.
+  lifecycle: ['agent-run.lifecycle.json', 'states', 3],
 };
-for (const [mode, [example, collection]] of Object.entries(cases)) {
+for (const [mode, [example, collection, index = 0]] of Object.entries(cases)) {
   test(`${mode}: icon overrides and hiding preserve all non-icon output`, () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-icons-'));
     try {
@@ -33,7 +34,7 @@ for (const [mode, [example, collection]] of Object.entries(cases)) {
       assert.ok(old);
       const icons = JSON.parse(fs.readFileSync(path.join(root, 'schemas/common.schema.json'))).$defs.nodeIcon.enum;
       for (const icon of icons) {
-        spec[collection][0].icon = icon;
+        spec[collection][index].icon = icon;
         const html = render();
         if (icon === 'none') {
           assert.equal(html, baseline.replace(old, ''));
@@ -44,17 +45,17 @@ for (const [mode, [example, collection]] of Object.entries(cases)) {
           assert.equal(html.replace(current, ''), baseline.replace(old, ''));
         }
       }
-      delete spec[collection][0].icon;
-      spec[collection][0].brand = 'openai';
+      delete spec[collection][index].icon;
+      spec[collection][index].brand = 'openai';
       const branded = render();
       const brandedSigil = branded.match(sigil)[0];
       for (const icon of ['calendar', 'none']) {
-        spec[collection][0].icon = icon;
+        spec[collection][index].icon = icon;
         const html = render();
         assert.match(html, /data-brand-mark="openai"/);
         assert.equal(icon === 'none' ? html : html.replace(html.match(sigil)[0], ''), branded.replace(brandedSigil, ''));
       }
-      spec[collection][0].icon = '<svg onload="alert(1)">';
+      spec[collection][index].icon = '<svg onload="alert(1)">';
       fs.writeFileSync(input, JSON.stringify(spec));
       const rejected = spawnSync(process.execPath, [path.join(root, 'bin/archify.mjs'), 'validate', mode, input, '--json'], { encoding: 'utf8' });
       assert.notEqual(rejected.status, 0);

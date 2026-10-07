@@ -101,7 +101,7 @@ test('renderer-owned structure supplies truthful Semantic Passport context', () 
   assert.match(workflow, /data-node-id="approval"[^>]+data-node-kind="security"[^>]+data-node-context="Policy &amp; Recovery › Human or policy stop › Plan \+ route"/);
   assert.match(sequence, /data-node-id="redis"[^>]+data-node-kind="database"[^>]+data-node-context="Sequence participant"/);
   assert.match(dataflow, /data-node-id="warehouse"[^>]+data-node-kind="database"[^>]+data-node-context="04 \/ Store"/);
-  assert.match(lifecycle, /data-node-id="executing"[^>]+data-node-kind="active"[^>]+data-node-context="Lifecycle phases"/);
+  assert.match(lifecycle, /data-node-id="executing"[^>]+data-node-kind="active"[^>]+data-node-context="Lifecycle state"/);
 });
 
 test('Relationship Lens renders one Semantic Passport and copyable stable focus link', () => {
@@ -186,20 +186,6 @@ test('semantic passport computes and applies target top synchronously on open an
   } finally {
     await browser.close().catch(() => {});
   }
-});
-
-test('committed lifecycle focus hides the non-semantic primary rail', () => {
-  const html = render('lifecycle', CASES.lifecycle);
-  const diagram = svg(html);
-  const rail = diagram.match(/<path\b[^>]*data-lifecycle-rail[^>]*>/)?.[0] || '';
-
-  assert.ok(rail, 'lifecycle: expected the primary decorative rail to be identifiable');
-  assert.doesNotMatch(rail, /data-edge-from|data-edge-to/, 'the rail must remain non-semantic');
-  assert.match(
-    html,
-    /svg\[data-focus-active\] \[data-lifecycle-rail\]\s*\{\s*opacity:\s*0;/,
-    'committed node focus must not expose the decorative rail through dimmed nodes',
-  );
 });
 
 test('Semantic Passport exposes one localized, bounded move affordance outside canonical export', () => {

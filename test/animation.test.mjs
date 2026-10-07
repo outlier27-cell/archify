@@ -129,10 +129,13 @@ test('editorial preset reaches every visual surface and all five typed renderers
   }
 });
 
-test('all five renderers add one geometry-neutral semantic sigil per primary node', () => {
+test('all five renderers add one geometry-neutral semantic sigil per sigil-bearing node', () => {
   for (const [mode, example] of Object.entries(CASES)) {
     const source = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', example), 'utf8'));
-    const expected = source[NODE_COLLECTION[mode]].length;
+    // Lifecycle start, active and neutral states have no default sigil unless final.
+    const outgoing = new Set((source.transitions || []).map((transition) => transition.from));
+    const expected = source[NODE_COLLECTION[mode]].filter((node) => mode !== 'lifecycle' || node.icon
+      || !['start', 'active', 'neutral'].includes(node.type) || !outgoing.has(node.id)).length;
     const staticHtml = render(mode, example, null, 'classic');
     const traceHtml = render(mode, example, 'trace', 'classic');
     const staticSvg = svgBlock(staticHtml);

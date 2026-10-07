@@ -29,6 +29,7 @@ const activeTypes = typeOrder.filter((type) => typeCounts[type] > 0);
           <div class="lead-label" data-en="Community registry / standalone packages" data-zh="社区注册表 / 独立包">Community registry / standalone packages</div>
           <h1 data-translation-html data-en="Built on Archify.<br><em>Shared by everyone.</em>" data-zh="基于 Archify 构建，<br><em>由社区共享。</em>">Built on Archify.<br><em>Shared by everyone.</em></h1>
           <p class="hero-copy" data-en="Community packages are standalone works that wrap the Archify CLI — skill packs, recipe libraries, brand kits, locales, and wrappers. Nothing here is a plugin: no third-party code ever runs inside the renderer." data-zh="社区包是围绕 Archify CLI 构建的独立产物——技能包、场景配方、品牌套件、语言包与命令行封装。这里没有插件：任何第三方代码都不会进入渲染器内部运行。">Community packages are standalone works that wrap the Archify CLI — skill packs, recipe libraries, brand kits, locales, and wrappers. Nothing here is a plugin: no third-party code ever runs inside the renderer.</p>
+          <a class="card-link submission-link" href="https://github.com/tt-a1i/archify/tree/main/community#submitting-a-package" target="_blank" rel="noopener noreferrer" data-en="Submit your package ↗" data-zh="提交你的包 ↗">Submit your package ↗</a>
         </div>
         <div class="proof-board" aria-label="Registry summary">
           <div class="proof-row"><span class="proof-value">{packages.length}</span><span class="proof-label" data-translation-html data-en="packages listed<br>from the registry" data-zh="个已收录包<br>来自注册表">packages listed<br>from the registry</span></div>
@@ -107,21 +108,22 @@ const activeTypes = typeOrder.filter((type) => typeCounts[type] > 0);
             <div class="pipeline-step"><span class="pipeline-num">01</span><span class="pipeline-label" data-en="Publish your package in your own repo" data-zh="在你自己的仓库发布你的包">Publish your package in your own repo</span><span class="pipeline-state you">YOU</span></div>
             <div class="pipeline-step"><span class="pipeline-num">02</span><span class="pipeline-label" data-en="Add one metadata file under community/packages/" data-zh="在 community/packages/ 下添加一个元数据文件">Add one metadata file under community/packages/</span><span class="pipeline-state you">YOU</span></div>
             <div class="pipeline-step"><span class="pipeline-num">03</span><span class="pipeline-label" data-en="Validate with check-community-packages.mjs" data-zh="运行 check-community-packages.mjs 校验">Validate with check-community-packages.mjs</span><span class="pipeline-state">PASS</span></div>
-            <div class="pipeline-step"><span class="pipeline-num">04</span><span class="pipeline-label" data-en="Open a PR targeting dev — merge means listed" data-zh="向 dev 分支提 PR——合并即收录">Open a PR targeting dev — merge means listed</span><span class="pipeline-state">PASS</span></div>
+            <div class="pipeline-step"><span class="pipeline-num">04</span><span class="pipeline-label" data-en="Open a PR targeting dev — publication follows main deployment" data-zh="向 dev 提 PR——进入 main 并部署后上线">Open a PR targeting dev — publication follows main deployment</span><span class="pipeline-state">PASS</span></div>
           </div>
         </div>
         <div class="method-code">
           <div class="method-code-bar"><span>submit locally</span><span>zero dependencies</span></div>
-          <pre><span class="accent">$ node scripts/check-community-packages.mjs</span>
-
-community registry: {packages.length} package(s) OK
-  {packages.map((entry) => entry.name).join(', ')}
-
-<span class="accent">$ git checkout -b community/my-pack origin/dev</span>
+          <pre># from your fork, track upstream dev
+<span class="accent">$ git fetch upstream dev</span>
+<span class="accent">$ git switch -c community/my-pack upstream/dev</span>
 
 # add community/packages/my-pack.json
-# open PR → review → listed here</pre>
-          <a class="card-link method-link" href="https://github.com/tt-a1i/archify/tree/main/community" target="_blank" rel="noopener noreferrer" data-en="Read the submission guide ↗" data-zh="阅读提交指南 ↗">Read the submission guide ↗</a>
+# validate from the repository root
+<span class="accent">$ node scripts/check-community-packages.mjs</span>
+
+# open PR to dev → review
+# promote to main → deploy → public catalog</pre>
+          <a class="card-link method-link" href="https://github.com/tt-a1i/archify/tree/main/community#submitting-a-package" target="_blank" rel="noopener noreferrer" data-en="Read the submission guide ↗" data-zh="阅读提交指南 ↗">Read the submission guide ↗</a>
         </div>
       </div>
     </section>

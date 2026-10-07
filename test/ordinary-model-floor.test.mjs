@@ -616,8 +616,6 @@ test('checked-in cases accept equivalent ordinary-model vocabulary without weake
           type: 'failure',
           label: 'Failed',
           sublabel: 'budget exhausted',
-          lane: 'terminal',
-          col: 2,
           tag: 'terminal',
         });
       },

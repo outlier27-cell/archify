@@ -7,6 +7,8 @@ import { resolveLegend, renderLegend as renderResolvedLegend } from '../shared/l
 import { availableNodeTextWidth, fittedNodeFontSize, minimumNodeTextWidth, nodeLabelLayout } from '../shared/text-fit.mjs';
 import { brandLabelFitWidth, brandMarkFor, brandMetadataFor, brandTopRailProblem, renderBrandMark } from '../shared/brand-marks.mjs';
 import { translateMessage as i18nText } from '../shared/i18n.mjs';
+import { minimumReadableSourceTextPx } from '../shared/desktop-readability.mjs';
+import { placeAutomaticLabels } from '../shared/automatic-labels.mjs';
 import {
   asArray,
   isFinitePoint,
@@ -23,6 +25,9 @@ import {
   suggestLabelPairFix,
   anchor,
   automaticPortSpread,
+  automaticPortRhythmBridge,
+  segmentIntersectsRect,
+  segmentRectClearanceWithin,
   legacyDefaultFromSide as defaultFromSide,
   legacyDefaultToSide as defaultToSide,
   chosenSide,
@@ -50,7 +55,6 @@ const { diagram: dataflow, template, outPath, sourceEvidence } = await loadDiagr
   defaultExample: 'product-analytics.dataflow.json'
 });
 
-const viewBox = dataflow.meta?.viewBox || [940, 720];
 const layout = {
   stageY: 46,
   stageH: 36,
@@ -63,6 +67,24 @@ const layout = {
   rowYs: [128, 242, 356, 470, 584],
   labelH: 16
 };
+
+// Explicit geometry preserves established node sizing, typography, height,
+// routing and label placement. An omitted canvas width still fits its content
+// in either profile, including authored node widths.
+const qualityProfile = process.env.ARCHIFY_QUALITY_PROFILE || dataflow.meta?.quality_profile;
+const automaticShowcase = qualityProfile === 'showcase'
+  && dataflow.meta?.viewBox === undefined
+  && !asArray(dataflow.nodes).some(node => node.width !== undefined);
+const stageRight = stageX(asArray(dataflow.stages).length - 1) + layout.stageW / 2;
+const nodeRights = asArray(dataflow.nodes).map(node =>
+  stageX(node.stage) + (node.width || layout.nodeW) / 2).filter(Number.isFinite);
+const viewBox = dataflow.meta?.viewBox || [
+  Math.max(940, Math.ceil(Math.max(stageRight, ...nodeRights) + 24)),
+  720,
+];
+const contextFontMinimum = automaticShowcase
+  ? Math.max(6, Math.ceil(minimumReadableSourceTextPx(viewBox[0]) * 10) / 10)
+  : 6;
 
 function flowLabelSize(flow) {
   const longestLine = Math.max(textUnits(flow.label), textUnits(flow.classification || ''));
@@ -89,12 +111,18 @@ function stageFrame(stage, index) {
   };
 }
 
-const compositionFrames = asArray(dataflow.stages).map(stageFrame);
-
 function measureNode(node) {
-  const width = node.width || layout.nodeW;
-  const height = node.height || layout.nodeH;
   const cx = stageX(node.stage);
+  // Expand only unpinned showcase nodes, within their existing stage budget.
+  // Very long text still gets an actionable error instead of an unbounded
+  // canvas/typography feedback loop.
+  const contextWidth = Math.max(0, ...[node.sublabel, node.tag].map(text =>
+    text ? minimumNodeTextWidth(text, Math.max(7, contextFontMinimum)) + 8 : 0));
+  const width = node.width || (automaticShowcase
+    ? Math.max(layout.nodeW, Math.min(layout.stageW,
+      (cx - 24) * 2, (viewBox[0] - 24 - cx) * 2, Math.ceil(contextWidth)))
+    : layout.nodeW);
+  const height = node.height || layout.nodeH;
   const y = layout.rowYs[node.row] + (node.yOffset || 0);
   return {
     ...node,
@@ -119,6 +147,7 @@ for (const [index, node] of asArray(dataflow.nodes).entries()) {
 
 function validateDataflow() {
   const problems = [];
+  const diagnostics = [];
   if (nodes.size !== asArray(dataflow.nodes).length) problems.push('Node ids must be unique.');
 
   const stageCount = asArray(dataflow.stages).length;
@@ -141,7 +170,7 @@ function validateDataflow() {
     }
     const estLabelW = textUnits(node.label) * 6.2;
     if (estLabelW > node.width + 6) {
-      problems.push(`Label "${node.label}" (~${Math.round(estLabelW)}px) is wider than node "${node.id}" (${node.width}px) — shorten the label or increase node.width.`);
+      problems.push(`Label "${node.label}" (~${Math.round(estLabelW)}px) is wider than component "${node.id}" (${node.width}px) — shorten the label or increase node.width.`);
     }
     const brandRailProblem = brandTopRailProblem(node, node.width, 8);
     if (brandRailProblem) problems.push(brandRailProblem);
@@ -149,8 +178,8 @@ function validateDataflow() {
     // handles the ordinary case, this rejects what it cannot rescue.
     const availableTextW = availableNodeTextWidth(node.width);
     for (const [field, value, minimum] of [
-      ['Sublabel', node.sublabel, nodeTextFit.sublabelMinimum],
-      ['Tag', node.tag, nodeTextFit.tagMinimum],
+      ['Sublabel', node.sublabel, contextFontMinimum],
+      ['Tag', node.tag, contextFontMinimum],
     ]) {
       if (!value) continue;
       const minimumW = minimumNodeTextWidth(value, minimum);
@@ -171,9 +200,42 @@ function validateDataflow() {
     }
   }
 
-  for (const flow of asArray(dataflow.flows)) {
-    if (!nodes.has(flow.from)) problems.push(`Flow "${flow.label || flow.from}" references unknown source "${flow.from}".`);
-    if (!nodes.has(flow.to)) problems.push(`Flow "${flow.label || flow.to}" references unknown target "${flow.to}".`);
+  const flowList = asArray(dataflow.flows);
+  const stageById = new Map(asArray(dataflow.nodes).map((node) => [node.id, node.stage]));
+  for (const flow of flowList) {
+    const flowIndex = flowList.indexOf(flow);
+    for (const [field, endpoint] of [['from', 'source'], ['to', 'target']]) {
+      if (nodes.has(flow[field])) continue;
+      const problem = `Flow "${flow.label || flow[field]}" references unknown ${endpoint} "${flow[field]}".`;
+      const anchorStage = stageById.get(flow[field === 'from' ? 'to' : 'from']);
+      const anchorId = flow[field === 'from' ? 'to' : 'from'];
+      const stageDelta = (id) => (anchorStage === undefined || stageById.get(id) === undefined
+        ? 0
+        : field === 'to'
+          ? stageById.get(id) - anchorStage
+          : anchorStage - stageById.get(id));
+      const candidates = [...stageById.keys()]
+        .filter((id) => id !== anchorId)
+        .sort((a, b) => {
+          const da = stageDelta(a);
+          const db = stageDelta(b);
+          const forwardDiff = (db > 0) - (da > 0);
+          return forwardDiff !== 0 ? forwardDiff : da - db;
+        });
+      diagnostics.push({
+        code: 'dataflow/unknown-endpoint', severity: 'error', message: problem,
+        subject: {
+          diagramType: 'dataflow',
+          flow: flow.id ?? null,
+          path: `/flows/${flowIndex}/${field}`,
+          from: flow.from,
+          to: flow.to,
+        },
+        evidence: { endpoint, unknownNodeId: flow[field], availableNodeIds: candidates },
+        supportedFixes: candidates.slice(0, 3).map((id) => `set /flows/${flowIndex}/${field} to verified node id "${id}"`),
+      });
+      problems.push(problem);
+    }
     if (!flow.label) problems.push(`Flow "${flow.from}" -> "${flow.to}" must include a short data label.`);
     if (nodes.has(flow.from) && nodes.has(flow.to)) {
       const routed = pathFor(flow);
@@ -251,13 +313,7 @@ function validateDataflow() {
     routeHint: 'adjust route/via or channelX/channelY so each turn uses a clear inter-stage corridor'
   }));
 
-  const labelRects = [];
-  for (const [flowIndex, flow] of asArray(dataflow.flows).entries()) {
-    if (!flow.label || !nodes.has(flow.from) || !nodes.has(flow.to)) continue;
-    const [lx, ly] = labelPoint(flow, pathFor(flow).points);
-    const { width, height } = flowLabelSize(flow);
-    labelRects.push({ relation: flow, relationIndex: flowIndex, label: flow.label, x: lx - width / 2, y: ly - 11, width, height, lx, ly });
-  }
+  const labelRects = resolvedLabelRects;
   for (const rect of labelRects) {
     for (const node of nodes.values()) {
       if (rectsOverlap(rect, node, -2)) {
@@ -298,6 +354,7 @@ function validateDataflow() {
   if (problems.length) {
     throwDiagnosticProblems('Data-flow layout validation failed', problems, {
       subject: { diagramType: 'dataflow' },
+      diagnostics,
     });
   }
 }
@@ -321,6 +378,27 @@ function routeVia(flow, from, to, start, end) {
     }
     case 'auto':
     default: {
+      const { fromSide, toSide } = flowSides(flow);
+      const fromVertical = fromSide === 'top' || fromSide === 'bottom';
+      const toVertical = toSide === 'top' || toSide === 'bottom';
+      const acrossDelta = fromVertical && toVertical
+        ? Math.abs(start[0] - end[0]) : Math.abs(start[1] - end[1]);
+      if (automaticShowcase && acrossDelta > 0.0001 && acrossDelta < 16) {
+        // Spread ports can differ by only 7px/14px. Reuse the bounded bridge
+        // rather than emit a midpoint turn below our own rhythm floor.
+        const bridge = automaticPortRhythmBridge(start, end, fromSide, toSide, {
+          accept: points => ![...nodes.values()].some(node => (
+            node.id !== from.id && node.id !== to.id && points.slice(1).some((point, index) =>
+              segmentIntersectsRect({ start: points[index], end: point }, node, 2))
+          )),
+        });
+        if (bridge) return bridge.slice(1, -1);
+      }
+      if (automaticShowcase && fromVertical && toVertical) {
+        if (Math.abs(start[0] - end[0]) < 0.0001) return [];
+        const midY = (start[1] + end[1]) / 2;
+        return [[start[0], midY], [end[0], midY]];
+      }
       if (Math.abs(start[1] - end[1]) < 4) return [];
       const midX = start[0] + (end[0] - start[0]) / 2;
       return [[midX, start[1]], [midX, end[1]]];
@@ -369,6 +447,60 @@ function pathFor(flow) {
   const routed = { d: polylinePath(points), points };
   pathCache.set(flow, routed);
   return routed;
+}
+
+const resolvedLabelPoints = new Map();
+const initialLabelRects = asArray(dataflow.flows).flatMap((flow, relationIndex) => {
+  if (!flow.label || !nodes.has(flow.from) || !nodes.has(flow.to)) return [];
+  const [lx, ly] = labelPoint(flow, pathFor(flow).points);
+  const { width, height } = flowLabelSize(flow);
+  // The shared placer uses a 10px baseline inset; Dataflow masks use 11px.
+  // Adapt the baseline so it tests exactly the rectangle we later render.
+  return [{ relation: flow, relationIndex, label: flow.label,
+    x: lx - width / 2, y: ly - 11, width, height, lx, ly: ly - 1 }];
+});
+// Routing depends on node geometry and canvas width, so its actual footprint
+// can determine height without another copy of routeVia's preset rules.
+const geometryBottom = Math.max(0,
+  ...[...nodes.values()].map(node => node.y + node.height),
+  ...asArray(dataflow.flows).flatMap(flow => nodes.has(flow.from) && nodes.has(flow.to)
+    ? pathFor(flow).points.map(point => point[1]) : []));
+function heightForLabels(labels) {
+  const contentBottom = Math.max(geometryBottom, ...labels.map(rect => rect.y + rect.height));
+  return Math.max(360, Math.ceil(contentBottom + 24 + layout.stageBottomPad));
+}
+if (automaticShowcase) viewBox[1] = heightForLabels(initialLabelRects);
+const compositionFrames = asArray(dataflow.stages).map(stageFrame);
+
+const resolvedLabelRects = (automaticShowcase ? placeAutomaticLabels({
+  labels: initialLabelRects,
+  routes: asArray(dataflow.flows).flatMap((flow, relationIndex) => (
+    nodes.has(flow.from) && nodes.has(flow.to)
+      ? [{ relationIndex, points: pathFor(flow).points }] : []
+  )),
+  components: [...nodes.values()],
+  titles: compositionFrames.map(frame => ({ ...frame, height: layout.stageH })),
+  viewBox,
+  placementBottom: viewBox[1] - layout.stageBottomPad,
+}) : initialLabelRects).map(rect => {
+  // Dataflow has compact 16px plates. Permit one clearance gutter beyond
+  // two plate heights (36px), which covers a label immediately above a node,
+  // while rejecting a collision-free island far from the labelled route.
+  const ownPoints = pathFor(rect.relation).points;
+  const nearby = ownPoints.slice(1).some((point, index) =>
+    segmentRectClearanceWithin({ start: ownPoints[index], end: point }, rect, 36) <= 36);
+  const original = initialLabelRects.find(label => label.relation === rect.relation);
+  const kept = nearby ? rect : original;
+  const resolved = { ...kept, ly: kept.ly + 1 };
+  if (automaticShowcase) resolvedLabelPoints.set(rect.relation, [resolved.lx, resolved.ly]);
+  return resolved;
+});
+
+// A bounded label move may extend below the initial route footprint. Include
+// its final rendered plate before drawing the stage frames and legend.
+if (automaticShowcase) {
+  viewBox[1] = heightForLabels(resolvedLabelRects);
+  for (const frame of compositionFrames) frame.height = viewBox[1] - layout.stageY - layout.stageBottomPad;
 }
 
 // Header measurement follows 276970789's #257, including the ordinal.
@@ -423,8 +555,8 @@ function renderNode(node) {
   const accent = componentText[node.type] || 't-muted';
   const hasSub = node.sublabel != null && node.sublabel !== '';
   const labelFontSize = fittedNodeFontSize(node.label, brandLabelFitWidth(node, node.width), 10, 8);
-  const sublabelFontSize = fittedNodeFontSize(node.sublabel, node.width, nodeTextFit.sublabelPreferred, nodeTextFit.sublabelMinimum);
-  const tagFontSize = fittedNodeFontSize(node.tag, node.width, nodeTextFit.tagPreferred, nodeTextFit.tagMinimum);
+  const sublabelFontSize = fittedNodeFontSize(node.sublabel, node.width, Math.max(nodeTextFit.sublabelPreferred, contextFontMinimum), contextFontMinimum);
+  const tagFontSize = fittedNodeFontSize(node.tag, node.width, Math.max(nodeTextFit.tagPreferred, contextFontMinimum), contextFontMinimum);
   const textRows = [{ text: node.label, font: labelFontSize, y: 21 }];
   if (hasSub) textRows.push({ text: node.sublabel, font: sublabelFontSize, y: 37 });
   if (node.tag) textRows.push({ text: node.tag, font: tagFontSize, y: node.height - 11 });
@@ -460,7 +592,7 @@ function renderFlowPath(flow, index) {
 
 function renderFlowLabel(flow, index) {
   const routed = pathFor(flow);
-  const [lx, ly] = labelPoint(flow, routed.points);
+  const [lx, ly] = resolvedLabelPoints.get(flow) || labelPoint(flow, routed.points);
   const { width: labelW, height: labelH } = flowLabelSize(flow);
   const classification = flow.classification
     ? `\n        <text data-detail="fine" x="${lx}" y="${ly + 11}" class="t-dim" font-size="7" text-anchor="middle">${esc(flow.classification)}</text>`

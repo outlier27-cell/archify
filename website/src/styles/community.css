@@ -217,3 +217,5 @@
     @media (max-width:640px) { .method-code pre { padding:1.25rem; font-size:.75rem; } }
     .method-link { align-self:flex-start; margin:0 1.9rem 1.9rem; border-color:var(--line-hi); color:var(--text); }
     .method-link:hover { border-color:var(--accent); color:var(--accent); }
+
+    .submission-link { margin-top: 1.25rem; }

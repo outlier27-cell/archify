@@ -2,18 +2,19 @@
   "name": "archify-dsh",
   "type": "wrapper",
   "summary": {
-    "en": "Published DSH bundle 0.1.0 contains Archify 2.14.0 (DSH 0.1.0-rc.6, experimental). Pending 0.2.0 contains Archify 3.0.1 and is not published.",
-    "zh": "已发布的 DSH 技能包 @tt-a1i/archify-dsh 0.1.0 内含 Archify 2.14.0，实验支持 DSH 0.1.0-rc.6；内含 Archify 3.0.1 的 0.2.0 包尚未发布。"
+    "en": "DSH 1.0.0 bundles Archify 3.0.1. Supports exact developer-preview DSH 0.1.2-rc.1; independent community Skill-only integration.",
+    "zh": "已发布 DSH 技能包 1.0.0，内含 Archify 3.0.1；支持明确测试的开发者预览版 DSH 0.1.2-rc.1，属于独立社区集成。"
   },
   "author": {
     "name": "tt-a1i",
     "url": "https://github.com/tt-a1i"
   },
-  "repository": "https://github.com/tt-a1i/archify/tree/archify-dsh-v0.1.0/integrations/deepseek-harness",
-  "homepage": "https://www.npmjs.com/package/@tt-a1i/archify-dsh/v/0.1.0",
-  "archify": "2.14.0",
+  "repository": "https://github.com/tt-a1i/archify/tree/archify-dsh-v1.0.0/integrations/deepseek-harness",
+  "homepage": "https://www.npmjs.com/package/@tt-a1i/archify-dsh/v/1.0.0",
+  "archify": "3.0.1",
   "schemaVersions": [
-    1
+    1,
+    2
   ],
   "tags": [
     "deepseek-harness",
@@ -23,12 +24,20 @@
   ],
   "evidence": [
     {
-      "label": "Published 0.1.0 integration guide",
-      "url": "https://github.com/tt-a1i/archify/blob/archify-dsh-v0.1.0/integrations/deepseek-harness/README.md"
+      "label": "Published 1.0.0 package guide",
+      "url": "https://github.com/tt-a1i/archify/blob/archify-dsh-v1.0.0/integrations/deepseek-harness/PACKAGE_README.md"
     },
     {
-      "label": "Bundled Archify 2.14.0 source",
-      "url": "https://github.com/tt-a1i/archify/blob/archify-dsh-v0.1.0/archify/package.json"
+      "label": "Bundled Archify 3.0.1 source",
+      "url": "https://github.com/tt-a1i/archify/blob/7158026e852f3aa6578c741e673b46d7878c92c1/archify/package.json"
+    },
+    {
+      "label": "Published 1.0.0 release and tarball checksum",
+      "url": "https://github.com/tt-a1i/archify/releases/tag/archify-dsh-v1.0.0"
+    },
+    {
+      "label": "Three-platform installation and upgrade acceptance",
+      "url": "https://github.com/tt-a1i/archify/actions/runs/37217119585"
     }
   ]
 }

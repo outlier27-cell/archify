@@ -161,7 +161,7 @@ test('brand discovery resolves model names, aliases, domains, and Chinese channe
 test('all five renderers keep the semantic sigil and add one export-safe brand badge', () => {
   for (const type of Object.keys(cases)) {
     const input = writeFixture(type, `preset-${type}`, 'openai', (_diagram, node) => {
-      if (type === 'lifecycle') node.step = node.step || '01';
+      if (type === 'lifecycle') Object.assign(node, { step: node.step || '01', icon: 'start' });
     });
     const { result, html } = renderSync(type, input, `preset-${type}`);
     assert.equal(result.status, 0, `${type}: ${result.stderr || result.stdout}`);
@@ -204,14 +204,15 @@ test('a branded node fails before its semantic sigil, label, and brand badge can
 });
 
 test('every renderer enforces the same collision-free brand top rail', () => {
-  for (const type of ['architecture', 'sequence', 'dataflow', 'lifecycle']) {
+  // Lifecycle sizes states to their text, so it has no narrow-box case.
+  for (const type of ['architecture', 'sequence', 'dataflow']) {
     const input = writeFixture(type, `narrow-brand-rail-${type}`, 'openai', (diagram, node) => {
       node.label = type === 'sequence' ? 'ABCDEFGHI' : 'A';
       delete node.sublabel;
       delete node.tag;
       if (type === 'architecture') node.size = [32, 60];
       if (type === 'sequence') diagram.meta.column_fit = 'fixed';
-      if (type === 'dataflow' || type === 'lifecycle') node.width = 48;
+      if (type === 'dataflow') node.width = 48;
     });
     const { result, html } = renderSync(type, input, `narrow-brand-rail-${type}`);
     assert.equal(result.status, 1, `${type}: ${result.stderr || result.stdout}`);
@@ -222,7 +223,7 @@ test('every renderer enforces the same collision-free brand top rail', () => {
 
 test('branded lifecycle states move the semantic stamp left and keep the brand at upper right', () => {
   const input = writeFixture('lifecycle', 'lifecycle-placement', 'openai', (_diagram, node) => {
-    node.step = '01';
+    Object.assign(node, { step: '01', icon: 'start' });
   });
   const { result, html } = renderSync('lifecycle', input, 'lifecycle-placement');
   assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -788,11 +789,11 @@ test('unknown preset names fail with a repairable public CLI diagnostic', () => 
   assert.ok(receipt.diagnostics.some((entry) => entry.supportedFixes.some((fix) => fix.includes('archify brands'))));
 });
 
-test('viewer exposes brand identity to Passport and Finder while keeping source beacons clear', () => {
+test('viewer exposes brand identity to Passport and Finder with sources in the Focus card', () => {
   const template = fs.readFileSync(path.join(skillRoot, 'assets', 'template.html'), 'utf8');
   assert.match(template, /id="focus-brand" data-passport="brand" hidden/);
   assert.match(template, /node\.getAttribute\('data-node-brand'\)/);
-  assert.match(template, /brandOffset = node\.hasAttribute\('data-node-brand'\) \? 22 : 0/);
+  assert.doesNotMatch(template, /Archify\.sourceEvidence\.installBeacons\(\)|classList\.add\('source-evidence-beacon'\)/);
   assert.match(template, /sourceSearch \+ ' ' \+ text\)\.toLowerCase\(\) \+ ' ' \+ brand\.toLowerCase\(\)/);
 });
 
