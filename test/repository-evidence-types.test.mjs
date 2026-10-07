@@ -99,10 +99,9 @@ for (const shape of TYPES) {
     );
     assert.equal(evidence.nodes[first][0].label, 'Request router');
 
-    // The verified node must exist in the artifact under the same id, or the
-    // viewer's beacon pass has nothing to attach the SRC affordance to.
+    // Evidence stays keyed to the rendered subject for Focus/Finder lookup.
     assert.match(html, new RegExp(`data-node-id="${first}"`));
-    assert.match(html, /Archify\.sourceEvidence\.installBeacons\(\)/);
+    assert.doesNotMatch(html, /Archify\.sourceEvidence\.installBeacons\(\)|classList\.add\('source-evidence-beacon'\)/);
 
     const svg = html.match(/<svg\b[\s\S]*?<\/svg>/)?.[0] || '';
     assert.doesNotMatch(svg, /src\/router\.js|github\.com\/example\/evidence-repo|source-evidence/);

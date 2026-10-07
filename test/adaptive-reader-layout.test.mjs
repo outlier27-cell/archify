@@ -40,7 +40,10 @@ test('wide desktop diagrams use one height-budgeted reader shell instead of brea
 });
 
 test('compiler-measured intrinsic tall workflows reuse the height budget without widening eligibility', () => {
-  assert.match(reader, /svg\.getAttribute\('data-reader-fit'\) === 'intrinsic-height'/);
+  assert.match(reader, /var readerFit = svg && svg\.getAttribute\('data-reader-fit'\)/);
+  assert.match(reader, /var widthFirstReading = readerFit === 'width-first'/);
+  assert.match(reader, /var measuredHeightFit = readerFit === 'intrinsic-height' \|\| widthFirstReading/);
+  assert.doesNotMatch(reader, /data-sequence-column-fit|data-waterfall-ui/);
   assert.match(reader, /ratio >= WIDE_RATIO \|\| measuredHeightFit/);
   assert.match(reader, /var MIN_PROJECTED_NODE_TEXT_PX = 6/);
   assert.match(reader, /viewBox\.width \* minimumReadableScale\(\) \+ chrome\.diagramX/);

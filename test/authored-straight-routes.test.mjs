@@ -11,18 +11,6 @@ const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-straight-routes-'));
 after(() => fs.rmSync(tmp, { recursive: true, force: true }));
 const common = { schema_version: 1, meta: { title: 'Direct handoff', quality_profile: 'standard' } };
 const cases = {
-  lifecycle: {
-    document: {
-      ...common, diagram_type: 'lifecycle',
-      lanes: [{ id: 'main', label: 'Work' }, { id: 'recovery', label: 'Recovery' }],
-      states: [
-        { id: 'start', type: 'waiting', label: 'Waiting', lane: 'main', col: 1 },
-        { id: 'end', type: 'failure', label: 'Failed', lane: 'recovery', col: 1 },
-      ],
-      transitions: [{ id: 'direct', from: 'start', to: 'end', route: 'straight' }],
-    },
-    collection: 'transitions', points: '307,157;493,307', d: 'M 307 157 L 493 307',
-  },
   dataflow: {
     document: {
       ...common, diagram_type: 'dataflow', stages: [{ label: 'Input' }, { label: 'Output' }],
@@ -103,7 +91,7 @@ for (const [type, { document, collection, points, d }] of Object.entries(cases))
   });
 }
 
-for (const type of ['lifecycle', 'architecture']) {
+for (const type of ['architecture']) {
   test(`${type}: an empty via preserves the explicitly authored direct straight route`, () => {
     const { document, collection, d } = cases[type];
     const withEmptyVia = structuredClone(document);
@@ -113,20 +101,6 @@ for (const type of ['lifecycle', 'architecture']) {
     assert.ok(fs.readFileSync(output, 'utf8').includes(`data-composition-route="straight" d="${d}"`));
   });
 }
-
-test('lifecycle: via overrides straight without granting a direct-route exception', () => {
-  const document = structuredClone(cases.lifecycle.document);
-  document.transitions[0].via = [[360, 195], [425, 250]];
-  const input = inputFor('lifecycle-via', document);
-  const output = path.join(tmp, 'lifecycle-via.html');
-  assertPassed(run('render', 'lifecycle', input, output));
-  const html = fs.readFileSync(output, 'utf8');
-  assert.match(html, /data-composition-points="307,157;360,195;425,250;493,307"/);
-  assert.doesNotMatch(html, /data-composition-route="straight"/);
-  const checked = run('check', output);
-  assert.equal(checked.status, 1);
-  assert.equal(orthogonalCheck(checked).ok, false);
-});
 
 test('dataflow: via overrides straight and diagonal via still fails during rendering', () => {
   const document = structuredClone(cases.dataflow.document);

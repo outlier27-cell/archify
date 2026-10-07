@@ -80,6 +80,7 @@ function fakeBrowser({
   overflowAt,
   tallAt,
   readableScrollAt,
+  automaticReaderFit = 'intrinsic-height',
   authoredScrollAt,
   authoredDiagramType = 'architecture',
   authoredUnclipped = true,
@@ -125,7 +126,7 @@ function fakeBrowser({
         } : {}),
         readerLayout: readableScroll ? 'adaptive' : null,
         readerOverflow: readableScroll ? 'authored' : null,
-        readerFit: readableScroll ? 'intrinsic-height' : authoredScroll ? 'authored-height' : null,
+        readerFit: readableScroll ? automaticReaderFit : authoredScroll ? 'authored-height' : null,
         diagramType: authoredScroll ? authoredDiagramType : null,
         documentScrollUnclipped: authoredScroll && authoredUnclipped,
         readerWidth: 960,
@@ -2677,24 +2678,32 @@ test('visual-check reports the page composition when a viewport overflows vertic
 test('visual-check accepts only Reader-declared readable vertical page scrolling', async () => {
   const input = artifact('readable-scroll.html');
   const target = ({ width, theme }) => width === 1440 && theme === 'light';
-  const result = await runVisualCheck({
-    artifactPath: input,
-    chromePath: '/fake/chrome',
-    browserFactory: async () => fakeBrowser({ readableScrollAt: target }),
-  });
+  for (const automaticReaderFit of ['intrinsic-height', 'width-first']) {
+    const result = await runVisualCheck({
+      artifactPath: input,
+      chromePath: '/fake/chrome',
+      browserFactory: async () => fakeBrowser({ readableScrollAt: target, automaticReaderFit }),
+    });
 
-  assert.equal(result.exitCode, 0);
-  assert.equal(result.receipt.status, 'pass');
-  assert.equal(result.receipt.containment.status, 'pass');
-  assert.equal(result.receipt.containment.policy, 'fit-or-reader-declared-readable-vertical-scroll');
-  const viewport = result.receipt.containment.viewports.find(({ width }) => width === 1440);
-  assert.equal(viewport.overflowY, true);
-  assert.equal(viewport.verticalScrollAccepted, true);
-  assert.equal(viewport.overflowDisposition, 'readable-vertical-scroll');
-  assert.equal(viewport.readerLayout, 'adaptive');
-  assert.equal(viewport.readerOverflow, 'authored');
-  assert.equal(viewport.readerFit, 'intrinsic-height');
-  assert.equal(result.receipt.diagnostics.some(({ code }) => code === 'viewer/viewport-overflow'), false);
+    assert.equal(result.exitCode, 0);
+    assert.equal(result.receipt.status, 'pass');
+    assert.equal(result.receipt.containment.status, 'pass');
+    assert.equal(result.receipt.containment.policy, 'fit-or-reader-declared-readable-vertical-scroll');
+    const viewport = result.receipt.containment.viewports.find(({ width }) => width === 1440);
+    assert.equal(viewport.overflowY, true);
+    assert.equal(viewport.verticalScrollAccepted, true);
+    assert.equal(viewport.overflowDisposition, 'readable-vertical-scroll');
+    assert.equal(viewport.readerLayout, 'adaptive');
+    assert.equal(viewport.readerOverflow, 'authored');
+    assert.equal(viewport.readerFit, automaticReaderFit);
+    assert.equal(result.receipt.diagnostics.some(({ code }) => code === 'viewer/viewport-overflow'), false);
+  }
+  for (const automaticReaderFit of [null, 'unknown']) {
+    const result = await runVisualCheck({ artifactPath: input, chromePath: '/fake/chrome',
+      browserFactory: async () => fakeBrowser({ readableScrollAt: target, automaticReaderFit }) });
+    assert.equal(result.exitCode, 1);
+    assert.equal(result.receipt.containment.viewports.find(({ width }) => width === 1440).verticalScrollAccepted, false);
+  }
 });
 
 test('visual-check still rejects horizontal overflow and unreadable text in Reader scroll state', async () => {

@@ -30,6 +30,7 @@ test('automatic architectures preserve primary reading size when fitting the ful
       return result.result?.value;
     };
     let geometry;
+    let compactRailCases = 0;
     for (const [width, height] of [[1440, 900], [1600, 900], [2048, 1320]]) {
       await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
       const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
@@ -43,15 +44,30 @@ test('automatic architectures preserve primary reading size when fitting the ful
           const toolbar = document.querySelector('.toolbar').getBoundingClientRect();
           const guide = document.querySelector('.diagram-container').getBoundingClientRect();
           const svg = document.querySelector('.diagram-container > svg');
+          const stage = svg.getBoundingClientRect();
+          const nav = document.querySelector('.diagram-nav').getBoundingClientRect();
+          const overlapWidth = Math.max(0, Math.min(stage.right, nav.right) - Math.max(stage.left, nav.left));
+          const overlapHeight = Math.max(0, Math.min(stage.bottom, nav.bottom) - Math.max(stage.top, nav.top));
           return { rail: document.documentElement.dataset.navStageRail, summaryRail: document.documentElement.dataset.readerRail || null,
             toolbarBottom: toolbar.bottom, guideTop: guide.top, guideWidth: guide.width,
+            navWidth: nav.width, navHeight: nav.height,
+            navStageOverlap: overlapWidth * overlapHeight,
+            navStageGap: Math.max(nav.top - stage.bottom, stage.top - nav.bottom, nav.left - stage.right, stage.left - nav.right),
             primaryFont: Math.min(...Array.from(svg.querySelectorAll('text[data-node-label]')).map(text => parseFloat(text.getAttribute('font-size')) * svg.getBoundingClientRect().width / svg.viewBox.baseVal.width)),
             scrollWidth: document.documentElement.scrollWidth,
             geometry: [svg.getAttribute('viewBox'), ...Array.from(svg.querySelectorAll('[data-node-id]')).map(node =>
               [node.getAttribute('transform'), ...Array.from(node.querySelectorAll('text')).map(text => text.getAttribute('font-size'))])] };
         })()`);
         const label = `${width}x${height}/${theme}`;
-        assert.equal(observed.rail, 'true', label + ': fixture must exercise the compact rail');
+        // Compact viewports still exercise the real stage rail. On a taller
+        // screen the independently capped SVG can leave enough normal canvas
+        // space for in-canvas navigation; either placement must clear the stage.
+        if (width <= 1600) assert.equal(observed.rail, 'true', label + ': compact fixture must exercise the stage rail');
+        else assert.ok(observed.rail === undefined || observed.rail === 'true', label + ': unexpected navigation placement');
+        if (observed.rail === 'true') compactRailCases += 1;
+        assert.ok(observed.navWidth > 0 && observed.navHeight > 0, label + ': navigation must be visible');
+        assert.equal(observed.navStageOverlap, 0, label + ': navigation overlaps graph stage ' + JSON.stringify(observed));
+        assert.ok(observed.navStageGap >= 9.99, label + ': navigation lacks its 10px stage clearance ' + JSON.stringify(observed));
         assert.ok(observed.guideWidth > 0, label + ': diagram must be visible');
         assert.ok(observed.guideTop >= observed.toolbarBottom + 4, label + ': toolbar overlaps diagram ' + JSON.stringify(observed));
         assert.ok(observed.scrollWidth <= width, label + ': horizontal overflow');
@@ -63,6 +79,7 @@ test('automatic architectures preserve primary reading size when fitting the ful
         else geometry = observed.geometry;
       }
     }
+    assert.ok(compactRailCases >= 4, 'both themes at 1440 and 1600 must exercise real compact-stage clearance');
   } finally {
     await browser.close();
     fs.rmSync(dir, { recursive: true, force: true });

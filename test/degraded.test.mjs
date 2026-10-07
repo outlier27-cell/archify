@@ -80,7 +80,7 @@ const ARRAY_FIELDS = {
   workflow: ['lanes', 'phases', 'groups', 'mainPath', 'nodes', 'edges', 'cards'],
   sequence: ['participants', 'messages', 'segments', 'activations', 'cards'],
   dataflow: ['stages', 'nodes', 'flows', 'cards'],
-  lifecycle: ['lanes', 'states', 'transitions', 'cards'],
+  lifecycle: ['mainPath', 'states', 'transitions', 'cards'],
   architecture: ['components', 'boundaries', 'connections', 'cards'],
 };
 
@@ -106,10 +106,10 @@ test('workflow: node missing col never writes NaN', () => {
   delete doc.nodes[0].col;
   assertFriendlyFailure('workflow', doc, 'workflow node no col');
 });
-test('lifecycle: state missing col never writes NaN', () => {
+test('lifecycle: a mainPath entry without a state never writes NaN', () => {
   const doc = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', EXAMPLES.lifecycle), 'utf8'));
-  delete doc.states[0].col;
-  assertFriendlyFailure('lifecycle', doc, 'lifecycle state no col');
+  doc.mainPath[0] = 'ghost';
+  assertFriendlyFailure('lifecycle', doc, 'lifecycle mainPath ghost');
 });
 
 // ---- property test: deterministic VALID perturbations always render ----

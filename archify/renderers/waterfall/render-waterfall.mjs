@@ -278,7 +278,7 @@ function legendSwatch(entry) {
 const SOLID_TONES = ['frontend', 'backend', 'database', 'cloud', 'messagebus', 'security', 'external'];
 
 function renderSvg() {
-  return `      <svg viewBox="0 0 ${viewBox[0]} ${viewBox[1]}" ${svgRootAttrs(wf.meta)} data-waterfall-ui="" data-waterfall-unit="${esc(unit)}" data-reader-fit="intrinsic-height" data-reader-min-text="7.5">
+  return `      <svg viewBox="0 0 ${viewBox[0]} ${viewBox[1]}" ${svgRootAttrs(wf.meta)} data-waterfall-ui="" data-waterfall-unit="${esc(unit)}" data-reader-fit="width-first" data-reader-min-text="7.5">
 ${svgAccessibleText(wf.meta, 'waterfall')}
 ${renderDefinitions()}
         <style>

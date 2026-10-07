@@ -155,14 +155,16 @@ test('reports diagnostics the manifest cannot attribute to an injected defect', 
   const result = run(['run', '--manifest', file, '--command', 'validate']);
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const receipt = JSON.parse(result.stdout.split('\n')[0]);
-  assert.ok(receipt.rounds[0].unattributed.length >= 1);
-  assert.equal(receipt.rounds[0].unattributed[0].code, 'layout/constraint');
+  assert.deepEqual(receipt.rounds[0].unattributed.map((d) => d.code),
+    ['architecture/unknown-endpoint', 'layout/constraint']);
   const resultsFile = path.join(tmp, 'unattributed-results.jsonl');
   fs.writeFileSync(resultsFile, `${JSON.stringify(receipt)}\n`);
   const report = run(['report', '--results', resultsFile]);
   assert.equal(report.status, 0, report.stderr || report.stdout);
   const summary = JSON.parse(report.stdout);
-  assert.equal(summary.overall.diagnostics.unattributed, receipt.rounds[0].unattributed.length);
+  const expectedUnattributed = receipt.rounds
+    .reduce((total, round) => total + (round.unattributed || []).length, 0);
+  assert.equal(summary.overall.diagnostics.unattributed, expectedUnattributed);
 });
 
 test('a staged second defect surfaces only after the first is repaired', () => {
@@ -182,6 +184,31 @@ test('a staged second defect surfaces only after the first is repaired', () => {
   assert.equal(label.firstSeenRound, 2);
 });
 
+test('advertised fixes repoint every reference verification rewrote', () => {
+  const file = miniManifest('workflow-shared-ghost', 'workflow', [{ class: 'endpoint-shared-ghost' }]);
+  const result = run(['run', '--manifest', file, '--command', 'validate']);
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const receipt = JSON.parse(result.stdout.split('\n')[0]);
+  assert.equal(receipt.passed, true);
+  assert.equal(receipt.totals.rounds, 2);
+  const diagnostic = receipt.rounds[0].diagnostics
+    .find((d) => d.code === 'workflow/unknown-edge-endpoint');
+  assert.ok(diagnostic, 'expected an unknown-edge-endpoint diagnostic');
+  const fixes = diagnostic.supportedFixes
+    .map((entry) => entry.match(/set (\S+) to verified node id "([^"]+)"/))
+    .filter(Boolean);
+  assert.ok(fixes.length > 0, 'expected advertised repoint fixes');
+  const byTarget = new Map();
+  for (const [, pointer, target] of fixes) {
+    byTarget.set(target, [...(byTarget.get(target) || []), pointer]);
+  }
+  for (const [target, pointers] of byTarget) {
+    assert.deepEqual([...pointers].sort(), ['/edges/0/from', '/mainPath/0'],
+      `candidate "${target}" must advertise every reference to the unknown id`);
+  }
+  assert.equal(receipt.rounds[0].repairs.applied[0].detail.includes('/mainPath/0'), true);
+});
+
 test('diagnostics the rules cannot map are counted as unactionable and stall the loop', () => {
   const file = miniManifest('arch-duplicate-id', 'architecture', [{ class: 'node-duplicate-id' }]);
   const result = run(['run', '--manifest', file, '--command', 'validate']);
@@ -192,7 +219,7 @@ test('diagnostics the rules cannot map are counted as unactionable and stall the
   assert.equal(receipt.totals.unactionable > 0, true);
 });
 
-test('a header overflow is detected late, only at the browser-check gate', { skip: !chromeAvailable }, () => {
+test('a header overflow is detected at the browser-check gate, where measurement is authoritative', { skip: !chromeAvailable }, () => {
   const file = miniManifest('arch-title-overflow', 'architecture', [{ class: 'title-overflow' }]);
   const result = run(['run', '--manifest', file, '--command', 'finalize', '--repair', 'oracle']);
   assert.equal(result.status, 0, result.stderr || result.stdout);

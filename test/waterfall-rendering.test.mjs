@@ -31,6 +31,9 @@ test('waterfall: both examples render and pass the showcase artifact checks', ()
   for (const diagram of [small, large]) {
     const result = run(diagram);
     assert.equal(result.status, 0, result.stderr);
+    const root = fs.readFileSync(result.output, 'utf8').match(/<svg\b[^>]*>/)?.[0];
+    assert.match(root, /data-reader-fit="width-first"/);
+    assert.match(root, /data-reader-min-text="7\.5"/);
     const receipt = JSON.parse(spawnSync(process.execPath, [checker, result.output], { encoding: 'utf8' }).stdout);
     assert.equal(receipt.ok, true, JSON.stringify(receipt.checks.filter((entry) => !entry.ok)));
     assert.equal(receipt.composition.summary.errors, 0);

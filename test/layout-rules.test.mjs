@@ -220,7 +220,7 @@ const CASES = [
   // ---- workflow layout rules ----
   ['workflow: unknown lane', 'workflow', (d) => { d.nodes[0].lane = 'ghost'; }, ['unknown lane "ghost"']],
   ['workflow: node label wider than box', 'workflow',
-    (d) => { d.nodes[0].label = 'An Extremely Long Node Label That Overflows'; }, ['wider than node', 'shorten the label']],
+    (d) => { d.nodes[0].label = 'An Extremely Long Node Label That Overflows'; }, ['wider than component', 'shorten the label']],
   ['workflow: node sublabel wider than its legible minimum', 'workflow',
     (d) => { d.nodes[0].sublabel = 'This supporting sentence is much too long for one workflow node'; }, ['Sublabel', 'legible', 'increase node.width']],
   ['workflow: node tag wider than its legible minimum', 'workflow',
@@ -270,26 +270,17 @@ const CASES = [
     ['Tag', 'legible', 'increase node.width']],
 
   // ---- lifecycle layout rules ----
-  ['lifecycle: missing reserved main lane', 'lifecycle',
-    (d) => {
-      d.lanes = d.lanes.map((l) => (l.id === 'main' ? { ...l, id: 'primary' } : l));
-      d.states = d.states.map((s) => (s.lane === 'main' ? { ...s, lane: 'primary' } : s));
-    }, ['"main"', 'reserved']],
-  ['lifecycle: cross-lane state overlap', 'lifecycle',
-    (d) => {
-      const approval = d.states.find((s) => s.id === 'approval');
-      const failed = d.states.find((s) => s.id === 'failed');
-      delete failed.yOffset;
-      failed.col = approval.col;
-    }, ['less than 10px apart']],
-  ['lifecycle: viewBox height below schema min', 'lifecycle',
-    (d) => { d.meta.viewBox = [980, 565]; }, ['566']],
+  ['lifecycle: mainPath names an unknown state', 'lifecycle',
+    (d) => { d.mainPath[1] = 'ghost'; }, ['mainPath[1] "ghost" is not a state']],
+  ['lifecycle: mainPath step without a transition', 'lifecycle',
+    (d) => { d.transitions = d.transitions.filter((t) => !(t.from === 'planning' && t.to === 'executing')); },
+    ['mainPath step "planning" -> "executing" has no transition']],
   ['lifecycle: state sublabel wider than its legible minimum', 'lifecycle',
     (d) => { d.states[0].sublabel = 'This supporting sentence is far too long for one lifecycle state box'; },
-    ['Sublabel', 'legible', 'increase state.width']],
+    ['Sublabel', 'legible', 'shorten the sublabel']],
   ['lifecycle: state tag wider than its legible minimum', 'lifecycle',
-    (d) => { d.states[0].tag = 'This tag is far too long to sit inside one lifecycle state box'; },
-    ['Tag', 'legible', 'increase state.width']],
+    (d) => { d.states[0].tag = 'This tag is far too long to sit inside one lifecycle state box at all'; },
+    ['Tag', 'legible', 'shorten the tag']],
 
   // ---- architecture layout rules ----
   ['architecture: components overlap', 'architecture',
@@ -648,7 +639,7 @@ const SHRINK_CASES = [
     d.participants[0].sublabel = 'long browser session';
   }, 7],
   ['dataflow', (d) => { d.nodes[0].sublabel = 'browser SDK and mobile SDK'; }, 7],
-  ['lifecycle', (d) => { d.states[0].sublabel = 'request accepted and queued'; }, 7],
+  ['lifecycle', (d) => { d.states[0].sublabel = 'request accepted, validated, then queued now'; }, 9],
 ];
 
 for (const [mode, mutate, preferred] of SHRINK_CASES) {
@@ -673,7 +664,7 @@ const TAG_SHRINK_CASES = [
   // [mode, collection, tag, preferredFontSize]
   ['architecture', 'components', 'owner: platform operations team', 7],
   ['dataflow', 'nodes', 'owner: analytics platform', 7],
-  ['lifecycle', 'states', 'owner: platform operations pod', 7],
+  ['lifecycle', 'states', 'owner: platform operations pod on weekday shift', 8],
   ['workflow', 'nodes', 'owner: runtime execution squad A', 7],
 ];
 
@@ -929,83 +920,6 @@ test('dataflow: authored endpoint sides that follow a border are rejected generi
   assert.match(stderr, /cross node borders perpendicularly/);
 });
 
-test('lifecycle: automatic cross-lane routes avoid every state border', () => {
-  const d = {
-    schema_version: 1,
-    diagram_type: 'lifecycle',
-    meta: { title: 'Lifecycle endpoint border invariant' },
-    lanes: [
-      { id: 'main', label: 'Main' },
-      { id: 'terminal', label: 'Terminal' },
-    ],
-    states: [
-      { id: 'target', lane: 'main', col: 3, type: 'success', label: 'Target' },
-      { id: 'source', lane: 'terminal', col: 1, type: 'active', label: 'Source' },
-    ],
-    transitions: [{ id: 'automatic-transition', from: 'source', to: 'target' }],
-  };
-  const { code, stderr, outPath } = render('lifecycle', d);
-  assert.equal(code, 0, stderr);
-  assertRelationshipsAvoidAllNodeBorders(
-    fs.readFileSync(outPath, 'utf8'),
-    d.transitions,
-    d.states,
-  );
-});
-
-function tangentViaLifecycle() {
-  return {
-    schema_version: 1,
-    diagram_type: 'lifecycle',
-    meta: { title: 'Legacy tangent via compatibility' },
-    lanes: [
-      { id: 'main', label: 'Main' },
-      { id: 'terminal', label: 'Terminal' },
-    ],
-    states: [
-      { id: 'source', lane: 'main', col: 1, type: 'active', label: 'Source' },
-      { id: 'target', lane: 'terminal', col: 0, type: 'success', label: 'Target' },
-    ],
-    transitions: [{
-      id: 'legacy-via',
-      from: 'source',
-      to: 'target',
-      fromSide: 'bottom',
-      toSide: 'top',
-      via: [[320, 188], [320, 430], [402, 430]],
-    }],
-  };
-}
-
-test('lifecycle: legacy tangent via is rendered exactly instead of silently rewritten', () => {
-  const d = tangentViaLifecycle();
-  const { code, stderr, outPath } = render('lifecycle', d);
-  assert.equal(code, 0, stderr);
-  assert.deepEqual(workflowEdgePoints(fs.readFileSync(outPath, 'utf8'), 'legacy-via'), [
-    [248, 188], [320, 188], [320, 430], [402, 430], [402, 450],
-  ]);
-});
-
-for (const qualityProfile of ['standard', 'showcase']) {
-  test(`lifecycle: ${qualityProfile} keeps an authored tangent via authoritative`, () => {
-    const d = tangentViaLifecycle();
-    d.meta.quality_profile = qualityProfile;
-    const { code, stderr, outPath } = render('lifecycle', d);
-    assert.equal(code, 0, stderr);
-    assert.deepEqual(workflowEdgePoints(fs.readFileSync(outPath, 'utf8'), 'legacy-via'), [
-      [248, 188], [320, 188], [320, 430], [402, 430], [402, 450],
-    ]);
-  });
-
-  test(`lifecycle: public validate accepts an authoritative authored tangent via in ${qualityProfile}`, () => {
-    const d = tangentViaLifecycle();
-    d.meta.quality_profile = qualityProfile;
-    const { code, result } = validateCli('lifecycle', d);
-    assert.equal(code, 0, JSON.stringify(result, null, 2));
-    assert.equal(result.ok, true);
-  });
-}
-
 test('workflow: explicit labelAt remains authoritative on an automatic one-bend edge', () => {
   const d = JSON.parse(fs.readFileSync(
     path.join(skillRoot, '..', 'test', 'fixtures/automatic-routing-node-border-clearance.workflow.json'),
@@ -1134,16 +1048,6 @@ test('workflow: showcase rejects an edge label that hides another route', () => 
   assert.match(stderr, /plan.*other-route/);
 });
 
-test('lifecycle: showcase rejects a transition label that hides another route', () => {
-  const d = load('lifecycle');
-  d.transitions[0].label = 'approval gate';
-  d.transitions[0].labelAt = [556, 250];
-  const { code, stderr } = render('lifecycle', d);
-  assert.notEqual(code, 0, `expected non-zero exit; stderr:\n${stderr}`);
-  assert.match(stderr, /\[composition\/label-route-clearance\] showcase lifecycle/);
-  assert.match(stderr, /approval gate.*review-blocked/);
-});
-
 test('sequence: showcase rejects a message label that hides an adjacent route', () => {
   const d = load('sequence');
   d.messages = d.messages.slice(0, 2);
@@ -1251,16 +1155,6 @@ test('dataflow: showcase rejects a flow label that leaves the canvas', () => {
   assert.match(stderr, /extends past the right edge by 79\.3px .*viewBox 1080x520/);
 });
 
-test('lifecycle: showcase rejects a transition label that leaves the canvas', () => {
-  const d = load('lifecycle');
-  d.transitions[0].label = 'operator approves the escalation';
-  d.transitions[0].labelAt = [960, 300];
-  const { code, stderr } = render('lifecycle', d);
-  assert.notEqual(code, 0, `expected non-zero exit; stderr:\n${stderr}`);
-  assert.match(stderr, /\[composition\/label-canvas-containment\] showcase lifecycle label "operator approves the escalation" on transitions\[0\]/);
-  assert.match(stderr, /extends past the right edge by 14\.4px .*viewBox 1030x630/);
-});
-
 // The repair side of the same contract: a suggested labelAt, applied verbatim,
 // must clear the obstacle the message names. Both 27px two-line forms used to
 // get an "above" hint that landed the rect back on the obstacle, so the
@@ -1283,27 +1177,6 @@ test('dataflow: obstacle hints for a two-line classification label survive being
     applied.flows[0].labelAt = labelAt;
     const result = render('dataflow', applied);
     assert.equal(result.code, 0, `labelAt [${labelAt}]: ${result.stderr}`);
-  }
-});
-
-test('lifecycle: obstacle hints for a two-line note label survive being applied', () => {
-  const withLabel = (labelAt) => {
-    const d = load('lifecycle');
-    d.transitions[0].label = 'needs approval';
-    d.transitions[0].note = 'security gate';
-    d.transitions[0].labelAt = labelAt;
-    return d;
-  };
-  const { code, stderr } = render('lifecycle', withLabel([400, 180]));
-  assert.notEqual(code, 0, `expected non-zero exit; stderr:\n${stderr}`);
-  assert.match(stderr, /Label "needs approval" overlaps state "executing"/);
-  const suggestions = suggestedLabelAts(stderr);
-  assert.equal(suggestions.length, 2, stderr);
-  for (const labelAt of suggestions) {
-    const result = render('lifecycle', withLabel(labelAt));
-    // The hint's contract covers the named obstacle and the canvas; a residual
-    // route-clearance issue at the new spot is that rule's own report.
-    assert.doesNotMatch(result.stderr, /overlaps state "executing"/, `labelAt [${labelAt}]: ${result.stderr}`);
   }
 });
 
@@ -1376,9 +1249,8 @@ test('architecture: measured auto canvases opt into height-aware reader fitting'
   assert.doesNotMatch(authoredSvg, /data-reader-min-text=/);
 });
 
-// Sequence and dataflow share the lifecycle/architecture contract: the default
-// canvas is below the wide ratio, so omitting meta.viewBox must declare the
-// intrinsic-height fit or every default canvas certainly overflows 1440x900.
+// Automatic Sequence declares width-first; Dataflow declares intrinsic-height.
+// Both default canvases need an explicit automatic Reader fit below the wide ratio.
 for (const [mode, doc, authoredViewBox] of [
   ['sequence', {
     schema_version: 1, diagram_type: 'sequence',
@@ -1397,12 +1269,12 @@ for (const [mode, doc, authoredViewBox] of [
     flows: [{ from: 'a', to: 'b', label: 'write' }],
   }, [1080, 520]],
 ]) {
-  test(`${mode}: default canvas declares intrinsic-height fit, authored viewBox does not`, () => {
+  test(`${mode}: default canvas declares automatic Reader fit, authored viewBox does not`, () => {
     const automatic = render(mode, doc);
     assert.equal(automatic.code, 0, automatic.stderr);
     const automaticSvg = fs.readFileSync(automatic.outPath, 'utf8').match(/<svg\b[^>]*>/)?.[0];
     assert.ok(automaticSvg, `expected an SVG root for the default ${mode} canvas`);
-    assert.match(automaticSvg, /data-reader-fit="intrinsic-height"/);
+    assert.match(automaticSvg, new RegExp(`data-reader-fit="${mode === 'sequence' ? 'width-first' : 'intrinsic-height'}"`));
 
     const authored = structuredClone(doc);
     authored.meta.viewBox = authoredViewBox;
@@ -2057,26 +1929,6 @@ test('dataflow: Clean Flow Gate rejects a flow through an unrelated node', () =>
   assert.match(stderr, /\[clean-flow\/edge-through-node\] dataflow flows\[0\] id "direct"/);
   assert.match(stderr, /crosses node "middle"/);
   assert.match(stderr, /stage\/row/);
-});
-
-test('lifecycle: Clean Flow Gate rejects a transition through an unrelated state', () => {
-  const d = {
-    schema_version: 1,
-    diagram_type: 'lifecycle',
-    meta: { title: 'Opaque state crossing', quality_profile: 'standard' },
-    lanes: [{ id: 'main', label: 'Main' }],
-    states: [
-      { id: 'left', type: 'start', label: 'Left', lane: 'main', col: 0 },
-      { id: 'middle', type: 'waiting', label: 'Middle', lane: 'main', col: 2 },
-      { id: 'right', type: 'success', label: 'Right', lane: 'main', col: 4 },
-    ],
-    transitions: [{ id: 'direct', from: 'left', to: 'right', route: 'straight' }],
-  };
-  const { code, stderr } = render('lifecycle', d);
-  assert.notEqual(code, 0, `expected non-zero exit; stderr:\n${stderr}`);
-  assert.match(stderr, /\[clean-flow\/edge-through-node\] lifecycle transitions\[0\] id "direct"/);
-  assert.match(stderr, /crosses state "middle"/);
-  assert.match(stderr, /col\/yOffset/);
 });
 
 test('sequence: lifelines and activation bars remain intentional pass-through geometry', () => {

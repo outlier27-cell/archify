@@ -219,7 +219,10 @@ for (const window of ['snapshot', 'receipt']) {
     let socket;
     try {
       preview = await startPreview({ ...data, type: 'architecture', open: false, deliveryCli });
-      await until(() => fs.existsSync(ready), `real delivery did not reach ${window}`);
+      // existsSync can observe the marker between open() and write() completion;
+      // require a non-empty marker so the captured path is never blank.
+      await until(() => fs.existsSync(ready) && fs.statSync(ready).size > 0,
+        `real delivery did not reach ${window}`);
       const staging = path.join(data.root, fs.readdirSync(data.root).find((name) => name.startsWith('.archify-preview-')));
       const claimant = path.join(staging, 'claimant.txt');
       fs.writeFileSync(claimant, 'unowned content');

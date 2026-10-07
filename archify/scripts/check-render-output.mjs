@@ -506,6 +506,7 @@ function collectArrows(fragment, useActualPoints = false) {
       // Readable-v2's root contract supersedes this narrower automatic-pair rule.
       // This marker never certifies a crossover halo or waives a quality rule.
       automaticWorkflowRoute: attrs['data-composition-routing'] === 'workflow-v2-auto',
+      junction: attrs['data-composition-junction'] || null,
       width: routeStrokeWidth,
       variant: raw.match(/\ba-(default|emphasis|security|dashed)\b/)?.[1] || 'default',
       role: attrs['data-edge-role'],
@@ -1169,7 +1170,7 @@ function collectDesktopReadability(svgAttrs, fragment, contract) {
   }
   const minimumSourceTextPx = entries.length ? Math.min(...entries.map((entry) => entry.sourceFontPx)) : Number.NaN;
   const eligible = contract === DECLARED_WIDE_READER_CONTRACT
-    && svgAttrs['data-reader-fit'] === 'intrinsic-height'
+    && ['intrinsic-height', 'width-first'].includes(svgAttrs['data-reader-fit'])
     && Number.isFinite(requestedMinimumTextPx) && requestedMinimumTextPx > 0
     && !invalidSemanticText && entries.length > 0;
   const declared = eligible ? declaredWideReadabilityBudget({
