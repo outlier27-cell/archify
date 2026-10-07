@@ -3596,10 +3596,10 @@ function renderValidatedArchitecture(inputPath, outputPath, quality, repoRoot, c
     stdio: 'pipe',
     maxBuffer: checkMaxBuffer,
   });
-  if (check.status !== 0) {
+  if (check.error || check.status !== 0) {
     const error = new Error('Validated snapshot failed final artifact checks.');
     error.compareStage = 'check';
-    error.compareStatus = check.status ?? 1;
+    error.compareStatus = check.status || 1;
     const outputLimit = checkerOutputLimitDiagnostics(check, checkMaxBuffer);
     if (outputLimit) {
       error.diagnostics = outputLimit;
@@ -4838,7 +4838,7 @@ async function commandDeliver(args) {
       stdio: 'pipe',
       maxBuffer: checkMaxBuffer,
     });
-    if (check.status !== 0) {
+    if (check.error || check.status !== 0) {
       if (check.stderr) process.stderr.write(check.stderr);
       const outputLimit = checkerOutputLimitDiagnostics(check, checkMaxBuffer);
       if (outputLimit) {
@@ -4850,7 +4850,7 @@ async function commandDeliver(args) {
           output: outputPath,
           error: `The artifact checker exceeded its ${checkMaxBuffer} byte output buffer and was terminated before reporting a verdict; the previous artifact was preserved.`,
           diagnostics: outputLimit,
-          status: check.status ?? 1,
+          status: check.status || 1,
         });
         return;
       }
@@ -4869,7 +4869,7 @@ async function commandDeliver(args) {
         output: outputPath,
         error: 'Final artifact check failed; the previous artifact was preserved.',
         diagnostics: checkerDiagnostics(checker),
-        status: check.status ?? 1,
+        status: check.status || 1,
         checker,
       });
       return;
@@ -6509,7 +6509,7 @@ async function commandMigrate(args) {
       stdio: 'pipe',
       maxBuffer: checkMaxBuffer,
     });
-    if (check.status !== 0) {
+    if (check.error || check.status !== 0) {
       const outputLimit = checkerOutputLimitDiagnostics(check, checkMaxBuffer);
       if (outputLimit) {
         reportMigrationFailure({
@@ -6518,7 +6518,7 @@ async function commandMigrate(args) {
             ...migration.newSchemaDiagnostics,
             ...outputLimit,
           ],
-          status: check.status ?? 1,
+          status: check.status || 1,
         });
         return;
       }
@@ -6534,7 +6534,7 @@ async function commandMigrate(args) {
           ...migration.newSchemaDiagnostics,
           ...checkerDiagnostics(checker),
         ],
-        status: check.status ?? 1,
+        status: check.status || 1,
       });
       return;
     }
@@ -6934,8 +6934,8 @@ async function commandValidate(args) {
         stdio: 'pipe',
         maxBuffer: checkMaxBuffer,
       });
-      if (check.status !== 0) {
-        exitCode = check.status ?? 1;
+      if (check.error || check.status !== 0) {
+        exitCode = check.status || 1;
         const outputLimit = checkerOutputLimitDiagnostics(check, checkMaxBuffer);
         if (outputLimit) {
           report = () => reportValidateFailure({
@@ -6945,7 +6945,7 @@ async function commandValidate(args) {
             input: path.resolve(input),
             error: `The artifact checker exceeded its ${checkMaxBuffer} byte output buffer and was terminated before reporting a verdict.`,
             diagnostics: outputLimit,
-            status: check.status ?? 1,
+            status: check.status || 1,
           });
         } else {
           let checker;
@@ -6963,7 +6963,7 @@ async function commandValidate(args) {
             error: 'Final artifact check failed.',
             diagnostics: checkerDiagnostics(checker),
             checker,
-            status: check.status ?? 1,
+            status: check.status || 1,
           });
         }
       } else {
