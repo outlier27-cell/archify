@@ -27,8 +27,9 @@
 
 <p align="center">
   <a href="https://github.com/tt-a1i/archify/stargazers"><img src="https://img.shields.io/github/stars/tt-a1i/archify?style=flat-square&amp;color=E5B650&amp;logo=github&amp;label=Stars" alt="GitHub stars" /></a>
+  <a href="https://skills.sh/tt-a1i/archify/archify"><img src="https://img.shields.io/badge/installs-130K%2B-0EA5E9?style=flat-square" alt="130K+ installs on skills.sh" /></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-22c55e?style=flat-square" alt="MIT License" /></a>
-  <a href="archify/SKILL.md"><img src="https://img.shields.io/badge/Agent-Skill-7C3AED?style=flat-square" alt="Agent Skill" /></a>
+  <a href="#安装方式"><img src="https://img.shields.io/badge/works_with-Claude_Code_%7C_Codex_%7C_Cursor_%7C_OpenCode-7C3AED?style=flat-square" alt="Works with Claude Code, Codex, Cursor, and OpenCode" /></a>
   <a href="CHANGELOG.md#unreleased"><img src="https://img.shields.io/badge/version-3.0.2--dev.1-0891b2?style=flat-square" alt="Development version 3.0.2-dev.1" /></a>
 </p>
 
@@ -200,11 +201,19 @@ npx -y skills add tt-a1i/archify --skill archify --agent cursor --global --copy 
 npx skills use tt-a1i/archify@archify --agent codex
 ```
 
-DeepSeek Harness（社区集成、显式启用）：运行 `dsh plugin --profile web add @tt-a1i/archify-dsh@0.1.0`；参见[兼容范围、限制与安全说明](integrations/deepseek-harness/README.md)。[Agent 切换器](https://tt-a1i.github.io/archify/start.html?agent=cursor&type=architecture)只为 `cursor`、`codex`、`claude-code` 和 `opencode` 生成命令。
+DeepSeek Harness（社区集成、显式启用）：运行 `dsh plugin --profile web add @tt-a1i/archify-dsh@1.0.0`；参见[兼容范围、限制与安全说明](integrations/deepseek-harness/README.md)。[Agent 切换器](https://tt-a1i.github.io/archify/start.html?agent=cursor&type=architecture)只为 `cursor`、`codex`、`claude-code` 和 `opencode` 生成命令。
 
 安装后的 Skill 包含一个低频、失败静默的发布检查，它最多只显示可选更新提醒，绝不会自行下载或安装更新。一次成功检查后，下次网络请求通常约在 24 小时（±20%）后发出；检查失败后，活跃使用可能在首次 6 小时、后续 24 小时退避到期时重试。请求只访问 `https://tt-a1i.github.io/archify/skill-updates/archify/stable.json`。服务端会自然获得 IP、请求时间和常规 HTTP 元数据；检查器不会发送本地版本、Agent、项目数据、用户输入、账户/设备标识，也不会保存或回传 ETag。是否更新以及何时更新始终由你决定。如需完全关闭检查（包括网络请求和提醒状态写入），请在 Agent 环境中设置 `ARCHIFY_UPDATE_CHECK_DISABLED=1`。
 
 </details>
+
+### 获取更新
+
+- **订阅新版本：** 在本 GitHub 仓库顶部选择 **Watch → Custom → Releases**，订阅版本发布通知。点 Star 不会自动订阅更新。
+- **查看更新内容：** [版本说明](https://github.com/tt-a1i/archify/releases)。
+- **使用 RSS 阅读器：** [订阅版本更新源](https://github.com/tt-a1i/archify/releases.atom)。
+
+带有更新检查器的安装版本，也会在交付图时检查新的稳定版，并可显示提醒。不带检查器的旧安装需要先手动更新，才能获得这项功能。是否升级、何时升级由你决定，Archify 不会自动安装更新。
 
 ### 2. 直接从描述开始——不需要代码库
 
@@ -376,7 +385,7 @@ node bin/archify.mjs deliver workflow examples/agent-tool-call.workflow.json /tm
 | **Claude.ai** | Settings → Capabilities → Skills 中上传 `archify.zip` | 取决于沙箱是否提供 Node.js |
 | **Project Knowledge** | 把 `archify.zip` 上传到项目 | Prompt 驱动的 Architecture Fallback |
 | **Hermes Agent** | 显式启用：`hermes skills install skills-sh/tt-a1i/archify/archify -y` | 社区 Skill-only；Node `>=18`；不是 Nous 官方产品。没有遥测。非切换器目标。[详情](integrations/hermes-agent/README.md)。 |
-| **DeepSeek Harness** | 显式启用：`dsh plugin --profile web add @tt-a1i/archify-dsh@0.1.0`；调用：`Use the archify skill to map this repository's runtime architecture.`；卸载：`dsh plugin --profile web remove @tt-a1i/archify-dsh`。 | 面向开发者预览版 `@deepseek-ai/dsh@0.1.0-rc.6` 的社区集成；Node `^22.19.0 \|\| >=24.0.0`；不是 DeepSeek 官方产品。没有遥测；shell 文件不会自动进入 Web Produced Files，请返回精确工作区路径。[详情](integrations/deepseek-harness/README.md)。 |
+| **DeepSeek Harness** | 显式启用：`dsh plugin --profile web add @tt-a1i/archify-dsh@1.0.0`；调用：`Use the archify skill to map this repository's runtime architecture.`；卸载：`dsh plugin --profile web remove @tt-a1i/archify-dsh`。 | 面向开发者预览版 `@deepseek-ai/dsh@0.1.2-rc.1` 的社区集成；Node `^22.19.0 \|\| >=24.0.0`；不是 DeepSeek 官方产品。没有遥测；shell 文件不会自动进入 Web Produced Files，请返回精确工作区路径。[详情](integrations/deepseek-harness/README.md)。 |
 
 ## 参考与边界
 
@@ -412,6 +421,8 @@ node bin/archify.mjs deliver workflow examples/agent-tool-call.workflow.json /tm
 [MIT](LICENSE) —— 可以自由使用、修改和分发。
 
 ## 参与贡献
+
+基于 Archify 做了独立包？[提交到社区目录](community/README.md#中文摘要)。详细步骤和 JSON 示例默认折叠，按需展开即可。
 
 欢迎提交 Issue、Pull Request 和真实场景图。请先阅读[贡献指南](CONTRIBUTING.md)；遇到问题时使用可复现 Bug 表单，也可以通过[社区 Showcase 表单](https://github.com/tt-a1i/archify/issues/new?template=showcase.yml)提交已验证成品。
 

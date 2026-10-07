@@ -9,7 +9,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(__dirname, '..');
 
-const TYPES = new Set(['architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle', 'erd']);
+const TYPES = new Set(['architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle', 'erd', 'tree', 'class', 'timeline', 'waterfall']);
 const DELIVERY_SIDECAR_SUFFIXES = Object.freeze([
   '.delivery.json',
   '.delivery-pending.json',
@@ -2209,7 +2209,7 @@ function usage() {
   archify demo [output-directory]
 
 Types:
-  architecture, workflow, sequence, dataflow, lifecycle, erd
+  architecture, workflow, sequence, dataflow, lifecycle, erd, tree, class, timeline, waterfall
 `;
 }
 
@@ -2647,6 +2647,16 @@ function checkerDiagnostics(checker) {
   }
   for (const check of checker?.checks || []) {
     if (check.ok || COMPOSITION_CHECKS.has(check.name)) continue;
+    if (check.name === 'svg_path_data') {
+      const pathDiagnostics = (checker.diagnostics || []).filter(item => (
+        item?.severity === 'error'
+        && ['artifact/svg-path-malformed', 'artifact/svg-path-unsupported'].includes(item.code)
+      ));
+      if (pathDiagnostics.length) {
+        diagnostics.push(...pathDiagnostics.map(item => diagnostic(item)));
+        continue;
+      }
+    }
     diagnostics.push(diagnostic({
       code: `artifact/${check.name.replaceAll('_', '-')}`,
       message: (check.details || []).find(Boolean) || `Final artifact failed ${check.name}.`,
@@ -5906,6 +5916,10 @@ async function commandDoctor(args) {
     dataflow: 'product-analytics.dataflow.json',
     lifecycle: 'agent-run.lifecycle.json',
     erd: 'orders.erd.json',
+    tree: 'payment-platform.tree.json',
+    class: 'payments.class.json',
+    timeline: 'payment-incident.timeline.json',
+    waterfall: 'checkout-request.waterfall.json',
   };
 
   for (const type of TYPES) {
@@ -6788,9 +6802,12 @@ async function commandValidate(args) {
     return;
   }
 
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-validate-'));
+  const { createOwnedTempDirectory } = await import('../renderers/shared/owned-temp-directory.mjs');
+  const temporary = createOwnedTempDirectory('archify-validate-');
+  const tmp = temporary.path;
   const out = path.join(tmp, `${type}.html`);
   let exitCode = 0;
+  let report = () => {};
 
   try {
     const snapshot = path.join(tmp, 'specification.snapshot.json');
@@ -6801,7 +6818,7 @@ async function commandValidate(args) {
     });
     if (render.status !== 0) {
       const failure = rendererFailure(render);
-      reportValidateFailure({
+      report = () => reportValidateFailure({
         json,
         stage: failure.diagnostics.some((entry) => entry.code.startsWith('input/')) ? 'input' : 'render',
         type,
@@ -6822,7 +6839,7 @@ async function commandValidate(args) {
         } catch {
           checker = { ok: false, diagnostic: 'Artifact checker failed without a parseable receipt.' };
         }
-        reportValidateFailure({
+        report = () => reportValidateFailure({
           json,
           stage: 'check',
           type,
@@ -6843,7 +6860,7 @@ async function commandValidate(args) {
           };
           const resolvedQuality = quality || result.composition.profile || 'standard';
           const localeWarnings = await specificationLocaleDiagnostics(type, specification);
-          console.log(JSON.stringify({
+          const receipt = {
             schemaVersion: 1,
             ok: true,
             command: 'validate',
@@ -6869,19 +6886,41 @@ async function commandValidate(args) {
             composition: result.composition,
             ...(engineeringProfile ? { engineeringProfile } : {}),
             ...(localeWarnings.length ? { diagnostics: localeWarnings } : {}),
-          }, null, 2));
+          };
+          report = () => console.log(JSON.stringify(receipt, null, 2));
         } else {
           const engineering = engineeringProfile
             ? `; engineering ${engineeringProfile}: pass`
             : '';
-          console.log(`ok ${type} ${path.resolve(input)} (${result.checks.length} artifact checks; composition ${result.composition.profile}: ${result.composition.summary.errors} errors, ${result.composition.summary.warnings} warnings${engineering})`);
+          report = () => console.log(`ok ${type} ${path.resolve(input)} (${result.checks.length} artifact checks; composition ${result.composition.profile}: ${result.composition.summary.errors} errors, ${result.composition.summary.warnings} warnings${engineering})`);
         }
       }
     }
   } finally {
-    fs.rmSync(tmp, { recursive: true, force: true });
+    try {
+      await temporary.cleanup();
+    } catch (error) {
+      exitCode = 1;
+      report = () => reportValidateFailure({
+        json,
+        stage: 'cleanup',
+        type,
+        input: path.resolve(input),
+        error: error.message,
+        diagnostics: [{
+          code: 'validate/temp-cleanup-incomplete',
+          severity: 'error',
+          message: error.message,
+          subject: { directory: tmp },
+          evidence: { reason: error.cause?.code || error.code },
+          supportedFixes: ['resolve the reported filesystem error and inspect the retained temporary directory before retrying'],
+        }],
+        status: 1,
+      });
+    }
   }
 
+  report();
   if (exitCode !== 0) process.exitCode = exitCode;
 }
 
