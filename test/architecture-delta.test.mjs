@@ -279,6 +279,12 @@ test('compare reports authored translation changes as presentation changes', () 
   const reorderedAgain = structuredClone(reordered);
   reorderedAgain.meta.translations = { 'legend.architecture.frontend': 'Frontend', 'legend.architecture.backend': 'Service' };
   assert.equal(canonicalArchitectureJson(reorderedAgain), canonicalArchitectureJson(reordered));
+
+  fs.writeFileSync(basePath, JSON.stringify(reordered));
+  fs.writeFileSync(headPath, JSON.stringify(reorderedAgain));
+  const reorderedResult = run(['compare', 'architecture', basePath, headPath, output, '--json']);
+  assert.equal(reorderedResult.status, 0, reorderedResult.stderr);
+  assert.equal(JSON.parse(reorderedResult.stdout).summary.presentationChanged, false);
 });
 
 test('change navigator order is exact-ID based, complete, unique, and stable', () => {
