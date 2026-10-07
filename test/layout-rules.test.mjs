@@ -2065,6 +2065,18 @@ test('sequence: long self-message labels diagnose adjacent lifeline clearance', 
   assert.match(stderr, /Self-message "a very long self-message label" label crosses the "Cache" lifeline/);
 });
 
+test('sequence: self-message at timeline boundary diagnoses loop overflow', () => {
+  const diagram = {
+    schema_version: 1, diagram_type: 'sequence',
+    meta: { title: 'Self message boundary', output: 'self-boundary.html', quality_profile: 'showcase', viewBox: [920, 620] },
+    participants: [{ id: 'worker', type: 'backend', label: 'Worker' }],
+    messages: [{ id: 'retry', from: 'worker', to: 'worker', y: 537, label: 'retry()' }],
+  };
+  const { code, stderr } = render('sequence', diagram);
+  assert.notEqual(code, 0);
+  assert.match(stderr, /Self-message "retry\(\)" loop extends below the readable timeline/);
+});
+
 test('sequence: a message cannot masquerade as a time-segment border', () => {
   const d = load('sequence');
   d.messages.find((message) => message.id === 'cache-read').y = d.segments[1].from;

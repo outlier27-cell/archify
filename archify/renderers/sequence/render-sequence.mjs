@@ -348,6 +348,12 @@ function validateSequence() {
     routeHint: 'shorten the label, reorder participants, or enlarge meta.viewBox',
   }));
 
+  for (const message of asArray(sequence.messages)) {
+    if (message.from === message.to && typeof message.y === 'number' && message.y + 24 > layout.lifelineBottom) {
+      problems.push(`Self-message "${message.label}" loop extends below the readable timeline — move the message y upward.`);
+    }
+  }
+
   for (const segment of asArray(sequence.segments)) {
     if (segment.to <= segment.from) {
       problems.push(`Segment "${segment.label}" has invalid y range (from ${segment.from} to ${segment.to}) — "to" must be greater than "from".`);
