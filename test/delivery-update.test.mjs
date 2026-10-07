@@ -102,6 +102,34 @@ globalThis.fetch = (_url, { signal }) => {
   assert.equal(fs.readFileSync(calls, 'utf8'), 'x');
 });
 
+test('cache startup time is deducted before the update fetch timeout starts', async (t) => {
+  const testFixture = fixture(t);
+  const calls = path.join(testFixture.root, 'fetch-calls');
+  const preload = path.join(testFixture.root, 'delayed-cache.mjs');
+  fs.writeFileSync(preload, `import fs from 'node:fs/promises';
+import syncFs from 'node:fs';
+const readFile = fs.readFile;
+let delayed = false;
+fs.readFile = async (...args) => {
+  if (!delayed && String(args[0]) === ${JSON.stringify(testFixture.releasePath)}) {
+    delayed = true;
+    await new Promise(resolve => setTimeout(resolve, 300));
+  }
+  return readFile.apply(fs, args);
+};
+globalThis.fetch = (_url, { signal }) => {
+  syncFs.appendFileSync(${JSON.stringify(calls)}, 'x');
+  return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason)));
+};
+`);
+  const slowEnv = { ...env(testFixture), NODE_OPTIONS: `--import=${pathToFileURL(preload).href}` };
+  const first = await startDeliveryUpdateCheck({ env: slowEnv, deadlineMs: 800 });
+  assert.equal(first.reason, 'check-failed');
+  const second = await startDeliveryUpdateCheck({ env: env(testFixture), deadlineMs: 800 });
+  assert.equal(second.status, 'unavailable');
+  assert.equal(fs.readFileSync(calls, 'utf8'), 'x');
+});
+
 test('a synchronous renderer delay does not turn a completed check into a timeout', async (t) => {
   const testFixture = fixture(t);
   await seed(testFixture);
