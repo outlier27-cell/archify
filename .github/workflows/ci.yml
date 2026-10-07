@@ -31,7 +31,7 @@ jobs:
           CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
       - name: Check README content for documentation-only changes
         if: steps.classify.outputs.scope == 'docs'
-        run: node --test archify/test/readme-showcase.test.mjs
+        run: node --test test/readme-showcase.test.mjs
 
   test:
     needs: scope
@@ -57,15 +57,15 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-          cache-dependency-path: archify/package-lock.json
+          cache-dependency-path: |
+            package-lock.json
+            archify/package-lock.json
       - name: Install renderer dependencies
         if: needs.scope.outputs.scope == 'full'
-        run: npm ci
-        working-directory: archify
+        run: npm ci && npm --prefix archify ci
       - name: Golden-file + schema tests
         if: needs.scope.outputs.scope == 'full'
         run: npm test
-        working-directory: archify
       - name: Verify community Hermes adapter
         if: needs.scope.outputs.scope == 'full' && matrix.node-version == 22
         run: node --test integrations/hermes-agent/test/plugin-contract.test.mjs
@@ -103,17 +103,14 @@ jobs:
       - name: Decode a real motion export and reject static frames
         if: needs.scope.outputs.scope == 'full'
         run: npm run test:webm
-        working-directory: archify
         env:
           ARCHIFY_CHROME: ${{ steps.setup-chrome.outputs.chrome-path }}
       - name: Install browser test dependencies
         if: needs.scope.outputs.scope == 'full'
-        run: npm ci --ignore-scripts --no-audit --no-fund
-        working-directory: archify
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm --prefix archify ci --ignore-scripts
       - name: Run shared browser regression gate
         if: needs.scope.outputs.scope == 'full'
         run: npm run test:browser
-        working-directory: archify
         env:
           ARCHIFY_CHROME: ${{ steps.setup-chrome.outputs.chrome-path }}
           ARCHIFY_CHROME_NO_SANDBOX: '1'
@@ -261,22 +258,19 @@ jobs:
         run: node scripts/package-smoke.mjs
       - name: Install delivery-lock test dependencies
         if: needs.scope.outputs.scope == 'full' && runner.os != 'Linux'
-        run: npm ci --ignore-scripts
-        working-directory: archify
+        run: npm ci --ignore-scripts && npm --prefix archify ci --ignore-scripts
       - name: Verify delivery-lock ownership with real subprocesses
         if: needs.scope.outputs.scope == 'full' && runner.os != 'Linux'
         run: >-
           node --test
           --test-name-pattern="cli: portable delivery lock:"
           test/cli.test.mjs
-        working-directory: archify
       - name: Verify macOS opener stays behind delivery-lock release
         if: needs.scope.outputs.scope == 'full' && runner.os == 'macOS'
         run: >-
           node --test
           --test-name-pattern="cli: lock release failure does not invoke the requested opener"
           test/cli.test.mjs
-        working-directory: archify
 
   website:
     needs: scope
@@ -301,7 +295,8 @@ jobs:
           chrome-version: stable
           install-dependencies: true
       - name: Verify built website navigation and language continuity
-        run: node --test --test-name-pattern='real Chrome' archify/test/site-language-continuity.test.mjs
+        run: npm run test:browser
+        working-directory: website
         env:
           ARCHIFY_SITE_ROOT: ${{ github.workspace }}/website/dist
           ARCHIFY_SITE_INTEGRATION: '1'
@@ -340,8 +335,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Install test dependencies
         if: needs.scope.outputs.scope == 'full'
-        run: npm ci --ignore-scripts
-        working-directory: archify
+        run: npm ci --ignore-scripts && npm --prefix archify ci --ignore-scripts
       - name: Provision controlled Windows path fixtures
         if: needs.scope.outputs.scope == 'full'
         shell: pwsh

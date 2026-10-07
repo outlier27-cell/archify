@@ -1,5 +1,6 @@
 ---
 import '../styles/utilities.css';
+import siteCss from '../styles/site.css?raw';
 interface Props { head: string; css: string }
 const { head, css } = Astro.props;
 ---
@@ -7,7 +8,8 @@ const { head, css } = Astro.props;
 <html lang="en">
 <head>
   <Fragment set:html={head} />
-  <style is:inline set:html={css}></style>
+  <script is:inline>(function () { var t = 'light'; try { t = localStorage.getItem('archify-site-theme') || 'light'; } catch (_) {} document.documentElement.setAttribute('data-theme', t === 'dark' ? 'dark' : 'light'); })();</script>
+  <style is:inline set:html={siteCss + css}></style>
 </head>
 <body><slot /></body>
 </html>

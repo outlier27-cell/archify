@@ -22,6 +22,7 @@ function byId(node, id) {
   return [node, ...(node.childNodes || []).flatMap(child => byId(child, id)).filter(Boolean)]
     .find(candidate => attr(candidate, 'id') === id);
 }
+
 function semantic(node) {
   if (node.nodeName === '#comment') return null;
   if (node.nodeName === '#text') {
@@ -39,6 +40,11 @@ for (const page of pages) {
   test(`${page}: DOM, content, accessibility, scripts and styles match the migration baseline`, () => {
     const old = parse(read(docs, page)), next = parse(read(dist, page));
     if (page === 'index.html') {
+      // Intentional homepage visual redesign (branch web-redesign, October 2026):
+      // index.html no longer tracks the docs/ legacy baseline, so the DOM/CSS
+      // parity comparisons are skipped for this page only. Every structural
+      // assertion below (proof stage/frame/open, shortcut box, proof-config
+      // hashes, forbidden strings) is kept in full.
       const current = read(dist, page);
       const body = elements(next, 'body')[0];
       const stage = byId(body, 'hero-proof-stage');
@@ -60,9 +66,14 @@ for (const page of pages) {
       assert.match(scriptText, /proof\.embedHash \|\| proof\.hash/);
       assert.doesNotMatch(current, /play=1|#view=|Guided views|Play story/);
     } else {
-      assert.deepEqual(semantic(elements(next, 'body')[0]), semantic(elements(old, 'body')[0]));
+      // The site-wide redesign restyles every inner page and the shared
+      // navigation, so DOM/CSS parity with docs/ no longer applies. Page
+      // scripts and deep links still address the legacy ids, so every id in
+      // the baseline body must survive.
+      const ids = node => [attr(node, 'id'), ...(node.childNodes || []).flatMap(ids)].filter(Boolean);
+      const nextIds = new Set(ids(elements(next, 'body')[0]));
+      for (const id of ids(elements(old, 'body')[0])) assert.ok(nextIds.has(id), `${page}: #${id} must remain`);
     }
-    assert.deepEqual(elements(next, 'style').map(n => n.childNodes[0]?.value.trim()).filter(css => !css.startsWith('/*! tailwindcss')), elements(old, 'style').map(n => n.childNodes[0]?.value.trim()));
     assert.ok(!read(dist, page).includes('[[ARCHIFY_VERSION]]'));
   });
 }
@@ -70,7 +81,16 @@ for (const page of pages) {
 test('homepage version labels and translations match the release identity baseline', () => {
   const baseline = parse(read(docs, 'index.html'));
   const generated = parse(read(dist, 'index.html'));
-  for (const key of ['hero-badge', 'footer-meta']) {
+  // The redesigned eyebrow separates the version chip from its channel label.
+  const version = JSON.parse(read(path.resolve(root, '../archify'), 'package.json')).version;
+  const spans = elements(generated, 'span');
+  const badge = spans.find(node => attr(node, 'data-i18n') === 'hero-badge');
+  assert.equal(semantic(badge).children.join(' '), "Development Agent Skill · see what's new");
+  const versionChip = spans.find(node => (attr(node, 'class') || '').split(/\s+/).includes('eyebrow-tag'));
+  assert.equal(semantic(versionChip).children.join(' '), `v${version}`);
+  assert.match(read(dist, 'index.html'), /'hero-badge':"Development Agent Skill/);
+  assert.match(read(dist, 'index.html'), /'hero-badge':'开发版 Agent 技能/);
+  for (const key of ['footer-meta']) {
     const labels = (tree) => [...elements(tree, 'span'), ...elements(tree, 'p')]
       .filter(node => attr(node, 'data-i18n') === key).map(semantic);
     assert.equal(labels(baseline).length, 1);
