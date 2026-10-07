@@ -12,7 +12,8 @@ assert.ok(output, 'Pass an output directory outside the repository');
 fs.mkdirSync(output, { recursive: true });
 const bottomSelector = 'html[data-reader-rail="bottom"]';
 const comparisonSelector = 'html:is([data-reader-rail="bottom"], [data-node-index-prototype-narrow])';
-const css = fs.readFileSync(path.join(experiment, 'prototype.css'), 'utf8').replaceAll(bottomSelector, comparisonSelector);
+const variants = new Map([['columns', ''], ...[['rows', 'prototype.css'], ['compact', 'compact.css'], ['continuation', 'continuation.css']]
+  .map(([name, file]) => [name, fs.readFileSync(path.join(experiment, file), 'utf8').replaceAll(bottomSelector, comparisonSelector)])]);
 const fixtures = new Map([['sample-web-app', fs.readFileSync(path.join(root, 'examples/web-app-rendered.html'), 'utf8')]]);
 const stress = {
   schema_version: 1, diagram_type: 'architecture',
@@ -44,13 +45,14 @@ try {
       for (const theme of ['light', 'dark']) {
         let baseline;
         let baselineInteraction;
-        for (const candidate of [false, true]) {
+        for (const [variant, css] of variants) {
+          const candidate = variant !== 'columns';
           // Expose the existing bottom CSS under a separate experiment attribute
           // at narrow widths; the reader does not own or clear this attribute.
           const comparison = original.replaceAll(bottomSelector, comparisonSelector).replace('</head>',
             '<script>if(innerWidth<768)document.documentElement.setAttribute("data-node-index-prototype-narrow", "")</script></head>');
           const html = candidate ? comparison.replace('</head>', `<style>${css}</style></head>`) : comparison;
-          const label = `${name}-${width}-${theme}-${candidate ? 'rows' : 'columns'}`;
+          const label = `${name}-${width}-${theme}-${variant}`;
           const artifact = path.join(output, `${label}.html`);
           fs.writeFileSync(artifact, html);
           await send('Emulation.setDeviceMetricsOverride', { width, height: 900, deviceScaleFactor: 1, mobile: width < 768 });

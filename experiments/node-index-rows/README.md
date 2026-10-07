@@ -1,6 +1,6 @@
 # Bottom Node index row prototype (#664)
 
-Review-only experiment from dev `7a3e1f3a`. It does not change the default
+Review-only experiment synchronized to dev `70a6dfa1`. It does not change the default
 viewer, generated template, ZIP, or diagram renderers.
 
 `prototype.css` replaces bottom-index columns with full-width group sections
@@ -52,6 +52,41 @@ long-text narrow candidate. Group membership is clear; desktop whitespace is
 used better, and narrow labels wrap. Exact spacing remains open for review.
 
 Related issue: https://github.com/tt-a1i/archify/issues/664
+
+## Maintainer-requested alternatives
+
+The follow-up compares four variants under identical fixtures, cameras, themes
+and viewport sizes: existing columns, original rows, tighter content-sized rows
+(`compact.css`), and vertical columns inside each full-width group
+(`continuation.css`). In the continuation variant, the group heading spans the
+entire group and the DOM order flows down a column then into the next column.
+The Sample Web App AWS group now uses four columns of two entries instead of
+one tall list. No production style or default is changed.
+
+All 32 browser comparisons pass the same text/order/color, SVG, width, clipping,
+hover and click checks. Existing font sizes are preserved. Native keyboard
+preview remains outside these assertions, as documented above.
+
+| Fixture / width | Columns | Original rows | Compact rows | Group columns |
+| --- | ---: | ---: | ---: | ---: |
+| Sample / 1440 | 338.69 | 289.38 | 228.94 | 291.38 |
+| Long labels / 1440 | 852.69 | 610.38 | 773.38 | 559.38 |
+| Sample / 390 | 435.25 | 667.38 | 663.38 | 659.38 |
+| Long labels / 390 | 934.25 | 1726.38 | 1527.38 | 1686.38 |
+
+Panel heights are CSS pixels and match across light/dark themes. Compact rows
+work best for short names/descriptions; long bilingual descriptions consume
+more height than original rows. Group columns use less desktop height for the
+uneven long-label fixture but retain the taller, untruncated narrow presentation.
+These are measurable tradeoffs for maintainer selection, not a claimed universal
+winner. Desktop Sample compact/group-column screenshots were visually inspected.
+
+| Fixture / width | Compact rows | Group columns |
+| --- | --- | --- |
+| Sample / 1440 | [Compact](screenshots/sample-web-app-1440-light-compact.png) | [Columns](screenshots/sample-web-app-1440-light-continuation.png) |
+| Long labels / 1440 | [Compact](screenshots/stress-1440-light-compact.png) | [Columns](screenshots/stress-1440-light-continuation.png) |
+| Sample / 390 | [Compact](screenshots/sample-web-app-390-light-compact.png) | [Columns](screenshots/sample-web-app-390-light-continuation.png) |
+| Long labels / 390 | [Compact](screenshots/stress-390-light-compact.png) | [Columns](screenshots/stress-390-light-continuation.png) |
 
 ## Checked-in comparisons
 
