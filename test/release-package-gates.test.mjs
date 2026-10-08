@@ -264,9 +264,13 @@ test('GitHub Pages deploys the verified website artifact only after every reposi
     'v4.3.3',
   );
   assert.match(website, /name: website-dist/);
-  const browser = workflowJob(workflow, 'webm-artifact');
+  const browser = workflowJob(workflow, 'browser-regression');
   assert.match(browser, /Run shared browser regression gate/);
-  assert.match(browser, /npm run test:browser/);
+  assert.match(browser, /npm run test:browser -- --shard=\$\{\{ matrix\.shard \}\}\/2/);
+  const media = workflowJob(workflow, 'webm-artifact');
+  assert.match(media, /needs: \[scope, browser-regression, webm-decode\]/);
+  assert.match(media, /test "\$BROWSER_RESULT" = success/);
+  assert.match(media, /test "\$WEBM_RESULT" = success/);
   const renderer = workflowJob(workflow, 'test');
   assert.match(renderer, /Verify community Hermes adapter/);
   const packageSmoke = workflowJob(workflow, 'package-smoke');

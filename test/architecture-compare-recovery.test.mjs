@@ -9,8 +9,6 @@ import { fileURLToPath } from 'node:url';
 
 const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'archify');
 const cli = path.join(skillRoot, 'bin/archify.mjs');
-const base = path.join(skillRoot, 'examples/checkout-platform.base.architecture.json');
-const head = path.join(skillRoot, 'examples/checkout-platform.head.architecture.json');
 const hash = (bytes) => createHash('sha256').update(bytes).digest('hex');
 const cases = [
   { name: 'successful replacement cleans staging', failures: [] },
@@ -30,6 +28,23 @@ const cases = [
 function fixture(t) {
   const root = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'archify-compare-recovery-')));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  // Recovery exercises publication and file identity, not checkout-platform layout.
+  // Keep real CLI-rendered artifacts while minimizing each old/candidate render.
+  const base = path.join(root, 'base.json');
+  const head = path.join(root, 'head.json');
+  const graph = {
+    schema_version: 1, diagram_type: 'architecture',
+    meta: { title: 'Recovery fixture', output: 'review.html' },
+    components: [
+      { id: 'api', type: 'backend', label: 'API', pos: [80, 80], size: [160, 80] },
+      { id: 'store', type: 'database', label: 'Store', pos: [380, 80], size: [160, 80] },
+    ],
+    connections: [{ id: 'write', from: 'api', to: 'store', label: 'write' }],
+  };
+  fs.writeFileSync(base, JSON.stringify(graph));
+  const candidate = structuredClone(graph);
+  candidate.components[1].label = 'Updated store';
+  fs.writeFileSync(head, JSON.stringify(candidate));
   const targets = { html: path.join(root, 'review.html'), receipt: path.join(root, 'review.receipt.json') };
   const run = (preload, newHead = head, json = true) => spawnSync(process.execPath, [
     ...(preload ? ['--require', preload] : []), cli, 'compare', 'architecture', base, newHead,
@@ -41,13 +56,13 @@ function fixture(t) {
   assert.equal(initial.status, 0, initial.stderr || initial.stdout);
   const old = Object.fromEntries(Object.entries(targets).map(([key, file]) => [key, fs.readFileSync(file)]));
   assert.equal(JSON.parse(old.receipt).artifact.sha256, hash(old.html));
-  return { root, targets, old, run };
+  return { root, targets, old, run, head };
 }
 
 test('compare recovery: human diagnostics identify the retained backup and target', { timeout: 70000 }, (t) => {
   const data = fixture(t);
   const { preload } = inject(data, ['commit-receipt', 'restore-html']);
-  const result = data.run(preload, head, false);
+  const result = data.run(preload, data.head, false);
   assert.ifError(result.error);
   assert.equal(result.status, 1);
   assert.equal(result.stdout.trim(), '');

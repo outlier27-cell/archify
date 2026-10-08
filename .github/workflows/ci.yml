@@ -17,9 +17,18 @@ jobs:
       scope: ${{ steps.classify.outputs.scope }}
       website: ${{ steps.classify.outputs.website }}
     steps:
+      # Classification compares two trees, not their shared history.
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
-          fetch-depth: 0
+          fetch-depth: 1
+      - name: Fetch PR comparison base
+        if: github.event_name == 'pull_request'
+        shell: bash
+        env:
+          CI_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          [[ "$CI_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          git fetch --no-tags --depth=1 origin "$CI_BASE_SHA"
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
         with:
           node-version: 22
@@ -63,14 +72,57 @@ jobs:
       - name: Install renderer dependencies
         if: needs.scope.outputs.scope == 'full'
         run: npm ci && npm --prefix archify ci
-      - name: Golden-file + schema tests
-        if: needs.scope.outputs.scope == 'full'
+      - name: Complete regression suite on canonical Node
+        if: needs.scope.outputs.scope == 'full' && matrix.node-version == 22
         run: npm test
+      - name: Supported Node runtime compatibility
+        if: needs.scope.outputs.scope == 'full' && matrix.node-version != 22
+        run: npm run test:compat
       - name: Verify community Hermes adapter
         if: needs.scope.outputs.scope == 'full' && matrix.node-version == 22
         run: node --test integrations/hermes-agent/test/plugin-contract.test.mjs
 
-  webm-artifact:
+  browser-regression:
+    needs: scope
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - name: Require successful scope checks
+        env:
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          CI_SCOPE: ${{ needs.scope.outputs.scope }}
+        shell: bash
+        run: |
+          test "$SCOPE_RESULT" = success
+          case "$CI_SCOPE" in docs|full) ;; *) exit 1 ;; esac
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        if: needs.scope.outputs.scope == 'full'
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        if: needs.scope.outputs.scope == 'full'
+        with:
+          node-version: 22
+      - name: Provision a known Chrome runtime
+        if: needs.scope.outputs.scope == 'full'
+        id: setup-chrome
+        uses: browser-actions/setup-chrome@48ad923757ca74d66703209fe939badbdf80f2f4 # v2.2.0
+        with:
+          chrome-version: stable
+          install-dependencies: true
+      - name: Install browser test dependencies
+        if: needs.scope.outputs.scope == 'full'
+        run: npm ci --ignore-scripts --no-audit --no-fund && npm --prefix archify ci --ignore-scripts
+      - name: Run shared browser regression gate
+        if: needs.scope.outputs.scope == 'full'
+        run: npm run test:browser -- --shard=${{ matrix.shard }}/2
+        env:
+          ARCHIFY_CHROME: ${{ steps.setup-chrome.outputs.chrome-path }}
+          ARCHIFY_CHROME_NO_SANDBOX: '1'
+
+  webm-decode:
     needs: scope
     if: always() && !cancelled()
     runs-on: ubuntu-latest
@@ -105,15 +157,24 @@ jobs:
         run: npm run test:webm
         env:
           ARCHIFY_CHROME: ${{ steps.setup-chrome.outputs.chrome-path }}
-      - name: Install browser test dependencies
-        if: needs.scope.outputs.scope == 'full'
-        run: npm ci --ignore-scripts --no-audit --no-fund && npm --prefix archify ci --ignore-scripts
-      - name: Run shared browser regression gate
-        if: needs.scope.outputs.scope == 'full'
-        run: npm run test:browser
+
+  webm-artifact:
+    needs: [scope, browser-regression, webm-decode]
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every browser and WebM gate to succeed
         env:
-          ARCHIFY_CHROME: ${{ steps.setup-chrome.outputs.chrome-path }}
-          ARCHIFY_CHROME_NO_SANDBOX: '1'
+          SCOPE_RESULT: ${{ needs.scope.result }}
+          CI_SCOPE: ${{ needs.scope.outputs.scope }}
+          BROWSER_RESULT: ${{ needs.browser-regression.result }}
+          WEBM_RESULT: ${{ needs.webm-decode.result }}
+        shell: bash
+        run: |
+          test "$SCOPE_RESULT" = success
+          case "$CI_SCOPE" in docs|full) ;; *) exit 1 ;; esac
+          test "$BROWSER_RESULT" = success
+          test "$WEBM_RESULT" = success
 
   zip-freshness:
     needs: scope

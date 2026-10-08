@@ -13,6 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(__dirname, '..', 'archify');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-viewer-chrome-layout-'));
 const chromePath = process.env.ARCHIFY_CHROME ? findChrome() : null;
+const renderedArtifacts = new Map();
 
 const CASES = {
   architecture: 'web-app.architecture.json',
@@ -23,7 +24,9 @@ const CASES = {
 };
 
 function render(mode, example) {
-  const output = path.join(tmp, `${mode}.html`);
+  const key = JSON.stringify([mode, example]);
+  if (renderedArtifacts.has(key)) return renderedArtifacts.get(key);
+  const output = path.join(tmp, `${mode}-${renderedArtifacts.size}.html`);
   execFileSync(process.execPath, [
     path.join(skillRoot, 'bin', 'archify.mjs'),
     'render',
@@ -31,6 +34,7 @@ function render(mode, example) {
     path.join(skillRoot, 'examples', example),
     output,
   ]);
+  renderedArtifacts.set(key, output);
   return output;
 }
 
