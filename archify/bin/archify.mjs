@@ -2253,9 +2253,6 @@ function runNode(args, options = {}) {
     maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER,
     env: options.env ? { ...process.env, ...options.env } : process.env,
   });
-  // The child can exit before a piped-output overflow is observed. A capture
-  // error still means the operation failed, even when its exit status is zero.
-  if (result.error && result.status === 0) result.status = 1;
   return result;
 }
 
