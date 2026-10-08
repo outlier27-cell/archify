@@ -21,7 +21,6 @@ const testFiles = [
   'sequence-width-default-browser.test.mjs',
   'compact-header-clearance.test.mjs',
   'architecture-reading-size-browser.test.mjs',
-  'architecture-typography-scale-browser.test.mjs',
   'export-cleanup-browser.test.mjs',
   'i18n.test.mjs',
   'offline-font-browser.test.mjs',
@@ -42,6 +41,7 @@ const testFiles = [
   'repository-evidence-types-browser.test.mjs',
   'tree-branches-browser.test.mjs',
   'class-motion-browser.test.mjs',
+  'architecture-typography-scale-browser.test.mjs',
 ];
 
 let options;
