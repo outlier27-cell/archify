@@ -1774,7 +1774,8 @@ test('an empty precheck snapshot cannot start a second concurrent network reques
 
   const delayedPrecheck = checkForUpdate(options(testFixture, fetchImpl));
   await pause.reached;
-  const claimedCheck = checkForUpdate(options(testFixture, fetchImpl));
+  // This fetch stays pending while the competing filesystem precheck resumes.
+  const claimedCheck = checkForUpdate(options(testFixture, fetchImpl, { timeoutMs: 2_000 }));
   await fetchStarted;
   pause.release();
   assert.deepEqual(await delayedPrecheck, { status: 'silent', reason: 'check-in-progress' });
@@ -2150,11 +2151,13 @@ test('a snooze for a superseded release never suppresses the newer candidate', a
   let releaseRefresh;
   let markRefreshStarted;
   const refreshStarted = new Promise((resolve) => { markRefreshStarted = resolve; });
+  // Hold this request across the overlapping reader and preference operations.
   const refresh = checkForUpdate(options(testFixture, async () => {
     markRefreshStarted();
     return new Promise((resolve) => { releaseRefresh = resolve; });
   }, {
     now: () => baseTime + (73 * 60 * 60 * 1_000),
+    timeoutMs: 2_000,
   }));
   await refreshStarted;
 

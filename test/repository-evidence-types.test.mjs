@@ -3,7 +3,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { startPreview } from '../archify/bin/preview.mjs';
 
@@ -42,9 +42,23 @@ function evidencePayload(html) {
   return JSON.parse(match[1]);
 }
 
-// A throwaway origin-matched checkout plus the typed diagram that points at it.
-function fixture({ type, collection, example, first }) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-evidence-types-'));
+function temporaryDirectory(t, prefix) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return root;
+}
+
+// Initialize identical source history once. Each test copies the whole checkout,
+// including .git, so changing its origin or index cannot affect another test.
+let sourceSeed;
+let seedRoot;
+after(() => {
+  if (seedRoot) fs.rmSync(seedRoot, { recursive: true, force: true });
+});
+function repositorySeed() {
+  if (sourceSeed) return sourceSeed;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-evidence-seed-'));
+  seedRoot = root;
   fs.mkdirSync(path.join(root, 'src', 'nested'), { recursive: true });
   fs.writeFileSync(path.join(root, 'src', 'router.js'), 'export function route(input) {\n  return input.kind;\n}\n');
   fs.writeFileSync(path.join(root, 'src', 'store.js'), 'export const store = new Map();\n');
@@ -55,6 +69,17 @@ function fixture({ type, collection, example, first }) {
   git(root, 'add', '.');
   git(root, 'commit', '-m', 'fixture');
   const revision = git(root, 'rev-parse', 'HEAD');
+  sourceSeed = { root, revision };
+  return sourceSeed;
+}
+
+// A throwaway origin-matched checkout plus the typed diagram that points at it.
+function fixture(t, { type, collection, example, first }) {
+  const seed = repositorySeed();
+  const root = temporaryDirectory(t, 'archify-evidence-types-');
+  // cpSync copies files rather than hardlinking them or sharing a Git common dir.
+  fs.cpSync(seed.root, root, { recursive: true });
+  const { revision } = seed;
 
   const diagram = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', example), 'utf8'));
   diagram.meta.repository = { url: 'https://github.com/example/evidence-repo', revision };
@@ -73,8 +98,8 @@ function fixture({ type, collection, example, first }) {
 for (const shape of TYPES) {
   const { type, collection, first } = shape;
 
-  test(`${type} repository evidence is revision-verified, receipt-backed, and keyed by node id`, () => {
-    const data = fixture(shape);
+  test(`${type} repository evidence is revision-verified, receipt-backed, and keyed by node id`, (t) => {
+    const data = fixture(t, shape);
     const output = path.join(data.root, `verified.${type}.html`);
     const result = run(['deliver', type, data.input, output, '--repo-root', data.root, '--json']);
     assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -107,8 +132,8 @@ for (const shape of TYPES) {
     assert.doesNotMatch(svg, /src\/router\.js|github\.com\/example\/evidence-repo|source-evidence/);
   });
 
-  test(`${type} repository evidence applies every architecture verification`, () => {
-    const data = fixture(shape);
+  test(`${type} repository evidence applies every architecture verification`, (t) => {
+    const data = fixture(t, shape);
     const output = path.join(data.root, `must-stay.${type}.html`);
     fs.writeFileSync(output, 'trusted previous artifact');
     const deliver = (...args) => run(['deliver', type, data.input, output, ...args, '--json']);
@@ -184,8 +209,8 @@ for (const shape of TYPES) {
     assert.equal(fs.readFileSync(output, 'utf8'), 'trusted previous artifact');
   });
 
-  test(`${type} duplicate evidence node IDs cannot replace a trusted artifact`, () => {
-    const data = fixture(shape);
+  test(`${type} duplicate evidence node IDs cannot replace a trusted artifact`, (t) => {
+    const data = fixture(t, shape);
     const duplicate = structuredClone(data.node);
     duplicate.sources = [{ path: 'src/store.js', line: 1 }];
     data.diagram[collection].push(duplicate);
@@ -221,8 +246,8 @@ for (const shape of TYPES) {
     assert.equal(fs.readFileSync(output, 'utf8'), 'trusted previous artifact');
   });
 
-  test(`${type} repository evidence honors Gitee and GitLab links and local-only mode`, () => {
-    const data = fixture(shape);
+  test(`${type} repository evidence honors Gitee and GitLab links and local-only mode`, (t) => {
+    const data = fixture(t, shape);
     const output = path.join(data.root, `provider.${type}.html`);
 
     data.diagram.meta.repository = { url: 'https://gitee.com/example/evidence-repo', revision: data.revision, provider: 'gitee' };
@@ -262,8 +287,8 @@ for (const shape of TYPES) {
     assert.ok(evidence.nodes[first].every((source) => !Object.hasOwn(source, 'href')));
   });
 
-  test(`${type} evidence diagnostics point at its own node collection`, () => {
-    const data = fixture(shape);
+  test(`${type} evidence diagnostics point at its own node collection`, (t) => {
+    const data = fixture(t, shape);
     data.node.sources = [{ path: 'src/missing.js' }];
     data.write();
     const result = run(['validate', type, data.input, '--repo-root', data.root, '--json']);
@@ -277,8 +302,8 @@ for (const shape of TYPES) {
     assert.ok(diagnostic.supportedFixes.length);
   });
 
-  test(`${type} sources stay bounded by the shared schema shape`, () => {
-    const data = fixture(shape);
+  test(`${type} sources stay bounded by the shared schema shape`, (t) => {
+    const data = fixture(t, shape);
     data.node.sources = [
       { path: 'src/router.js' },
       { path: 'src/router.js' },
@@ -297,8 +322,8 @@ for (const shape of TYPES) {
     assert.match(result.stderr, /must NOT have additional properties/);
   });
 
-  test(`${type} node sources require pinned repository metadata`, () => {
-    const data = fixture(shape);
+  test(`${type} node sources require pinned repository metadata`, (t) => {
+    const data = fixture(t, shape);
     delete data.diagram.meta.repository;
     data.write();
     const result = run(['validate', type, data.input, '--repo-root', data.root, '--json']);
@@ -308,8 +333,8 @@ for (const shape of TYPES) {
     ));
   });
 
-  test(`${type} repository metadata requires at least one verified source`, () => {
-    const data = fixture(shape);
+  test(`${type} repository metadata requires at least one verified source`, (t) => {
+    const data = fixture(t, shape);
     delete data.node.sources;
     data.write();
     const result = run(['validate', type, data.input, '--repo-root', data.root, '--json']);
@@ -340,9 +365,9 @@ test('repository evidence no longer rejects any supported diagram type', () => {
   );
 });
 
-test('ordinary typed artifacts still carry no repository evidence', () => {
+test('ordinary typed artifacts still carry no repository evidence', (t) => {
   for (const { type, example } of TYPES) {
-    const output = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'archify-no-evidence-types-')), `${type}.html`);
+    const output = path.join(temporaryDirectory(t, 'archify-no-evidence-types-'), `${type}.html`);
     const result = run(['render', type, path.join(skillRoot, 'examples', example), output]);
     assert.equal(result.status, 0, result.stderr);
     const html = fs.readFileSync(output, 'utf8');
@@ -361,9 +386,9 @@ async function waitForState(url, predicate, timeoutMs = 12000) {
   assert.fail(`preview did not settle; latest state: ${JSON.stringify(latest)}`);
 }
 
-test('live preview publishes verified evidence for a non-architecture type', { timeout: 20000 }, async () => {
+test('live preview publishes verified evidence for a non-architecture type', { timeout: 20000 }, async (t) => {
   const shape = TYPES.find(({ type }) => type === 'lifecycle');
-  const data = fixture(shape);
+  const data = fixture(t, shape);
   const output = path.join(data.root, 'preview.lifecycle.html');
   const preview = await startPreview({
     type: shape.type,
@@ -386,8 +411,8 @@ test('live preview publishes verified evidence for a non-architecture type', { t
   }
 });
 
-test('workflow migration verifies and preserves pinned source evidence before replacement', () => {
-  const data = fixture(TYPES.find(shape => shape.type === 'workflow'));
+test('workflow migration verifies and preserves pinned source evidence before replacement', (t) => {
+  const data = fixture(t, TYPES.find(shape => shape.type === 'workflow'));
   const repository = data.diagram.meta.repository;
   const legacy = JSON.parse(fs.readFileSync(path.join(skillRoot, '..', 'test', 'fixtures/v1-workflow-explicit-coordinates.workflow.json'), 'utf8'));
   legacy.meta.repository = repository;
