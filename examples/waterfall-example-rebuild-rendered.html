@@ -5316,17 +5316,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <!-- Legend -->
         <g data-legend="">
           <text x="28" y="747" class="t-primary" font-size="12" font-weight="650">Legend</text>
-          <g data-legend-semantic-kind="service:worker 1" data-legend-x="28" data-legend-baseline="767" data-legend-width="77">
+          <g data-legend-semantic-kind="service:worker 1" data-legend-x="28" data-legend-baseline="767" data-legend-width="87">
             <rect x="28" y="757" width="14" height="10" rx="2.5" class="c-frontend wf-solid" stroke-width="1.2"/>
             <text x="50" y="767" class="t-muted" font-size="13" font-weight="500">worker 1</text>
           </g>
-          <g data-legend-semantic-kind="service:worker 2" data-legend-x="127" data-legend-baseline="767" data-legend-width="77">
-            <rect x="127" y="757" width="14" height="10" rx="2.5" class="c-backend wf-solid" stroke-width="1.2"/>
-            <text x="149" y="767" class="t-muted" font-size="13" font-weight="500">worker 2</text>
+          <g data-legend-semantic-kind="service:worker 2" data-legend-x="137" data-legend-baseline="767" data-legend-width="87">
+            <rect x="137" y="757" width="14" height="10" rx="2.5" class="c-backend wf-solid" stroke-width="1.2"/>
+            <text x="159" y="767" class="t-muted" font-size="13" font-weight="500">worker 2</text>
           </g>
-          <g data-legend-semantic-kind="service:worker 3" data-legend-x="226" data-legend-baseline="767" data-legend-width="77">
-            <rect x="226" y="757" width="14" height="10" rx="2.5" class="c-database wf-solid" stroke-width="1.2"/>
-            <text x="248" y="767" class="t-muted" font-size="13" font-weight="500">worker 3</text>
+          <g data-legend-semantic-kind="service:worker 3" data-legend-x="246" data-legend-baseline="767" data-legend-width="87">
+            <rect x="246" y="757" width="14" height="10" rx="2.5" class="c-database wf-solid" stroke-width="1.2"/>
+            <text x="268" y="767" class="t-muted" font-size="13" font-weight="500">worker 3</text>
           </g>
         </g>
       </svg>
@@ -9923,11 +9923,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             document.documentElement.scrollHeight,
             document.body.scrollHeight
           ) - window.innerHeight - belowFold();
-          if (overflow > 1 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
+          // visual-check fails any page whose rounded-up height exceeds the
+          // viewport, so even a 1px remainder must be reduced or declared.
+          if (overflow > 0 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
             applyWidth(Math.max(minWidth, lastWidth - overflow * ratio - 4), minWidth);
             settledCap = lastWidth;
             html.setAttribute('data-reader-overflow', 'reduced');
-          } else if (overflow > 1) {
+          } else if (overflow > 0) {
             html.setAttribute('data-reader-overflow', 'authored');
           } else {
             html.removeAttribute('data-reader-overflow');

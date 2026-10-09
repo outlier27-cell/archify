@@ -5202,29 +5202,29 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <!-- Legend -->
         <g data-legend="" data-legend-bridge="">
           <text x="20" y="800" class="t-primary" font-size="12" font-weight="650">Legend</text>
-          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="User UI" data-legend-x="20" data-legend-baseline="820" data-legend-width="74">
+          <g data-legend-semantic-kind="frontend" data-legend-kind="frontend" data-legend-label="User UI" data-legend-x="20" data-legend-baseline="820" data-legend-width="76">
             <rect x="20" y="812" width="14" height="9" rx="2" class="c-frontend" stroke-width="1"/>
             <text x="42" y="820" class="t-muted" font-size="7.5" font-weight="500">User UI</text>
           </g>
-          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Agent logic" data-legend-x="101" data-legend-baseline="820" data-legend-width="91">
-            <rect x="101" y="812" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
-            <text x="123" y="820" class="t-muted" font-size="7.5" font-weight="500">Agent logic</text>
+          <g data-legend-semantic-kind="backend" data-legend-kind="backend" data-legend-label="Agent logic" data-legend-x="103" data-legend-baseline="820" data-legend-width="95">
+            <rect x="103" y="812" width="14" height="9" rx="2" class="c-backend" stroke-width="1"/>
+            <text x="125" y="820" class="t-muted" font-size="7.5" font-weight="500">Agent logic</text>
           </g>
-          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="Policy" data-legend-x="199" data-legend-baseline="820" data-legend-width="70">
-            <rect x="199" y="812" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
-            <text x="221" y="820" class="t-muted" font-size="7.5" font-weight="500">Policy</text>
+          <g data-legend-semantic-kind="security" data-legend-kind="security" data-legend-label="Policy" data-legend-x="205" data-legend-baseline="820" data-legend-width="71">
+            <rect x="205" y="812" width="14" height="9" rx="2" class="c-security" stroke-width="1"/>
+            <text x="227" y="820" class="t-muted" font-size="7.5" font-weight="500">Policy</text>
           </g>
-          <g data-legend-semantic-kind="messagebus" data-legend-kind="messagebus" data-legend-label="Tool action" data-legend-x="276" data-legend-baseline="820" data-legend-width="91">
-            <rect x="276" y="812" width="14" height="9" rx="2" class="c-messagebus" stroke-width="1"/>
-            <text x="298" y="820" class="t-muted" font-size="7.5" font-weight="500">Tool action</text>
+          <g data-legend-semantic-kind="messagebus" data-legend-kind="messagebus" data-legend-label="Tool action" data-legend-x="283" data-legend-baseline="820" data-legend-width="95">
+            <rect x="283" y="812" width="14" height="9" rx="2" class="c-messagebus" stroke-width="1"/>
+            <text x="305" y="820" class="t-muted" font-size="7.5" font-weight="500">Tool action</text>
           </g>
-          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="Cloud service" data-legend-x="374" data-legend-baseline="820" data-legend-width="100">
-            <rect x="374" y="812" width="14" height="9" rx="2" class="c-cloud" stroke-width="1"/>
-            <text x="396" y="820" class="t-muted" font-size="7.5" font-weight="500">Cloud service</text>
+          <g data-legend-semantic-kind="cloud" data-legend-kind="cloud" data-legend-label="Cloud service" data-legend-x="385" data-legend-baseline="820" data-legend-width="104">
+            <rect x="385" y="812" width="14" height="9" rx="2" class="c-cloud" stroke-width="1"/>
+            <text x="407" y="820" class="t-muted" font-size="7.5" font-weight="500">Cloud service</text>
           </g>
-          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="External system" data-legend-x="481" data-legend-baseline="820" data-legend-width="109">
-            <rect x="481" y="812" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
-            <text x="503" y="820" class="t-muted" font-size="7.5" font-weight="500">External system</text>
+          <g data-legend-semantic-kind="external" data-legend-kind="external" data-legend-label="External system" data-legend-x="496" data-legend-baseline="820" data-legend-width="113">
+            <rect x="496" y="812" width="14" height="9" rx="2" class="c-external" stroke-width="1"/>
+            <text x="518" y="820" class="t-muted" font-size="7.5" font-weight="500">External system</text>
           </g>
         </g>
       </svg>
@@ -9855,11 +9855,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             document.documentElement.scrollHeight,
             document.body.scrollHeight
           ) - window.innerHeight - belowFold();
-          if (overflow > 1 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
+          // visual-check fails any page whose rounded-up height exceeds the
+          // viewport, so even a 1px remainder must be reduced or declared.
+          if (overflow > 0 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
             applyWidth(Math.max(minWidth, lastWidth - overflow * ratio - 4), minWidth);
             settledCap = lastWidth;
             html.setAttribute('data-reader-overflow', 'reduced');
-          } else if (overflow > 1) {
+          } else if (overflow > 0) {
             html.setAttribute('data-reader-overflow', 'authored');
           } else {
             html.removeAttribute('data-reader-overflow');

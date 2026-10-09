@@ -5126,21 +5126,21 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <!-- Legend -->
         <g data-legend="">
           <text x="28" y="272" class="t-primary" font-size="12" font-weight="650">Legend</text>
-          <g data-legend-semantic-kind="service:checkout-api" data-legend-x="28" data-legend-baseline="292" data-legend-width="104">
+          <g data-legend-semantic-kind="service:checkout-api" data-legend-x="28" data-legend-baseline="292" data-legend-width="119">
             <rect x="28" y="282" width="14" height="10" rx="2.5" class="c-frontend wf-solid" stroke-width="1.2"/>
             <text x="50" y="292" class="t-muted" font-size="13" font-weight="500">checkout-api</text>
           </g>
-          <g data-legend-semantic-kind="service:identity" data-legend-x="154" data-legend-baseline="292" data-legend-width="77">
-            <rect x="154" y="282" width="14" height="10" rx="2.5" class="c-backend wf-solid" stroke-width="1.2"/>
-            <text x="176" y="292" class="t-muted" font-size="13" font-weight="500">identity</text>
+          <g data-legend-semantic-kind="service:identity" data-legend-x="169" data-legend-baseline="292" data-legend-width="87">
+            <rect x="169" y="282" width="14" height="10" rx="2.5" class="c-backend wf-solid" stroke-width="1.2"/>
+            <text x="191" y="292" class="t-muted" font-size="13" font-weight="500">identity</text>
           </g>
-          <g data-legend-semantic-kind="service:inventory" data-legend-x="253" data-legend-baseline="292" data-legend-width="84">
-            <rect x="253" y="282" width="14" height="10" rx="2.5" class="c-database wf-solid" stroke-width="1.2"/>
-            <text x="275" y="292" class="t-muted" font-size="13" font-weight="500">inventory</text>
+          <g data-legend-semantic-kind="service:inventory" data-legend-x="278" data-legend-baseline="292" data-legend-width="95">
+            <rect x="278" y="282" width="14" height="10" rx="2.5" class="c-database wf-solid" stroke-width="1.2"/>
+            <text x="300" y="292" class="t-muted" font-size="13" font-weight="500">inventory</text>
           </g>
-          <g data-legend-semantic-kind="service:payments" data-legend-x="359" data-legend-baseline="292" data-legend-width="77">
-            <rect x="359" y="282" width="14" height="10" rx="2.5" class="c-cloud wf-solid" stroke-width="1.2"/>
-            <text x="381" y="292" class="t-muted" font-size="13" font-weight="500">payments</text>
+          <g data-legend-semantic-kind="service:payments" data-legend-x="395" data-legend-baseline="292" data-legend-width="87">
+            <rect x="395" y="282" width="14" height="10" rx="2.5" class="c-cloud wf-solid" stroke-width="1.2"/>
+            <text x="417" y="292" class="t-muted" font-size="13" font-weight="500">payments</text>
           </g>
         </g>
       </svg>
@@ -9737,11 +9737,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             document.documentElement.scrollHeight,
             document.body.scrollHeight
           ) - window.innerHeight - belowFold();
-          if (overflow > 1 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
+          // visual-check fails any page whose rounded-up height exceeds the
+          // viewport, so even a 1px remainder must be reduced or declared.
+          if (overflow > 0 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
             applyWidth(Math.max(minWidth, lastWidth - overflow * ratio - 4), minWidth);
             settledCap = lastWidth;
             html.setAttribute('data-reader-overflow', 'reduced');
-          } else if (overflow > 1) {
+          } else if (overflow > 0) {
             html.setAttribute('data-reader-overflow', 'authored');
           } else {
             html.removeAttribute('data-reader-overflow');

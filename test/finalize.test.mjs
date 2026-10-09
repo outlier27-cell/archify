@@ -234,7 +234,7 @@ test('finalize stops at the failed gate and persists actionable failure evidence
   assert.deepEqual(finalized.summary.nextAction, {
     action: 'edit-in-place',
     candidate: input,
-    constraint: 'Preserve unaffected semantics and geometry; do not replace the whole candidate.',
+    constraint: 'Preserve unaffected semantics and geometry; apply each diagnostic\'s supportedFixes, or the fix its message names, and do not replace the whole candidate.',
     then: 'finalize-once',
   });
   assert.equal(finalized.receipt.diagnostics[0].evidence.intersection[1], 40);
@@ -1303,4 +1303,20 @@ test('runFinalize reads the capture limit from the supplied env, not process.env
 
   assert.equal(overflowed.receipt.stages.validate.status, 'fail');
   assert.equal(overflowed.receipt.stages.validate.receipt.diagnostics[0].code, 'artifact/check-output-limit');
+});
+
+test('compact review and repair guidance follow the mode and the failing diagnostics', () => {
+  const routeReview = { crossings: [{ left: { from: 'a', to: 'b' }, right: { from: 'c', to: 'd' } }], detours: [] };
+  const lifecycle = compactFinalizeReceipt({ ok: true, type: 'lifecycle', stages: { check: { receipt: { composition: {
+    metrics: { resolvedCrossovers: 1 }, routeReview,
+  } } } } }).visualReviewRecommendation;
+  assert.equal('hints' in lifecycle, false);
+  assert.doesNotMatch(lifecycle.repair, /architecture-layout-repair/);
+
+  const failure = (code) => compactFinalizeReceipt({
+    ok: false, status: 'fail', failedStage: 'validate', type: 'architecture',
+    diagnostics: [{ code, severity: 'error', message: code }],
+  }).nextAction.constraint;
+  assert.doesNotMatch(failure('composition/desktop-readability'), /architecture-layout-repair/);
+  assert.match(failure('composition/proper-crossing'), /architecture-layout-repair/);
 });
