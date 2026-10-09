@@ -57,8 +57,8 @@
       border: 1px solid var(--line-hi);
       border-radius: 14px;
       background: var(--paper-raised);
-      opacity: 0;
-      transform: translateY(18px);
+      opacity: 1;
+      transform: none;
       transition: opacity .5s var(--ease-out), transform .5s var(--ease-out), border-color .2s var(--ease-out), box-shadow .2s var(--ease-out);
     }
     .showcase-card.visible { opacity: 1; transform: translateY(0); }

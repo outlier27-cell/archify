@@ -5214,25 +5214,25 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <!-- Legend -->
         <g data-legend="" data-legend-bridge="">
           <text x="40" y="464" class="t-primary" font-size="12" font-weight="650">Legend</text>
-          <g data-legend-semantic-kind="emphasis" data-legend-x="40" data-legend-baseline="484" data-legend-width="103">
+          <g data-legend-semantic-kind="emphasis" data-legend-x="40" data-legend-baseline="484" data-legend-width="118">
             <path d="M 40 481 L 74 481" class="a-emphasis" stroke-width="1.8" marker-end="url(#arrowhead-emphasis)"/>
             <text x="83" y="484" class="t-muted" font-size="10" font-weight="500">primary data</text>
           </g>
-          <g data-legend-semantic-kind="security" data-legend-x="165" data-legend-baseline="484" data-legend-width="103">
-            <path d="M 165 481 L 199 481" class="a-security" stroke-width="1.4" marker-end="url(#arrowhead-security)"/>
-            <text x="208" y="484" class="t-muted" font-size="10" font-weight="500">policy / PII</text>
+          <g data-legend-semantic-kind="security" data-legend-x="180" data-legend-baseline="484" data-legend-width="118">
+            <path d="M 180 481 L 214 481" class="a-security" stroke-width="1.4" marker-end="url(#arrowhead-security)"/>
+            <text x="223" y="484" class="t-muted" font-size="10" font-weight="500">policy / PII</text>
           </g>
-          <g data-legend-semantic-kind="dashed" data-legend-x="290" data-legend-baseline="484" data-legend-width="98">
-            <path d="M 290 481 L 324 481" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
-            <text x="333" y="484" class="t-muted" font-size="10" font-weight="500">async batch</text>
+          <g data-legend-semantic-kind="dashed" data-legend-x="320" data-legend-baseline="484" data-legend-width="112">
+            <path d="M 320 481 L 354 481" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>
+            <text x="363" y="484" class="t-muted" font-size="10" font-weight="500">async batch</text>
           </g>
-          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="data store" data-legend-x="410" data-legend-baseline="484" data-legend-width="93">
-            <rect x="410" y="476" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
-            <text x="432" y="484" class="t-muted" font-size="10" font-weight="500">data store</text>
+          <g data-legend-semantic-kind="database" data-legend-kind="database" data-legend-label="data store" data-legend-x="454" data-legend-baseline="484" data-legend-width="105">
+            <rect x="454" y="476" width="14" height="9" rx="2" class="c-database" stroke-width="1"/>
+            <text x="476" y="484" class="t-muted" font-size="10" font-weight="500">data store</text>
           </g>
-          <g data-legend-semantic-kind="default" data-legend-x="525" data-legend-baseline="484" data-legend-width="88">
-            <path d="M 525 481 L 559 481" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
-            <text x="568" y="484" class="t-muted" font-size="10" font-weight="500">data flow</text>
+          <g data-legend-semantic-kind="default" data-legend-x="581" data-legend-baseline="484" data-legend-width="99">
+            <path d="M 581 481 L 615 481" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+            <text x="624" y="484" class="t-muted" font-size="10" font-weight="500">data flow</text>
           </g>
         </g>
       </svg>
@@ -9863,11 +9863,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             document.documentElement.scrollHeight,
             document.body.scrollHeight
           ) - window.innerHeight - belowFold();
-          if (overflow > 1 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
+          // visual-check fails any page whose rounded-up height exceeds the
+          // viewport, so even a 1px remainder must be reduced or declared.
+          if (overflow > 0 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
             applyWidth(Math.max(minWidth, lastWidth - overflow * ratio - 4), minWidth);
             settledCap = lastWidth;
             html.setAttribute('data-reader-overflow', 'reduced');
-          } else if (overflow > 1) {
+          } else if (overflow > 0) {
             html.setAttribute('data-reader-overflow', 'authored');
           } else {
             html.removeAttribute('data-reader-overflow');

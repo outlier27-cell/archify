@@ -64,9 +64,11 @@ test('real Skills CLI keeps source and ZIP installs scoped to the requested Skil
   // Use the repository's tracked-file stager: no node_modules, local Skills,
   // symlinks, or other developer files enter the installation source.
   stageCleanSkill({ repoRoot, destination: path.join(source, 'archify') });
-  const review = '.agents/skills/archify-review/SKILL.md';
-  fs.mkdirSync(path.dirname(path.join(source, review)), { recursive: true });
-  fs.copyFileSync(path.join(repoRoot, review), path.join(source, review));
+  for (const internal of fs.readdirSync(path.join(repoRoot, '.agents', 'skills'))) {
+    const skill = path.join('.agents', 'skills', internal, 'SKILL.md');
+    fs.mkdirSync(path.dirname(path.join(source, skill)), { recursive: true });
+    fs.copyFileSync(path.join(repoRoot, skill), path.join(source, skill));
+  }
   extractArchive(archive);
   let sequence = 0;
   function invoke(sourcePath, flags) {
@@ -99,7 +101,7 @@ test('real Skills CLI keeps source and ZIP installs scoped to the requested Skil
         assert.equal(result.status, 0, result.output);
         assert.match(result.output, /Found 1 skill\b/);
         assert.match(result.output, /Available Skills[\s\S]*\barchify\b/);
-        assert.doesNotMatch(result.output, /archify-review|YAML parse error/);
+        assert.doesNotMatch(result.output, /archify-review|archify-tuning|YAML parse error/);
         assert.deepEqual(installedNames(result.cwd), []);
       }
     });

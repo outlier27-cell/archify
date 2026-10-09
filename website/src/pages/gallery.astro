@@ -6,8 +6,9 @@ import Navigation from '../components/Navigation.astro';
 import head from '../data/gallery-head.html?raw';
 import css from '../styles/gallery.css?raw';
 import pageScript from '../scripts/gallery.js?raw';
+const { lang = 'en' } = Astro.props;
 ---
-<SiteLayout head={versioned(head)} css={css}>
+<SiteLayout page="gallery" lang={lang} head={versioned(head)} css={css}>
 
   <div class="grid-bg" aria-hidden="true"></div>
 
@@ -32,7 +33,7 @@ import pageScript from '../scripts/gallery.js?raw';
     <section class="controls" aria-label="Gallery controls">
       <div class="shell controls-inner">
         <div class="filter-group" role="group" aria-label="Filter diagrams by type">
-          <button class="filter-button" type="button" data-filter="all" aria-pressed="true" data-en="All / 12" data-zh="全部配方 / 12">All / 12</button>
+          <button class="filter-button" type="button" data-filter="all" aria-pressed="true" data-en={`All / ${cards.length}`} data-zh={`全部配方 / ${cards.length}`}>All / {cards.length}</button>
           <button class="filter-button" type="button" data-filter="architecture" aria-pressed="false" data-en="Architecture" data-zh="架构图">Architecture</button>
           <button class="filter-button" type="button" data-filter="workflow" aria-pressed="false" data-en="Workflow" data-zh="工作流">Workflow</button>
           <button class="filter-button" type="button" data-filter="sequence" aria-pressed="false" data-en="Sequence" data-zh="时序图">Sequence</button>

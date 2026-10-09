@@ -5146,13 +5146,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <!-- Legend -->
         <g data-legend="">
           <text x="24" y="394" class="t-primary" font-size="12" font-weight="650">Legend</text>
-          <g data-legend-semantic-kind="dependency" data-legend-x="24" data-legend-baseline="414" data-legend-width="104">
-            <rect class="cl-legend-hit" tabindex="0" role="img" aria-label="Depends on" x="18" y="399" width="116" height="22" rx="11"/><path d="M 26 410 L 56 410" class="a-default cl-relationship cl-dashed" stroke-width="1.5" marker-end="url(#cl-open)"/>
+          <g data-legend-semantic-kind="dependency" data-legend-x="24" data-legend-baseline="414" data-legend-width="117">
+            <rect class="cl-legend-hit" tabindex="0" role="img" aria-label="Depends on" x="18" y="399" width="129" height="22" rx="11"/><path d="M 26 410 L 56 410" class="a-default cl-relationship cl-dashed" stroke-width="1.5" marker-end="url(#cl-open)"/>
             <text x="66" y="414" class="t-muted" font-size="12" font-weight="500">Depends on</text>
           </g>
-          <g data-legend-semantic-kind="realization" data-legend-x="150" data-legend-baseline="414" data-legend-width="104">
-            <rect class="cl-legend-hit" tabindex="0" role="img" aria-label="Implements" x="144" y="399" width="116" height="22" rx="11"/><path d="M 152 410 L 182 410" class="a-default cl-relationship cl-dashed" stroke-width="1.5" marker-end="url(#cl-triangle)"/>
-            <text x="192" y="414" class="t-muted" font-size="12" font-weight="500">Implements</text>
+          <g data-legend-semantic-kind="realization" data-legend-x="163" data-legend-baseline="414" data-legend-width="117">
+            <rect class="cl-legend-hit" tabindex="0" role="img" aria-label="Implements" x="157" y="399" width="129" height="22" rx="11"/><path d="M 165 410 L 195 410" class="a-default cl-relationship cl-dashed" stroke-width="1.5" marker-end="url(#cl-triangle)"/>
+            <text x="205" y="414" class="t-muted" font-size="12" font-weight="500">Implements</text>
           </g>
         </g>
       </svg>
@@ -9749,11 +9749,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             document.documentElement.scrollHeight,
             document.body.scrollHeight
           ) - window.innerHeight - belowFold();
-          if (overflow > 1 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
+          // visual-check fails any page whose rounded-up height exceeds the
+          // viewport, so even a 1px remainder must be reduced or declared.
+          if (overflow > 0 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
             applyWidth(Math.max(minWidth, lastWidth - overflow * ratio - 4), minWidth);
             settledCap = lastWidth;
             html.setAttribute('data-reader-overflow', 'reduced');
-          } else if (overflow > 1) {
+          } else if (overflow > 0) {
             html.setAttribute('data-reader-overflow', 'authored');
           } else {
             html.removeAttribute('data-reader-overflow');

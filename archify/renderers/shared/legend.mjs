@@ -52,12 +52,18 @@ export function resolveLegend(config, catalog, presentKinds) {
   });
 }
 
+// Labels render slightly larger than the layout font size; measure the
+// rendered size so a long label cannot run into the next entry.
+function renderedLegendFontSize(fontSize) {
+  return fontSize < 8 ? fontSize + 0.5 : fontSize + 2;
+}
+
 function measuredEntryWidth(entry, fontSize, swatchGap) {
   const swatchWidth = entry.swatchWidth ?? 14;
   return Math.ceil(
     swatchWidth
     + swatchGap
-    + textUnits(entry.label) * fontSize * TEXT_ADVANCE_EM
+    + textUnits(entry.label) * renderedLegendFontSize(fontSize) * TEXT_ADVANCE_EM
     + (entry.interactive ? INTERACTIVE_BADGE_ALLOWANCE : 0)
     + (entry.trailingWidth ?? 0),
   );
