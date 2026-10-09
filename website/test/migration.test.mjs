@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parse } from 'parse5';
+import { parse, parseFragment } from 'parse5';
+import { CASES } from '../src/data/gallery-presentation.mjs';
+import { artifactMetadata, SEO_BLOCK_START, SEO_BLOCK_END, stripPublishedArtifactMetadata } from '../scripts/publish-seo.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const docs = path.resolve(root, '../docs');
@@ -55,8 +57,12 @@ for (const page of pages) {
       assert.ok(frame, 'homepage proof iframe must remain present');
       assert.ok(open, 'homepage proof link must remain present');
       assert.equal(shortcuts.length, 1, 'homepage shortcut card must remain present');
-      assert.equal(attr(frame, 'src'), 'gallery/artifacts/agent-tool-call.workflow.html?embed=1&theme=dark#focus=planner&reach=downstream');
-      assert.equal(attr(open, 'href'), 'gallery/artifacts/agent-tool-call.workflow.html?present=1#focus=planner&reach=downstream');
+      const base = elements(next, 'base');
+      assert.equal(base.length, 1);
+      assert.equal(attr(base[0], 'href'), './');
+      const baseUri = new URL(attr(base[0], 'href'), 'https://tt-a1i.github.io/archify/index.html');
+      assert.equal(new URL(attr(frame, 'src'), baseUri).href, 'https://tt-a1i.github.io/archify/gallery/artifacts/agent-tool-call.workflow.html?embed=1&theme=dark#focus=planner&reach=downstream');
+      assert.equal(new URL(attr(open, 'href'), baseUri).href, 'https://tt-a1i.github.io/archify/gallery/artifacts/agent-tool-call.workflow.html?present=1#focus=planner&reach=downstream');
       const proofScript = elements(next, 'script').find(script => (script.childNodes || []).some(child => (child.value || '').includes("hash: '#lens=backend~database'")));
       assert.ok(proofScript, 'homepage proof configuration must remain present');
       const scriptText = proofScript.childNodes.map(child => child.value || '').join('');
@@ -88,8 +94,11 @@ test('homepage version labels and translations match the release identity baseli
   assert.equal(semantic(badge).children.join(' '), "Development Agent Skill · see what's new");
   const versionChip = spans.find(node => (attr(node, 'class') || '').split(/\s+/).includes('eyebrow-tag'));
   assert.equal(semantic(versionChip).children.join(' '), `v${version}`);
-  assert.match(read(dist, 'index.html'), /'hero-badge':"Development Agent Skill/);
-  assert.match(read(dist, 'index.html'), /'hero-badge':'开发版 Agent 技能/);
+  const copyNode = byId(generated, 'site-copy');
+  assert.ok(copyNode, 'built page must carry its shared translation dictionary');
+  const copy = JSON.parse(copyNode.childNodes.map(child => child.value || '').join(''));
+  assert.equal(copy.en['hero-badge'], "Development Agent Skill · see what's new");
+  assert.equal(copy.zh['hero-badge'], '开发版 Agent 技能 · 查看更新');
   for (const key of ['footer-meta']) {
     const labels = (tree) => [...elements(tree, 'span'), ...elements(tree, 'p')]
       .filter(node => attr(node, 'data-i18n') === key).map(semantic);
@@ -101,25 +110,54 @@ test('homepage version labels and translations match the release identity baseli
         .map(match => match[2]);
     });
     assert.equal(translations(baseline).length, 2, 'both built-in languages must be covered');
-    assert.deepEqual(translations(generated), translations(baseline), `${key}: translated identity`);
+    assert.deepEqual([copy.en[key], copy.zh[key]], translations(baseline), `${key}: translated identity`);
   }
 });
 
-test('all existing non-page public URLs retain exact file bytes', () => {
+test('all existing non-page public URLs retain exact bytes outside the declared artifact metadata block', () => {
+  const manifest = JSON.parse(read(docs, 'gallery/manifest.json'));
+  const selected = new Map(CASES.map(presentation => {
+    const entry = manifest.entries.find(item => item.id === presentation.id);
+    assert.ok(entry, presentation.id);
+    return [entry.artifact, { entry, presentation }];
+  }));
+  function publishedBytes(file) {
+    const bytes = fs.readFileSync(path.join(dist, file));
+    const proof = selected.get(file.replaceAll(path.sep, '/'));
+    if (!proof) return bytes;
+    const html = bytes.toString('utf8');
+    assert.equal(html.split(SEO_BLOCK_START).length, 2, `${file}: one metadata start marker`);
+    assert.equal(html.split(SEO_BLOCK_END).length, 2, `${file}: one metadata end marker`);
+    const start = html.indexOf(SEO_BLOCK_START), end = html.indexOf(SEO_BLOCK_END) + SEO_BLOCK_END.length;
+    assert.ok(start > html.indexOf('<head>') && end < html.indexOf('</head>'), `${file}: metadata belongs only in head`);
+    const block = html.slice(start, end) + '\n';
+    assert.equal(block, artifactMetadata(proof.entry, proof.presentation), `${file}: exact publication metadata`);
+    const metadataNodes = (parseFragment(block).childNodes || []).filter(node => node.tagName);
+    assert.deepEqual(metadataNodes.map(node => node.tagName), ['link', 'meta', 'meta', 'meta', 'meta', 'meta', 'script']);
+    const structured = metadataNodes.at(-1);
+    assert.equal(attr(structured, 'type'), 'application/ld+json', `${file}: no executable script permitted`);
+    assert.equal(structured.attrs.length, 1);
+    const data = JSON.parse(structured.childNodes.map(node => node.value || '').join(''));
+    assert.equal(data['@type'], 'CreativeWork');
+    assert.equal(data['@context'], 'https://schema.org');
+    assert.equal(data.isBasedOn, `https://archify.si/${proof.entry.input}`);
+    return Buffer.from(stripPublishedArtifactMetadata(html), 'utf8');
+  }
   function visit(dir, rel = '') {
     for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
       const file = path.join(rel, entry.name);
       if (entry.isDirectory()) visit(path.join(dir, entry.name), file);
-      else if (!pages.includes(file)) assert.deepEqual(fs.readFileSync(path.join(dist, file)), fs.readFileSync(path.join(docs, file)), file);
+      else if (!pages.includes(file)) assert.deepEqual(publishedBytes(file), fs.readFileSync(path.join(docs, file)), file);
     }
   }
   visit(docs);
 });
 
 test('every generated Astro asset referenced by a page exists under the Pages base', () => {
-  for (const page of pages) {
+  for (const page of [...pages, 'community.html', 'zh.html', ...['gallery', 'guide', 'start', 'community'].map(page => `zh/${page}.html`)]) {
     for (const match of read(dist, page).matchAll(/(?:href|src)="(\/archify\/[^"?#]+)"/g)) {
-      assert.ok(fs.existsSync(path.join(dist, match[1].slice('/archify/'.length))), match[1]);
+      const relative = match[1].slice('/archify/'.length) || 'index.html';
+      assert.ok(fs.statSync(path.join(dist, relative)).isFile(), match[1]);
     }
   }
 });

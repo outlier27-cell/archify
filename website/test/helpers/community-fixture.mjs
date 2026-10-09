@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawnSync, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -12,23 +12,33 @@ export function createCommunityFixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-community-build-'));
   const copy = relative => {
     const target = path.join(root, relative);
+    let source = repoRoot;
+    for (const segment of relative.split('/')) {
+      source = path.join(source, segment);
+      if (fs.lstatSync(source).isSymbolicLink()) throw new Error(`Fixture refuses source symlink: ${relative}`);
+    }
     fs.mkdirSync(path.dirname(target), { recursive: true });
-    fs.cpSync(path.join(repoRoot, relative), target, { recursive: true });
+    fs.copyFileSync(source, target);
   };
-  // Compile the actual page, loader, validator and language script, without
-  // modifying the checked-out registry or running any community package code.
-  for (const relative of ['website/src', 'website/astro.config.mjs', 'website/package.json',
-    'archify/package.json', 'archify/recipes', 'scripts/site-copy.mjs',
-    'scripts/check-community-packages.mjs', 'docs/gallery/manifest.json']) copy(relative);
-  const pages = path.join(root, 'website/src/pages');
-  for (const file of fs.readdirSync(pages)) {
-    if (file !== 'community.astro') fs.rmSync(path.join(pages, file), { recursive: true });
-  }
+  // Exercise the real full-site publication hook and all locale routes while
+  // replacing only the community registry. Do not copy arbitrary untracked files.
+  const tracked = execFileSync('git', ['ls-files', '-z', '--',
+    'website/src/', 'website/public/', 'website/astro.config.mjs', 'website/scripts/', 'website/package.json',
+    'archify/package.json', 'archify/skill-release.json', 'archify/recipes/',
+    'scripts/site-copy.mjs', 'scripts/check-community-packages.mjs',
+    'docs/gallery/', 'docs/assets/', 'docs/cases/life/'], { cwd: repoRoot, encoding: 'utf8' })
+    .split('\0').filter(Boolean);
+  for (const relative of tracked) copy(relative);
   fs.symlinkSync(path.join(websiteRoot, 'node_modules'), path.join(root, 'website/node_modules'), process.platform === 'win32' ? 'junction' : 'dir');
-  const assets = path.join(root, 'website/.public/assets');
-  fs.mkdirSync(assets, { recursive: true });
-  for (const file of ['site-language.js', 'site-navigation.css', 'archify-lockup-light.svg', 'archify-mark.svg']) {
-    fs.copyFileSync(path.join(repoRoot, 'docs/assets', file), path.join(assets, file));
+  const publicRoot = path.join(root, 'website/.public');
+  fs.mkdirSync(publicRoot, { recursive: true });
+  // Only the tracked public evidence/assets above enter the fixture output.
+  // Production stage-public remains unchanged and keeps its own tracked-only gate.
+  for (const relative of tracked.filter(file => file.startsWith('docs/') || file.startsWith('website/public/'))) {
+    const prefix = relative.startsWith('docs/') ? 'docs/' : 'website/public/';
+    const target = path.join(publicRoot, relative.slice(prefix.length));
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.copyFileSync(path.join(root, relative), target);
   }
   const registry = path.join(root, 'community/packages');
   fs.mkdirSync(registry, { recursive: true });
@@ -47,6 +57,7 @@ export function createCommunityFixture() {
       fs.rmSync(path.join(root, 'website/dist'), { recursive: true, force: true });
       return spawnSync(process.execPath, [path.join(websiteRoot, 'node_modules/astro/bin/astro.mjs'), 'build'], {
         cwd: path.join(root, 'website'), encoding: 'utf8', timeout: 60000,
+        env: { ...process.env, ARCHIFY_SITE_TARGET: 'github' },
       });
     },
     close() { fs.rmSync(root, { recursive: true, force: true }); },

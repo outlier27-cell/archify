@@ -3,16 +3,20 @@ import { version, versioned } from '../data/site';
 import SiteLayout from '../layouts/SiteLayout.astro';
 import Navigation from '../components/Navigation.astro';
 import Brand from '../components/Brand';
+import ProductFacts from '../components/ProductFacts.astro';
+import { defaultProofLabels } from '../data/default-proof-labels.mjs';
 import head from '../data/index-head.html?raw';
 import css from '../styles/index.css?raw';
 import pageScript from '../scripts/index.js?raw';
 
 const installCommand = 'npx -y skills add tt-a1i/archify --skill archify --agent claude-code --global --copy --yes';
+const { lang = 'en' } = Astro.props;
 ---
-<SiteLayout head={versioned(head)} css={css}>
+<SiteLayout page="index" lang={lang} head={versioned(head)} css={css}>
 
   <!-- NAV -->
   <Navigation page="index" />
+  <main id="main-content">
 
   <!-- HERO — centered statement; the live artifact window peeks in below the fold line -->
   <section class="hero" data-proof-aperture="first-fold">
@@ -79,7 +83,7 @@ const installCommand = 'npx -y skills add tt-a1i/archify --skill archify --agent
             <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><rect x="2" y="5.5" width="8" height="5.5" rx="1.2" stroke="currentColor" stroke-width="1.2"/><path d="M4 5.5V4a2 2 0 1 1 4 0v1.5" stroke="currentColor" stroke-width="1.2"/></svg>
             <span id="address-file">agent-tool-call.workflow.html</span><b id="address-hash"></b>
           </div>
-          <a class="proof-open" id="proof-open" href="gallery/artifacts/agent-tool-call.workflow.html?present=1#focus=planner&amp;reach=downstream" target="_blank" rel="noopener">
+          <a class="proof-open" id="proof-open" href="gallery/artifacts/agent-tool-call.workflow.html?present=1#focus=planner&amp;reach=downstream" target="_blank" rel="noopener" aria-label={lang === 'zh' ? '在新标签页打开交互图表' : 'Open the interactive diagram in a new tab'}>
             <span data-i18n="proof-open">Open artifact</span><span aria-hidden="true">↗</span>
           </a>
         </div>
@@ -93,10 +97,10 @@ const installCommand = 'npx -y skills add tt-a1i/archify --skill archify --agent
             <button class="beat-tick" type="button" data-beat="2" aria-pressed="false"><span data-i18n="beat-2-k">Upstream</span></button>
             <button class="beat-tick" type="button" data-beat="3" aria-pressed="false"><span data-i18n="beat-3-k">Lens</span></button>
           </div>
-          <p class="beat-meta"><span class="proof-live" data-i18n="proof-live">Live proof</span><span id="proof-meta">Workflow · Signal Flow · 12 nodes · 11 edges</span></p>
-          <h3 class="beat-title" id="beat-title">The whole system, in one readable frame.</h3>
-          <p class="beat-body" id="beat-body">This is the real generated artifact, not a screenshot. Lanes, boundaries, and every authored edge — scroll to move its camera.</p>
-          <strong class="sr-only" id="proof-title">Agent Tool Call — policy, execution, recovery, and evidence</strong>
+          <p class="beat-meta"><span class="proof-live" data-i18n="proof-live">Live proof</span><span id="proof-meta" data-en={defaultProofLabels.meta.en} data-zh={defaultProofLabels.meta.zh}>{defaultProofLabels.meta.en}</span></p>
+          <h3 class="beat-title" id="beat-title" data-i18n="beat-0-t">The whole system, in one readable frame.</h3>
+          <p class="beat-body" id="beat-body" data-i18n="beat-0-b">This is the real generated artifact, not a screenshot. Lanes, boundaries, and every authored edge — scroll to move its camera.</p>
+          <strong class="sr-only" id="proof-title" data-en={defaultProofLabels.title.en} data-zh={defaultProofLabels.title.zh}>{defaultProofLabels.title.en}</strong>
         </div>
       </div>
     </div>
@@ -335,17 +339,17 @@ const installCommand = 'npx -y skills add tt-a1i/archify --skill archify --agent
         <ol class="steps fade-up d1">
           <li class="step">
             <span class="step-num">1</span>
-            <div><h4 data-i18n="step1-h">Install in one command</h4>
+            <div><h3 data-i18n="step1-h">Install in one command</h3>
             <p data-i18n="step1-p">Run the command for your agent, or open the <a href="start.html?agent=cursor&amp;type=architecture">agent-aware quick start</a> for project-scoped installs.</p></div>
           </li>
           <li class="step">
             <span class="step-num">2</span>
-            <div><h4 data-i18n="step2-h">Describe your system</h4>
+            <div><h3 data-i18n="step2-h">Describe your system</h3>
             <p data-i18n="step2-p">Describe the steps, people, parts, or states — or ask your agent to read a repository first.</p></div>
           </li>
           <li class="step">
             <span class="step-num">3</span>
-            <div><h4 data-i18n="step3-h">Ask your agent to draw it</h4>
+            <div><h3 data-i18n="step3-h">Ask your agent to draw it</h3>
             <p data-i18n="step3-p">Tell your agent to use Archify. It generates a self-contained HTML file you can open in any browser and refine in chat.</p></div>
           </li>
         </ol>
@@ -371,6 +375,8 @@ const installCommand = 'npx -y skills add tt-a1i/archify --skill archify --agent
     </div>
   </section>
 
+  <ProductFacts />
+
   <!-- CLOSING CTA -->
   <section id="cta">
     <div class="cta-glow" aria-hidden="true"></div>
@@ -385,6 +391,7 @@ const installCommand = 'npx -y skills add tt-a1i/archify --skill archify --agent
   </section>
 
   <!-- FOOTER -->
+  </main>
   <footer>
     <div class="footer-inner">
       <div class="footer-left">

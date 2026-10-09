@@ -5129,21 +5129,21 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <!-- Legend -->
         <g data-legend="">
           <text x="28" y="449" class="t-primary" font-size="12" font-weight="650">Legend</text>
-          <g data-legend-semantic-kind="change" data-legend-x="28" data-legend-baseline="469" data-legend-width="63">
+          <g data-legend-semantic-kind="change" data-legend-x="28" data-legend-baseline="469" data-legend-width="71">
             <circle cx="34" cy="465" r="4.5" class="t-frontend tl-dot" stroke-width="2"/>
             <text x="50" y="469" class="t-muted" font-size="13" font-weight="500">Change</text>
           </g>
-          <g data-legend-semantic-kind="alert" data-legend-x="113" data-legend-baseline="469" data-legend-width="57">
-            <circle cx="119" cy="465" r="4.5" class="t-security tl-dot" stroke-width="2"/>
-            <text x="135" y="469" class="t-muted" font-size="13" font-weight="500">Alert</text>
+          <g data-legend-semantic-kind="alert" data-legend-x="121" data-legend-baseline="469" data-legend-width="63">
+            <circle cx="127" cy="465" r="4.5" class="t-security tl-dot" stroke-width="2"/>
+            <text x="143" y="469" class="t-muted" font-size="13" font-weight="500">Alert</text>
           </g>
-          <g data-legend-semantic-kind="action" data-legend-x="192" data-legend-baseline="469" data-legend-width="77">
-            <circle cx="198" cy="465" r="4.5" class="t-messagebus tl-dot" stroke-width="2"/>
-            <text x="214" y="469" class="t-muted" font-size="13" font-weight="500">Response</text>
+          <g data-legend-semantic-kind="action" data-legend-x="206" data-legend-baseline="469" data-legend-width="87">
+            <circle cx="212" cy="465" r="4.5" class="t-messagebus tl-dot" stroke-width="2"/>
+            <text x="228" y="469" class="t-muted" font-size="13" font-weight="500">Response</text>
           </g>
-          <g data-legend-semantic-kind="recovery" data-legend-x="291" data-legend-baseline="469" data-legend-width="77">
-            <circle cx="297" cy="465" r="4.5" class="t-backend tl-dot" stroke-width="2"/>
-            <text x="313" y="469" class="t-muted" font-size="13" font-weight="500">Recovery</text>
+          <g data-legend-semantic-kind="recovery" data-legend-x="315" data-legend-baseline="469" data-legend-width="87">
+            <circle cx="321" cy="465" r="4.5" class="t-backend tl-dot" stroke-width="2"/>
+            <text x="337" y="469" class="t-muted" font-size="13" font-weight="500">Recovery</text>
           </g>
         </g>
       </svg>
@@ -9740,11 +9740,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
             document.documentElement.scrollHeight,
             document.body.scrollHeight
           ) - window.innerHeight - belowFold();
-          if (overflow > 1 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
+          // visual-check fails any page whose rounded-up height exceeds the
+          // viewport, so even a 1px remainder must be reduced or declared.
+          if (overflow > 0 && !widthFirstReading && lastWidth > Math.ceil(minWidth)) {
             applyWidth(Math.max(minWidth, lastWidth - overflow * ratio - 4), minWidth);
             settledCap = lastWidth;
             html.setAttribute('data-reader-overflow', 'reduced');
-          } else if (overflow > 1) {
+          } else if (overflow > 0) {
             html.setAttribute('data-reader-overflow', 'authored');
           } else {
             html.removeAttribute('data-reader-overflow');

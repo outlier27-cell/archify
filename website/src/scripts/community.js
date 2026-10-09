@@ -7,7 +7,7 @@
 
       function applyLanguage(next) {
         language = ArchifySiteLanguage.write(next);
-        document.documentElement.lang = language === 'zh' ? 'zh-CN' : 'en';
+        document.documentElement.lang = language === 'zh' ? 'zh-Hans' : 'en';
         document.querySelectorAll('[data-en][data-zh]').forEach(function (node) {
           var text = node.getAttribute(language === 'zh' ? 'data-zh' : 'data-en');
           // Only fixed page copy opts into markup. Registry strings are text.
@@ -41,7 +41,6 @@
       filterButtons.forEach(function (button) {
         button.addEventListener('click', function () { applyFilter(button.getAttribute('data-filter'), true); });
       });
-      document.getElementById('language').addEventListener('click', function () { applyLanguage(language === 'en' ? 'zh' : 'en'); });
 
       var allowed = ['all'].concat(Array.prototype.slice.call(document.querySelectorAll('[data-filter]')).map(function (button) {
         return button.getAttribute('data-filter');

@@ -564,6 +564,9 @@ function placementHints({ crossings = [], detours = [], crowdedSides = [] }) {
   return [...new Set(hints)].slice(0, 8);
 }
 
+// Route failures call for a connected-scene repair; size and text failures do not.
+const ROUTE_DIAGNOSTIC = /^(clean-flow\/|composition\/(proper-crossing|ambiguous-corridor|border-run|container-border-run|excessive-route-detour|route-rhythm|arrowhead-collision))/;
+
 export function compactFinalizeReceipt(receipt) {
   const gates = {};
   for (const stage of FINALIZE_STAGES) gates[stage] = receipt.stages?.[stage]?.status || 'not-run';
@@ -641,6 +644,8 @@ export function compactFinalizeReceipt(receipt) {
   if (receipt.ok && Object.keys(reviewSignals).length) {
     const routeReview = receipt.stages?.check?.receipt?.composition?.routeReview;
     const hints = routeReview ? placementHints(routeReview) : [];
+    // Modes without free node placement cannot act on node-move hints.
+    const advisoryOnly = Boolean(receipt.type) && receipt.type !== 'architecture';
     compact.visualReviewRecommendation = {
       action: 'inspect-route-readability',
       signals: reviewSignals,
@@ -651,8 +656,10 @@ export function compactFinalizeReceipt(receipt) {
           detours: routeReview.detours.slice(0, 8),
           truncated: routeReview.crossings.length > 8 || routeReview.detours.length > 8,
         },
-        ...(hints.length ? { hints } : {}),
-        repair: 'Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit.',
+        ...(hints.length && !advisoryOnly ? { hints } : {}),
+        repair: !advisoryOnly
+          ? 'Trace these relationships at the desktop viewport. For Architecture, use references/architecture-layout-repair.md: reflow a blocked main path or tangled connected scene, and repair an isolated defect locally only when the surrounding composition is accepted. Preserve all semantic content and user-fixed geometry. Rerun finalize once after the edit.'
+          : 'Advisory only: this mode places or routes these relationships itself. Report them; do not remove relationships or meaning to reduce crossings.',
       } : {}),
     };
   }
@@ -678,9 +685,9 @@ export function compactFinalizeReceipt(receipt) {
     compact.nextAction = {
       action: 'edit-in-place',
       candidate: receipt.specification?.path,
-      constraint: receipt.type === 'architecture'
+      constraint: receipt.type === 'architecture' && (receipt.diagnostics || []).some((entry) => ROUTE_DIAGNOSTIC.test(entry.code || ''))
         ? 'Preserve all semantics and user-fixed geometry. Use references/architecture-layout-repair.md to choose a local repair or connected-scene reflow; edit the existing candidate.'
-        : 'Preserve unaffected semantics and geometry; do not replace the whole candidate.',
+        : 'Preserve unaffected semantics and geometry; apply each diagnostic\'s supportedFixes, or the fix its message names, and do not replace the whole candidate.',
       then: 'finalize-once',
     };
   }

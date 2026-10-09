@@ -23,7 +23,13 @@ export const DEFAULT_ER_GRID = {
 
 export function erGridLayout(er) {
   const raw = er.layout;
-  if (!raw || raw.mode !== 'grid') return null;
+  // Grid cells without a layout block mean the default grid, not absolute
+  // coordinates that were never supplied.
+  if (!raw) {
+    const gridPlaced = (er.entities || []).some((entity) => Number.isFinite(entity?.row) && Number.isFinite(entity?.col));
+    return gridPlaced ? { ...DEFAULT_ER_GRID } : null;
+  }
+  if (raw.mode !== 'grid') return null;
   return { ...DEFAULT_ER_GRID, ...raw };
 }
 
@@ -49,7 +55,10 @@ export function entityHeight(entity, grid) {
 // column (a class grid's `col: 1.5`) is centred between two columns: it sizes
 // its row but neither column.
 const gridColumn = (col) => Number.isInteger(col * 2) && col >= 0;
-export function bandedLayout(entities, grid) {
+// `columnGaps` raises the gap after a column to a measured floor (see the
+// renderer's relationship-label demand); the authored or default gapX stays
+// the minimum everywhere, so an absent map reproduces the plain grid.
+export function bandedLayout(entities, grid, { columnGaps = null } = {}) {
   const widths = new Map();
   const heights = new Map();
   let maxCol = -1;
@@ -65,7 +74,7 @@ export function bandedLayout(entities, grid) {
   let x = grid.origin[0];
   for (let col = 0; col <= maxCol; col += 1) {
     columnX.set(col, x);
-    x += (widths.get(col) || 0) + grid.gapX;
+    x += (widths.get(col) || 0) + Math.max(grid.gapX, columnGaps?.get(col) || 0);
   }
   // A half-column box may be wider than its empty neighbouring bands. Keep
   // every grid box inside the left margin without changing integer-only grids.
