@@ -3,12 +3,13 @@ import { fileURLToPath } from 'node:url';
 import { esc, renderDefinitions, renderSemanticSigil, textUnits } from '../shared/utils.mjs';
 import { animateAttr, focusEdgeAttrs, focusNodeAttrs, focusNodeTitle, loadDiagramWithBrandMarks, writeDiagram, svgAccessibleText, svgRootAttrs } from '../shared/cli.mjs';
 import { throwDiagnosticProblems } from '../shared/diagnostics.mjs';
-import { resolveLegend, renderLegend as renderResolvedLegend } from '../shared/legend.mjs';
+import { resolveLegend, renderLegend as renderResolvedLegend, legendFootprint } from '../shared/legend.mjs';
 import { availableNodeTextWidth, fittedNodeFontSize, minimumNodeTextWidth, nodeLabelLayout } from '../shared/text-fit.mjs';
 import { brandLabelFitWidth, brandMarkFor, brandMetadataFor, brandTopRailProblem, renderBrandMark } from '../shared/brand-marks.mjs';
 import { translateMessage as i18nText } from '../shared/i18n.mjs';
 import { minimumReadableSourceTextPx } from '../shared/desktop-readability.mjs';
 import { placeAutomaticLabels } from '../shared/automatic-labels.mjs';
+import { shortestOrthogonalGridRoute } from '../shared/route-quality.mjs';
 import {
   asArray,
   isFinitePoint,
@@ -28,6 +29,8 @@ import {
   automaticPortRhythmBridge,
   segmentIntersectsRect,
   segmentRectClearanceWithin,
+  routeHonorsEndpointSides,
+  normalizeRoutePoints,
   legacyDefaultFromSide as defaultFromSide,
   legacyDefaultToSide as defaultToSide,
   chosenSide,
@@ -38,7 +41,8 @@ import {
   componentFill,
   componentText,
   arrowClassMap,
-  edgeLabelAccent
+  edgeLabelAccent,
+  properSegmentIntersection
 } from '../shared/geometry.mjs';
 
 const nodeTextFit = {
@@ -78,8 +82,15 @@ const automaticShowcase = qualityProfile === 'showcase'
 const stageRight = stageX(asArray(dataflow.stages).length - 1) + layout.stageW / 2;
 const nodeRights = asArray(dataflow.nodes).map(node =>
   stageX(node.stage) + (node.width || layout.nodeW) / 2).filter(Number.isFinite);
+const pinnedLabelRights = asArray(dataflow.flows).filter(flow => flow.label && Array.isArray(flow.labelAt) && isFinitePoint(...flow.labelAt))
+  .map(flow => flow.labelAt[0] + flowLabelSize(flow).width / 2);
+// Automatic width fits stages/nodes with 24px right pad. The old 940px floor
+// left a blank third of the canvas on 2–3 stage drafts; five default stages
+// still measure ~1068 and stay unchanged. Height starts at 720 and is refit
+// by heightForLabels for automatic showcase.
+const contentWidth = Math.ceil(Math.max(stageRight, ...nodeRights, ...pinnedLabelRights, 0) + 24);
 const viewBox = dataflow.meta?.viewBox || [
-  Math.max(940, Math.ceil(Math.max(stageRight, ...nodeRights) + 24)),
+  Math.max(480, contentWidth),
   720,
 ];
 const contextFontMinimum = automaticShowcase
@@ -394,6 +405,26 @@ function routeVia(flow, from, to, start, end) {
         });
         if (bridge) return bridge.slice(1, -1);
       }
+      if (fromVertical !== toVertical) {
+        // Perpendicular sides meet at one corner when both endpoints face it;
+        // otherwise each leaves through a short stub before the corner.
+        const outward = { left: [-24, 0], right: [24, 0], top: [0, -24], bottom: [0, 24] };
+        const stub = (point, side) => [point[0] + outward[side][0], point[1] + outward[side][1]];
+        const startStub = stub(start, fromSide);
+        const endStub = stub(end, toSide);
+        const route = [
+          [fromVertical ? [start[0], end[1]] : [end[0], start[1]]],
+          [startStub, [startStub[0], endStub[1]], endStub],
+          [startStub, [endStub[0], startStub[1]], endStub],
+        ].find(candidate => {
+          const points = normalizeRoutePoints([start, ...candidate, end]);
+          return routeHonorsEndpointSides(points, fromSide, toSide)
+            && ![...nodes.values()].some(node => points.slice(1).some((point, index) => (
+              segmentIntersectsRect({ start: points[index], end: point }, node, 2)
+              && !((node.id === from.id && index === 0) || (node.id === to.id && index === points.length - 2)))));
+        });
+        if (route) return route;
+      }
       if (automaticShowcase && fromVertical && toVertical) {
         if (Math.abs(start[0] - end[0]) < 0.0001) return [];
         const midY = (start[1] + end[1]) / 2;
@@ -401,7 +432,17 @@ function routeVia(flow, from, to, start, end) {
       }
       if (Math.abs(start[1] - end[1]) < 4) return [];
       const midX = start[0] + (end[0] - start[0]) / 2;
-      return [[midX, start[1]], [midX, end[1]]];
+      // Across several stages the midpoint can fall inside a middle stage's
+      // node; then turn in the clear inter-stage gap nearest to it.
+      const gapXs = asArray(dataflow.stages).slice(1).map((_, index) => (stageX(index) + stageX(index + 1)) / 2)
+        .filter((x) => x > Math.min(start[0], end[0]) && x < Math.max(start[0], end[0]))
+        .sort((left, right) => Math.abs(left - midX) - Math.abs(right - midX));
+      const turnX = [midX, ...gapXs].find((x) => {
+        const points = [start, [x, start[1]], [x, end[1]], end];
+        return ![...nodes.values()].some((node) => node.id !== from.id && node.id !== to.id
+          && points.slice(1).some((point, index) => segmentIntersectsRect({ start: points[index], end: point }, node, 2)));
+      }) ?? midX;
+      return [[turnX, start[1]], [turnX, end[1]]];
     }
   }
 }
@@ -417,8 +458,12 @@ function flowSides(flow) {
   };
 }
 
+// The shared default of 14px packs two 10px arrowheads on top of each other.
+// Raise the ceiling so a side that has room spreads them; a short side still
+// clamps to usable/(n-1) and keeps the previous layout.
 const automaticPorts = automaticPortSpread(dataflow.flows, nodes, {
   sideFor: (flow, endpoint) => flowSides(flow)[endpoint === 'source' ? 'fromSide' : 'toSide'],
+  maxSpacing: 18,
 });
 
 function pathFor(flow) {
@@ -449,15 +494,94 @@ function pathFor(flow) {
   return routed;
 }
 
+// The preset auto routes are planned one flow at a time and know nothing of
+// each other, so a flow skipping a stage can cut straight through a vertical
+// flow inside that stage. The showcase gate rejects every proper crossing, so
+// for an unpinned showcase draft a crossing auto route is re-planned on the
+// shared obstacle grid with every unrelated flow treated as a wall. The
+// detour is used only when it crosses nothing; otherwise the preset route and
+// its crossing diagnostic stay.
+if (automaticShowcase) {
+  const routable = asArray(dataflow.flows).filter(flow => nodes.has(flow.from) && nodes.has(flow.to));
+  const segmentsOf = points => points.slice(1).map((end, index) => ({ start: points[index], end }));
+  const related = (left, right) => [left.from, left.to].some(id => id === right.from || id === right.to);
+  const crosses = (left, right) => segmentsOf(pathFor(left).points).some(a => segmentsOf(pathFor(right).points).some(b => (
+    properSegmentIntersection(a.start, a.end, b.start, b.end))));
+  const pinned = flow => flow.via || (flow.route && flow.route !== 'auto') || flow.channelX !== undefined || flow.channelY !== undefined;
+  const unrelated = flow => routable.filter(other => other !== flow && !related(flow, other));
+  const length = points => segmentsOf(points).reduce((sum, { start, end }) => sum + Math.abs(end[0] - start[0]) + Math.abs(end[1] - start[1]), 0);
+  const DETOUR_NODE_GAP = 12;
+  function detourFor(flow) {
+    const { points } = pathFor(flow);
+    const { fromSide, toSide } = flowSides(flow);
+    const others = unrelated(flow);
+    const detour = shortestOrthogonalGridRoute({
+      start: points[0],
+      end: points.at(-1),
+      points: [points[0], points.at(-1)],
+      // Keep a detour a readable gap away from the nodes it passes; only its
+      // own endpoints are held to the grid's 2-unit clearance.
+      obstacles: [...nodes.values()].map(node => (node.id === flow.from || node.id === flow.to ? node : {
+        x: node.x - DETOUR_NODE_GAP, y: node.y - DETOUR_NODE_GAP,
+        width: node.width + DETOUR_NODE_GAP * 2, height: node.height + DETOUR_NODE_GAP * 2,
+      })),
+      fromSide,
+      toSide,
+      clearance: 2,
+      maximumObstacleCount: 80,
+      endpointStubPx: 24,
+      maximumGridNodes: 4096,
+      avoidedSegments: others.flatMap(other => segmentsOf(pathFor(other).points)),
+      allowAvoidedCrossings: false,
+      minimumAvoidedOverlapPx: 8,
+      routeSeparationPx: 8,
+      minimumSegmentPx: 16,
+      bendPenaltyPx: 48,
+    });
+    if (!detour) return null;
+    const normalized = normalizeRoutePoints(detour.points);
+    return { flow, routed: { d: polylinePath(normalized), points: normalized }, cost: length(normalized) - length(points) };
+  }
+  // Of the flows in a crossing, re-plan the one whose clear detour adds the
+  // least length, so a short straight flow is not bent around a long one.
+  for (let pass = 0; pass < routable.length; pass += 1) {
+    const crossing = routable.filter(flow => !pinned(flow) && unrelated(flow).some(other => crosses(flow, other)));
+    const options = crossing.map(detourFor).filter(Boolean).sort((left, right) => left.cost - right.cost);
+    const before = routable.filter(flow => unrelated(flow).some(other => crosses(flow, other))).length;
+    const chosen = options.find(({ flow, routed }) => {
+      const previous = pathCache.get(flow);
+      pathCache.set(flow, routed);
+      const after = routable.filter(other => unrelated(other).some(next => crosses(other, next))).length;
+      if (after < before) return true;
+      pathCache.set(flow, previous);
+      return false;
+    });
+    if (!chosen) break;
+  }
+}
+
 const resolvedLabelPoints = new Map();
+const twoLineOcclusions = new Set();
 const initialLabelRects = asArray(dataflow.flows).flatMap((flow, relationIndex) => {
   if (!flow.label || !nodes.has(flow.from) || !nodes.has(flow.to)) return [];
   const [lx, ly] = labelPoint(flow, pathFor(flow).points);
   const { width, height } = flowLabelSize(flow);
   // The shared placer uses a 10px baseline inset; Dataflow masks use 11px.
   // Adapt the baseline so it tests exactly the rectangle we later render.
-  return [{ relation: flow, relationIndex, label: flow.label,
-    x: lx - width / 2, y: ly - 11, width, height, lx, ly: ly - 1 }];
+  const rect = { relation: flow, relationIndex, label: flow.label,
+    x: lx - width / 2, y: ly - 11, width, height, lx, ly: ly - 1 };
+  // Only repair the additional footprint of an unpinned second line. A
+  // single-line plate may intentionally interrupt its own route, especially
+  // on a vertical segment; that established placement remains authoritative.
+  if (flow.classification && !['labelAt', 'labelDx', 'labelDy', 'labelSegment'].some(key => flow[key] !== undefined)) {
+    const points = pathFor(flow).points;
+    const segments = points.slice(1).map((end, index) => ({ start: points[index], end }));
+    if (segments.some(segment => segmentIntersectsRect(segment, rect))
+      && !segments.some(segment => segmentIntersectsRect(segment, { ...rect, height: layout.labelH }))) {
+      twoLineOcclusions.add(flow);
+    }
+  }
+  return [rect];
 });
 // Routing depends on node geometry and canvas width, so its actual footprint
 // can determine height without another copy of routeVia's preset rules.
@@ -469,6 +593,14 @@ function heightForLabels(labels) {
   const contentBottom = Math.max(geometryBottom, ...labels.map(rect => rect.y + rect.height));
   return Math.max(360, Math.ceil(contentBottom + 24 + layout.stageBottomPad));
 }
+function fitAutomaticWidthToLabels(labels) {
+  if (dataflow.meta?.viewBox) return;
+  const labelRight = Math.max(0, ...labels.map(rect => rect.x + rect.width));
+  viewBox[0] = Math.max(viewBox[0], Math.ceil(labelRight + 24));
+}
+// Give the shared placer room for complete initial plates before its search;
+// width growth here does not recompute the measured nodes or cached routes.
+fitAutomaticWidthToLabels(initialLabelRects);
 if (automaticShowcase) viewBox[1] = heightForLabels(initialLabelRects);
 const compositionFrames = asArray(dataflow.stages).map(stageFrame);
 
@@ -496,8 +628,65 @@ const resolvedLabelRects = (automaticShowcase ? placeAutomaticLabels({
   return resolved;
 });
 
-// A bounded label move may extend below the initial route footprint. Include
-// its final rendered plate before drawing the stage frames and legend.
+// The ordinary shared placer allows a plate to interrupt its own connector.
+// For the second-line defect above, keep the complete plate beside the route
+// instead. This local search freezes all other labels and authored geometry,
+// and uses the same node/title/label/other-route checks as ordinary placement.
+for (const [index, rect] of resolvedLabelRects.entries()) {
+  if (!twoLineOcclusions.has(rect.relation)) continue;
+  const ownPoints = pathFor(rect.relation).points;
+  if (!ownPoints.slice(1).some((end, segmentIndex) => segmentIntersectsRect({ start: ownPoints[segmentIndex], end }, rect))) continue;
+  const original = initialLabelRects.find(label => label.relation === rect.relation);
+  const extraHeight = original.height - layout.labelH;
+  const preferred = { ...original, y: original.y - extraHeight, ly: original.ly - extraHeight };
+  const ownRouteBands = ownPoints.slice(1).map((end, segmentIndex) => {
+    const start = ownPoints[segmentIndex];
+    return {
+      x: Math.min(start[0], end[0]) - 2, y: Math.min(start[1], end[1]) - 2,
+      width: Math.abs(end[0] - start[0]) + 4, height: Math.abs(end[1] - start[1]) + 4,
+    };
+  });
+  const labels = resolvedLabelRects.map((other, otherIndex) => otherIndex === index ? preferred : {
+    ...other, ly: other.ly - 1,
+    relation: { ...other.relation, labelAt: [other.lx, other.ly] },
+  });
+  const routes = asArray(dataflow.flows).flatMap((flow, relationIndex) => (
+    nodes.has(flow.from) && nodes.has(flow.to) ? [{ relationIndex, points: pathFor(flow).points }] : []
+  ));
+  const titles = compositionFrames.map(frame => ({ ...frame, height: layout.stageH }));
+  const replacement = placeAutomaticLabels({
+    labels, routes,
+    components: [...nodes.values(), ...ownRouteBands],
+    titles,
+    viewBox,
+    placementBottom: viewBox[1] - layout.stageBottomPad,
+    keepFallbackNearRoute: true,
+  })[index];
+  // An exhausted shared search returns its supplied preferred rect. That is
+  // not proof of a safe replacement: preserve the previously accepted label
+  // if the complete footprint cannot fit near its connector without collisions.
+  const clear = replacement.x >= 0 && replacement.y >= 0
+    && replacement.x + replacement.width <= viewBox[0]
+    && replacement.y + replacement.height <= viewBox[1] - layout.stageBottomPad
+    && ![...nodes.values(), ...titles].some(obstacle => rectsOverlap(replacement, obstacle, 2))
+    && !resolvedLabelRects.some((other, otherIndex) => otherIndex !== index && rectsOverlap(replacement, other, 2))
+    && routes.every(route => route.points.slice(1).every((end, segmentIndex) => (
+      segmentRectClearanceWithin({ start: route.points[segmentIndex], end }, replacement, 4) >= 4
+    )))
+    && ownPoints.slice(1).some((end, segmentIndex) => (
+      segmentRectClearanceWithin({ start: ownPoints[segmentIndex], end }, replacement, 36) <= 36
+    ));
+  if (!clear) continue;
+  const resolved = { ...replacement, ly: replacement.ly + 1 };
+  resolvedLabelRects[index] = resolved;
+  resolvedLabelPoints.set(rect.relation, [resolved.lx, resolved.ly]);
+}
+
+// A shared placement search may retain an unpinned original plate when none
+// of its candidates fit the compact width. Include every final rendered plate
+// without moving nodes, routes or labels; an authored canvas remains fixed.
+fitAutomaticWidthToLabels(resolvedLabelRects);
+// A bounded label move may also extend below the initial route footprint.
 if (automaticShowcase) {
   viewBox[1] = heightForLabels(resolvedLabelRects);
   for (const frame of compositionFrames) frame.height = viewBox[1] - layout.stageY - layout.stageBottomPad;
@@ -635,7 +824,26 @@ function renderLegend() {
   });
 }
 
+function ensureAutoLegendFits() {
+  // Narrow auto canvases can wrap the legend onto extra rows. Stage frames
+  // fill the canvas height, so growing height alone does not free a legend
+  // band — widen just enough for a one-row pack instead.
+  if (dataflow.meta?.viewBox) return;
+  const presentKinds = new Set(asArray(dataflow.flows).map((flow) => flow.variant || 'default'));
+  if ([...nodes.values()].some((node) => node.type === 'database')) presentKinds.add('database');
+  const entries = resolveLegend(dataflow.meta?.legend, LEGEND_CATALOG, presentKinds);
+  if (!entries.length) return;
+  if (legendFootprint(entries, { width: Math.max(1, viewBox[0] - 80) }).extraHeight <= 0) return;
+  let width = viewBox[0];
+  while (width < 1600
+    && legendFootprint(entries, { width: Math.max(1, width - 80) }).extraHeight > 0) {
+    width += 40;
+  }
+  viewBox[0] = width;
+}
+
 function renderSvg() {
+  ensureAutoLegendFits();
   // Same default-canvas contract as lifecycle: 940x720 is below the 1.55 wide
   // ratio, so without intrinsic-height the desktop Reader can neither narrow
   // nor scroll it and every default dataflow fails the browser gate.

@@ -1044,6 +1044,71 @@ test('cli: check reports an output-limit failure with a classified receipt', () 
   assert.equal(receipt.diagnostic, receipt.diagnostics[0].message);
 });
 
+test('cli: checker output-limit errors remain failures when the child exits zero', async (t) => {
+  const input = path.join(skillRoot, 'examples/web-app.architecture.json');
+  const artifact = path.join(tmp, 'zero-exit-output-limit.html');
+  assert.equal(run(['render', 'architecture', input, artifact]).status, 0);
+  const checker = path.join(skillRoot, 'scripts/check-render-output.mjs');
+  const preload = path.join(tmp, 'zero-exit-output-limit.cjs');
+  const log = path.join(tmp, 'zero-exit-output-limit.log');
+  fs.writeFileSync(preload, `
+const fs = require('node:fs');
+const childProcess = require('node:child_process');
+const spawnSync = childProcess.spawnSync;
+childProcess.spawnSync = function (executable, args, options) {
+  const result = spawnSync(executable, args, options);
+  if (args[0] === ${JSON.stringify(checker)}) {
+    if (result.error?.code !== 'ENOBUFS') throw new Error('Expected a real checker buffer overflow');
+    // Reproduce the real race: stdout exceeds the limit after the child exits.
+    result.status = 0;
+    result.signal = null;
+    fs.appendFileSync(${JSON.stringify(log)}, JSON.stringify({
+      status: result.status, error: result.error.code, bytes: Buffer.byteLength(result.stdout),
+    }) + '\\n');
+  }
+  return result;
+};
+require('node:module').syncBuiltinESMExports();
+`);
+  const source = path.join(__dirname, 'fixtures/v1-workflow-700x400.workflow.json');
+  const outputs = Object.fromEntries(['migrate', 'deliver', 'compare'].map(command => [
+    command, path.join(tmp, `zero-exit-output-limit-${command}.${command === 'migrate' ? 'workflow.json' : 'html'}`),
+  ]));
+  const cases = {
+    migrate: ['migrate', 'workflow', source, outputs.migrate, '--to-schema', '2', '--json'],
+    validate: ['validate', 'architecture', input, '--json'],
+    deliver: ['deliver', 'architecture', input, outputs.deliver, '--json'],
+    compare: ['compare', 'architecture', input, input, outputs.compare, '--json'],
+    check: ['check', artifact],
+  };
+  for (const [command, args] of Object.entries(cases)) {
+    await t.test(`${command} preserves its output-limit diagnostic`, () => {
+      const previous = 'trusted previous output\n';
+      if (outputs[command]) fs.writeFileSync(outputs[command], previous);
+      fs.writeFileSync(log, '');
+      const result = spawnSync(process.execPath, ['--require', preload, cli, ...args], {
+        cwd: skillRoot,
+        encoding: 'utf8',
+        env: { ...process.env, ARCHIFY_CHECK_MAX_BUFFER: '1024' },
+      });
+      const witness = JSON.parse(fs.readFileSync(log, 'utf8').trim().split('\n')[0]);
+      assert.equal(witness.status, 0);
+      assert.equal(witness.error, 'ENOBUFS');
+      assert.ok(witness.bytes > 1024);
+      assert.equal(result.status, 1, result.stderr || result.stdout);
+      const failure = JSON.parse(result.stdout);
+      assert.equal(failure.ok, false);
+      assert.equal(failure.command, command);
+      const entry = failure.diagnostics.find(diagnosticEntry => diagnosticEntry.code === 'artifact/check-output-limit');
+      assert.ok(entry, `missing output-limit diagnostic for ${command}`);
+      assert.equal(entry.evidence.systemCode, 'ENOBUFS');
+      assert.equal(entry.evidence.limitBytes, 1024);
+      assert.equal(entry.evidence.receivedBytes, witness.bytes);
+      if (outputs[command]) assert.equal(fs.readFileSync(outputs[command], 'utf8'), previous);
+    });
+  }
+});
+
 test('cli: finalize captures a near-limit check receipt with provenance', { timeout: 180000 }, () => {
   const input = path.join(tmp, 'near-limit-finalize.architecture.json');
   fs.writeFileSync(input, JSON.stringify(bipartiteArchitectureSpec(11)));

@@ -190,6 +190,8 @@ const isFinal = (state) => !outgoing.has(state.id);
 // and keeps the placed layout with the fewest bends and short jogs.
 let spacing = { spineGap: 72, rowGap: 44, drop: 58, firstTrack: 34 };
 let geometry;
+// Labels that could not be placed at a tighter spacing, which widened every gap.
+const spacingWideners = new Set();
 for (let round = 0; round < SPACING_ROUNDS; round += 1) {
   const candidates = ['partner', 'even'].map((ports) => ({ ports, ...layout({ ...spacing, ports }) }));
   const placed = candidates.filter((candidate) => !candidate.unplacedLabels.length);
@@ -197,6 +199,10 @@ for (let round = 0; round < SPACING_ROUNDS; round += 1) {
   // layout() positions the shared states, so the winner is laid out again.
   geometry = best === candidates.at(-1) ? best : layout({ ...spacing, ports: best.ports });
   if (placed.length) break;
+  if (round === 0) {
+    const closest = [...candidates].sort((a, b) => a.unplacedLabels.length - b.unplacedLabels.length)[0];
+    for (const transition of closest.unplacedLabels) spacingWideners.add(transition);
+  }
   spacing = { spineGap: spacing.spineGap + 28, rowGap: spacing.rowGap + 28, drop: spacing.drop + 14, firstTrack: spacing.firstTrack + 6 };
 }
 
@@ -883,12 +889,23 @@ function validateLayout() {
   }));
   const budget = Math.floor(DESKTOP_READER_DIAGRAM_WIDTH * smallest / MIN_PROJECTED_NODE_TEXT_PX);
   if (viewBox[0] > budget) {
-    const message = `The lifecycle is ${viewBox[0]}px wide; at ${smallest}px text it stays readable on a desktop only up to ${budget}px.`;
+    // A labelled main-path step widens its gap past the default spacing.
+    const wideStepLabels = mainPath.slice(0, -1).flatMap((id, index) => {
+      const edge = spineEdges.get(index);
+      const excessPx = edge && hasLabel(edge) ? Math.round(labelBox(edge).width + 26 - spacing.spineGap) : 0;
+      return excessPx > 0 ? [{ from: edge.from, to: edge.to, label: edge.label || edge.note, excessPx }] : [];
+    }).sort((a, b) => b.excessPx - a.excessPx);
+    const widenerLabels = [...spacingWideners].map((transition) => `"${transition.label || transition.note}"`);
+    const labelFixes = [
+      ...(widenerLabels.length ? [`relieve the routes crowding ${widenerLabels.join(', ')}: those labels found no clear spot at the base spacing, so every gap widened by 28px; drop labels both endpoints imply, merge exits that share a target, or move a secondary transition elsewhere`] : []),
+      ...(wideStepLabels.length ? [`shorten the main-path transition labels that widen their gaps: ${wideStepLabels.map((step) => `"${step.label}" (+${step.excessPx}px)`).join(', ')}`] : []),
+    ];
+    const message = `The lifecycle is ${viewBox[0]}px wide; at ${smallest}px text it stays readable on a desktop only up to ${budget}px.${labelFixes.length ? ` Transition labels set most of that width.` : ''}`;
     diagnostics.push({
       code: 'lifecycle/too-wide', severity: 'error', message,
       subject: { diagramType: 'lifecycle', path: '/mainPath' },
-      evidence: { viewBoxWidth: viewBox[0], budgetPx: budget, mainPathStates: mainPath.length, lowerRowStates: offStates.length },
-      supportedFixes: ['shorten state labels and sublabels', 'move secondary phases off mainPath or merge adjacent phases', 'split the lifecycle into two diagrams'],
+      evidence: { viewBoxWidth: viewBox[0], budgetPx: budget, mainPathStates: mainPath.length, lowerRowStates: offStates.length, wideStepLabels, spacingWideners: [...spacingWideners].map((transition) => ({ from: transition.from, to: transition.to, label: transition.label || transition.note })) },
+      supportedFixes: [...labelFixes, 'shorten state labels and sublabels', 'move secondary phases off mainPath or merge adjacent phases', 'split the lifecycle into two diagrams'],
     });
     problems.push(message);
   }

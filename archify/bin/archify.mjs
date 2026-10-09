@@ -2246,13 +2246,17 @@ function rendererPath(type) {
 const DEFAULT_MAX_BUFFER = 64 * 1024 * 1024;
 
 function runNode(args, options = {}) {
-  return spawnSync(process.execPath, args, {
+  const result = spawnSync(process.execPath, args, {
     cwd: options.cwd || process.cwd(),
     encoding: 'utf8',
     stdio: options.stdio || 'inherit',
     maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER,
     env: options.env ? { ...process.env, ...options.env } : process.env,
   });
+  // The child can exit before a piped-output overflow is observed. A capture
+  // error still means the operation failed, even when its exit status is zero.
+  if (result.error && result.status === 0) result.status = 1;
+  return result;
 }
 
 // The artifact checker prints its whole receipt on stdout; a dense,

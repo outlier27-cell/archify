@@ -264,9 +264,13 @@ test('GitHub Pages deploys the verified website artifact only after every reposi
     'v4.3.3',
   );
   assert.match(website, /name: website-dist/);
-  const browser = workflowJob(workflow, 'webm-artifact');
+  const browser = workflowJob(workflow, 'browser-regression');
   assert.match(browser, /Run shared browser regression gate/);
-  assert.match(browser, /npm run test:browser/);
+  assert.match(browser, /npm run test:browser -- --shard=\$\{\{ matrix\.shard \}\}\/2/);
+  const media = workflowJob(workflow, 'webm-artifact');
+  assert.match(media, /needs: \[scope, browser-regression, webm-decode\]/);
+  assert.match(media, /test "\$BROWSER_RESULT" = success/);
+  assert.match(media, /test "\$WEBM_RESULT" = success/);
   const renderer = workflowJob(workflow, 'test');
   assert.match(renderer, /Verify community Hermes adapter/);
   const packageSmoke = workflowJob(workflow, 'package-smoke');
@@ -1690,7 +1694,7 @@ test('CI and tagged releases share the maintained Windows path contract on Node 
     assert.match(job, /npm ci --ignore-scripts/);
     assert.match(job, /node scripts\/run-windows-path-tests\.mjs/);
     assert.match(job, label === 'CI'
-      ? /name: Provision controlled Windows path fixtures\n\s+if: needs\.scope\.outputs\.scope == 'full'\n\s+shell: pwsh/
+      ? /name: Provision controlled Windows path fixtures\n\s+if: needs\.scope\.outputs\.windows == 'true'\n\s+shell: pwsh/
       : /name: Provision controlled Windows path fixtures\n\s+shell: pwsh/);
     assert.match(
       job,
@@ -1699,7 +1703,7 @@ test('CI and tagged releases share the maintained Windows path contract on Node 
     assert.match(
       job,
       label === 'CI'
-        ? /name: Clean up controlled Windows path fixtures\n\s+if: \$\{\{ always\(\) && needs\.scope\.outputs\.scope == 'full' \}\}/
+        ? /name: Clean up controlled Windows path fixtures\n\s+if: \$\{\{ always\(\) && needs\.scope\.outputs\.windows == 'true' \}\}/
         : /name: Clean up controlled Windows path fixtures\n\s+if: \$\{\{ always\(\) \}\}/,
     );
     assert.match(

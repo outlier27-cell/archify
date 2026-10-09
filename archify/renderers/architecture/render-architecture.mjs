@@ -17,6 +17,7 @@ import {
   asArray,
   isFinitePoint,
   rectsOverlap,
+  segmentIntersectsRect,
   cleanEndpointSideProblems,
   cleanFlowProblems,
   cleanCrossingProblems,
@@ -252,6 +253,42 @@ function horizontalOverlap(left, right) {
   return left.x < right.x + right.width && left.x + left.width > right.x;
 }
 
+// A route through a title disappears under its mask and reads as struck-through
+// text. Keep the left rail position when it is clear; otherwise slide the title
+// along its rail to the nearest clear position inside the frame.
+let titleRouteSegments = null;
+function slideTitleOffRoutes(boundary, title, placedTitles) {
+  if (!enforcesBoundaryTitleComposition) return;
+  titleRouteSegments ||= asArray(arch.connections)
+    .filter((conn) => components.has(conn.from) && components.has(conn.to))
+    .flatMap((conn) => {
+      const points = pathFor(conn).points;
+      return points.slice(1).map((end, index) => ({ start: points[index], end }));
+    });
+  const clear = (x) => {
+    const rect = { ...title, x };
+    return !titleRouteSegments.some((segment) => segmentIntersectsRect(segment, rect, 2))
+      && ![...placedTitles, ...components.values(), ...connectionLabels].some((other) => rectsOverlap(rect, other));
+  };
+  if (clear(title.x)) return;
+  const left = boundary.x + layout.boundaryLabelFrameInset;
+  const right = boundary.x + boundary.width - layout.boundaryLabelFrameInset - title.width;
+  const band = titleRouteSegments.filter(({ start, end }) => (
+    Math.max(start[1], end[1]) >= title.y - 2 && Math.min(start[1], end[1]) <= title.y + title.height + 2
+  ));
+  const labelBlockers = connectionLabels.filter((label) => (
+    label.y < title.y + title.height && label.y + label.height > title.y
+  ));
+  const x = [right, ...band.flatMap(({ start, end }) => [
+    Math.max(start[0], end[0]) + 8, Math.min(start[0], end[0]) - 8 - title.width,
+  ]), ...labelBlockers.flatMap((label) => [
+    label.x + label.width + 8, label.x - 8 - title.width,
+  ])].filter((value) => value >= left && value <= right)
+    .sort((a, b) => a - b)
+    .find(clear);
+  if (x !== undefined) title.x = x;
+}
+
 function layoutBoundaryTitles(rawBoundaries, minimumFontSize) {
   const placedTitles = [];
   const measured = new Map();
@@ -280,6 +317,7 @@ function layoutBoundaryTitles(rawBoundaries, minimumFontSize) {
         Infinity,
       );
     }
+    slideTitleOffRoutes(boundary, title, placedTitles);
     placedTitles.push(title);
     measured.set(index, { boundary, title });
   }
@@ -311,7 +349,7 @@ function layoutBoundaryTitles(rawBoundaries, minimumFontSize) {
 // automatic route never borrows a frame border as its corridor), never the
 // title-expanded frames or the viewBox.
 const rawBoundaries = asArray(arch.boundaries).map(boundaryRect).filter(Boolean);
-const { pathFor, connectionSides, connectionEndpointSide } = createRouter(components, arch.connections, {
+const routerOptions = {
   distinctAutomaticPorts: true,
   preferReadableRoutes: true,
   frames: rawBoundaries.map((boundary) => ({
@@ -325,7 +363,8 @@ const { pathFor, connectionSides, connectionEndpointSide } = createRouter(compon
     labels,
     components: [...components.values()],
   }) : null),
-});
+};
+const { pathFor, connectionSides, connectionEndpointSide } = createRouter(components, arch.connections, routerOptions);
 function hasAutomaticRouteGeometry(connection) {
   return !Array.isArray(connection?.via)
     && (!connection?.route || connection.route === 'auto')
@@ -618,6 +657,39 @@ function validateArchitecture() {
     }
   }
 
+  // A boundary frame is drawn as the padded box around its members, so a
+  // component that is not in `wraps` but sits wholly inside that box reads as
+  // a member. Report it instead of letting the picture claim false ownership.
+  // A box the frame border visibly cuts through does not claim membership,
+  // and earlier valid inputs depend on that, so only full enclosure fails.
+  // This new composition gate applies to showcase; standard keeps its existing
+  // acceptance contract while authors can opt into the stricter check.
+  if (arch.meta?.quality_profile === 'showcase') {
+    for (const b of boundaries) {
+      const members = new Set(asArray(b.wraps));
+      for (const component of components.values()) {
+        if (members.has(component.id) || !rectContains(b, component)) continue;
+        const message = `Component "${component.id}" is not wrapped by boundary "${b.label}" but sits inside its frame — `
+          + 'move it outside the frame, place the wrapped members in one compact axis-aligned cluster (no empty bay for a non-member), or add it to wraps only when it truly belongs there.';
+        problems.push(message);
+        diagnostics.push({
+          code: 'layout/boundary-encloses-non-member',
+          severity: 'error',
+          message,
+          subject: { diagramType: 'architecture', boundary: { kind: b.kind, label: b.label, wraps: b.wraps }, component: component.id },
+          evidence: {
+            bounds: { x: b.x, y: b.y, width: b.width, height: b.height },
+            component: componentBox(component),
+          },
+          supportedFixes: [
+            `move "${component.id}" outside the boundary frame`,
+            'reposition the wrapped members into one compact axis-aligned cluster (no empty bay) that leaves non-members outside',
+          ],
+        });
+      }
+    }
+  }
+
   const connectionList = asArray(arch.connections);
   const knownComponentIds = [...components.keys()].sort();
   for (const conn of connectionList) {
@@ -777,7 +849,6 @@ function validateArchitecture() {
     relationCollection: 'connections',
     profile: arch.meta?.quality_profile,
   }));
-
   // Connection labels must not land on top of components.
   const labelRects = connectionLabels;
   for (const rect of labelRects) {

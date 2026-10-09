@@ -353,11 +353,11 @@ test('readable-v2 separates approval branches in the checked-in workflow example
 
   assert.equal(result.receipt.contract, 'readable-v2');
   assert.equal(
-    // The only visible delta is approved-tool's source moving 12px left:
-    // approval-denied and approved-tool previously shared a mixed-style trunk.
-    // Node geometry, labels, all other paths and v1 baselines are unchanged.
+    // approval-denied and approved-tool keep separate trunks. Neighbouring
+    // columns now keep a 32px route corridor, which widens the canvas by 12px,
+    // and tags keep their 7px preferred size.
     sha256(result.svg.replace(/ data-(?:composition-routing|edge-role|layout-contract)="[^"]*"/g, '')),
-    '7a4effe6000ef4d5c8e2e933186ff225f6398d76216d916600e51f8e05a7e139',
+    '09ece2904db9a525bd5990f896ab6f335b48cd7617beb6a47868874a17e94774',
   );
 });
 
@@ -488,6 +488,95 @@ test('an automatic readable-v2 vertical stack opts into width-first reader fitti
   }));
   const svgRoot = result.svg.match(/<svg\b[^>]*>/)?.[0];
   assert.ok(svgRoot, 'expected an SVG root');
+  assert.equal(attribute(svgRoot, 'data-reader-fit'), 'width-first');
+});
+
+test('a readable-v2 node without an authored width grows to fit its label', () => {
+  const workflow = adjacentWorkflow({ widths: [undefined, undefined], nodeLabels: ['Start', 'TOOL_RESULT 策略'] });
+  const before = JSON.stringify(workflow);
+  const result = compileSuccessfully(workflow);
+  const width = Number(result.svg.match(/data-node-id="b"[\s\S]*?<rect[^>]*width="([\d.]+)"/)[1]);
+  assert.equal(JSON.stringify(workflow), before, 'the authored document is not rewritten');
+  assert.equal(width, 104);
+});
+
+test('automatic widths are recomputed after editing the same workflow object', () => {
+  const document = adjacentWorkflow({ widths: [undefined, undefined], nodeLabels: ['Start', 'a'.repeat(29)] });
+  document.nodes[1].col = 5;
+  const expanded = compileSuccessfully(document);
+  assert.equal(expanded.receipt.nodes.find(({ id }) => id === 'b').width, 192);
+  document.nodes[1].label = 'A';
+  document.meta.viewBox = [768, 420];
+  const reused = compileSuccessfully(document);
+  const fresh = compileSuccessfully(clone(document));
+  assert.equal(reused.receipt.nodes.find(({ id }) => id === 'b').width, 92);
+  assert.equal(reused.svg, fresh.svg);
+  assert.deepEqual(reused.receipt, fresh.receipt);
+});
+
+test('switching an edited document to fixed-v1 does not reuse automatic widths', () => {
+  const document = adjacentWorkflow({ widths: [undefined, undefined], nodeLabels: ['Start', 'a'.repeat(29)] });
+  document.nodes[1].col = 5;
+  compileSuccessfully(document);
+  document.nodes[1].label = 'A';
+  document.schema_version = 1;
+  const reused = compileSuccessfully(document);
+  const fresh = compileSuccessfully(clone(document));
+  assert.equal(reused.receipt.nodes.find(({ id }) => id === 'b').width, 92);
+  assert.equal(reused.svg, fresh.svg);
+});
+
+test('authored canvases and standard workflows preserve bounded sublabel fonts', () => {
+  for (const qualityProfile of ['standard', 'showcase']) {
+    const document = adjacentWorkflow({ widths: [92, 92], viewBox: [10000, 420] });
+    document.nodes[0].sublabel = 'x';
+    const result = compileSuccessfully(document, qualityProfile);
+    assert.match(result.svg, /data-detail="context"[^>]*font-size="8"[^>]*>x<\/text>/);
+  }
+  const document = adjacentWorkflow({ widths: [132, 200] });
+  document.nodes[1].col = 5;
+  document.nodes[0].sublabel = 'chain / debate / synthesis 调度';
+  for (const col of [0, 2, 3, 4]) document.nodes.push({ id: `wide-${col}`, lane: 'main', col, type: 'backend', label: `Step ${col}`, width: 200 });
+  compileSuccessfully(document, 'standard');
+});
+
+test('readable-v2 sublabels must fit at the size that stays readable on the final canvas', () => {
+  const workflow = adjacentWorkflow({ widths: [132, 200] });
+  workflow.nodes[1].col = 5;
+  workflow.nodes[0].sublabel = 'chain / debate / synthesis 调度';
+  for (const col of [0, 2, 3, 4]) {
+    workflow.nodes.push({ id: `wide-${col}`, lane: 'main', col, type: 'backend', label: `Step ${col}`, width: 200 });
+  }
+  const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  assert.equal(result.ok, false, 'expected a readable-size failure on a canvas wider than the reader');
+  assert.match(JSON.stringify(result.diagnostics), /minimum that stays readable on this \d+px canvas/);
+});
+
+test('automatic showcase rejects a sublabel floor above the fixed row font budget', () => {
+  const workflow = adjacentWorkflow({ fromCol: 0, widths: [400, 400] });
+  workflow.nodes[0].sublabel = 'x';
+  workflow.nodes[1].col = 5;
+  for (const col of [2, 3, 4]) workflow.nodes.push({ id: `wide-${col}`, lane: 'main', col, type: 'backend', label: `Step ${col}`, width: 400 });
+  const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  assert.equal(result.ok, false);
+  assert.match(JSON.stringify(result.diagnostics), /above the supported 8px text row/);
+  const diagnostic = result.diagnostics.find(({ code }) => code === 'workflow/sublabel-readability');
+  assert.equal(diagnostic.subject.path, '/nodes/0/sublabel');
+  assert.ok(diagnostic.evidence.requiredFontPx > diagnostic.evidence.maximumSlotFontPx);
+  assert.equal(diagnostic.evidence.maximumSlotFontPx, 8);
+  assert.ok(diagnostic.supportedFixes.some(fix => /compact column spacing/.test(fix)));
+  compileSuccessfully(workflow, 'standard');
+});
+
+test('an automatic readable-v2 canvas too tall for the desktop page reads at page width', () => {
+  const workflow = adjacentWorkflow();
+  workflow.lanes = Array.from({ length: 6 }, (_, index) => ({ id: `lane-${index}`, label: `Lane ${index}` }));
+  workflow.nodes = workflow.lanes.map((lane, index) => ({ id: `n${index}`, lane: lane.id, col: 1, type: 'backend', label: `Step ${index}` }));
+  workflow.edges = workflow.nodes.slice(1).map((node, index) => ({ id: `e${index}`, from: workflow.nodes[index].id, to: node.id }));
+  const result = compileSuccessfully(workflow);
+  const svgRoot = result.svg.match(/<svg\b[^>]*>/)?.[0];
+  const [, , width, height] = attribute(svgRoot, 'viewBox').split(' ').map(Number);
+  assert.ok(width / height < 1.55, `${width}x${height} must be below the wide ratio`);
   assert.equal(attribute(svgRoot, 'data-reader-fit'), 'width-first');
 });
 
@@ -837,12 +926,26 @@ test('readable-v2 shifts top-side routes beyond lane header text deterministical
   );
 });
 
-test('explicit viewBox width is containment capacity and never stretches readable-v2 geometry', () => {
+test('an authored historical workflow canvas retains its valid rank plan', () => {
+  const document = readJson(path.join(__dirname, 'fixtures/workflow-viewport/order-overflow.workflow.json'));
+  document.meta.viewBox = [860, 786];
+  const before = JSON.stringify(document);
+  const result = compileSuccessfully(document, 'showcase');
+  assert.deepEqual(result.receipt.viewBox, [860, 786]);
+  assert.deepEqual(result.receipt.requiredViewBox, [860, 786]);
+  assert.equal(JSON.stringify(document), before);
+  assert.doesNotMatch(result.svg.match(/<svg[^>]*>/)[0], /data-reader-fit=/);
+});
+
+test('explicit viewBox width is containment capacity and never stretches its historical readable-v2 geometry', () => {
   for (const qualityProfile of ['standard', 'showcase']) {
     for (let fromCol = 0; fromCol < 5; fromCol += 1) {
+      // Compare authored capacities against the same historical rank plan.
+      // Unpinned drafts may reserve larger optional routing corridors.
       const intrinsic = compileSuccessfully(adjacentWorkflow({
         fromCol,
         label: 'liga',
+        viewBox: [1600, 420],
       }), qualityProfile);
       const expectedGeometry = {
         columns: intrinsic.receipt.columns,
@@ -870,7 +973,7 @@ test('explicit viewBox width is containment capacity and never stretches readabl
   }
 });
 
-test('capacity-only viewBox failures preserve the intrinsic routes, labels, and requirement', () => {
+test('capacity-only viewBox failures preserve historical routes, labels, and requirement', () => {
   const document = {
     schema_version: 2,
     diagram_type: 'workflow',
@@ -892,10 +995,13 @@ test('capacity-only viewBox failures preserve the intrinsic routes, labels, and 
       },
     ],
   };
-  const intrinsic = compileSuccessfully(clone(document), 'showcase');
+  const referenceDocument = clone(document);
+  referenceDocument.meta.viewBox = [1600, 1000];
+  const intrinsic = compileSuccessfully(referenceDocument, 'showcase');
+  assert.deepEqual(intrinsic.receipt.requiredViewBox, [768, 404]);
 
   const insufficientDocument = clone(document);
-  insufficientDocument.meta.viewBox = [900, 1000];
+  insufficientDocument.meta.viewBox = [700, 1000];
   const insufficient = compileWorkflow({
     workflow: insufficientDocument,
     qualityProfile: 'showcase',
@@ -905,7 +1011,7 @@ test('capacity-only viewBox failures preserve the intrinsic routes, labels, and 
   assert.equal(insufficient.diagnostics.length, 1, JSON.stringify(insufficient.diagnostics, null, 2));
   const [capacity] = insufficient.diagnostics;
   assert.equal(capacity.code, 'workflow/viewbox-capacity');
-  assert.deepEqual(capacity.evidence.actualViewBox, [900, 1000]);
+  assert.deepEqual(capacity.evidence.actualViewBox, [700, 1000]);
   assert.deepEqual(capacity.evidence.requiredViewBox, intrinsic.receipt.requiredViewBox);
 
   const sufficientDocument = clone(document);
@@ -1222,13 +1328,17 @@ test('readable-v2 measures multi-row legends into intrinsic and explicit viewBox
   const sufficient = compileSuccessfully(sufficientDocument, 'showcase');
   assert.deepEqual(sufficient.receipt.viewBox, intrinsic.receipt.requiredViewBox);
 
+  const referenceDocument = clone(workflow);
+  referenceDocument.meta.viewBox = [1600, 1000];
+  const reference = compileSuccessfully(referenceDocument, 'showcase');
+  assert.deepEqual(reference.receipt.requiredViewBox, [768, 302]);
   const expectedGeometry = {
-    requiredViewBox: intrinsic.receipt.requiredViewBox,
-    columns: intrinsic.receipt.columns,
-    nodes: intrinsic.receipt.nodes,
-    edges: intrinsic.receipt.edges,
-    labels: intrinsic.receipt.labels,
-    legend: legendGeometry(intrinsic.svg),
+    requiredViewBox: reference.receipt.requiredViewBox,
+    columns: reference.receipt.columns,
+    nodes: reference.receipt.nodes,
+    edges: reference.receipt.edges,
+    labels: reference.receipt.labels,
+    legend: legendGeometry(reference.svg),
   };
   for (const width of [900, 1400]) {
     const explicitDocument = clone(workflow);
@@ -1415,6 +1525,13 @@ test('CLI validate workflow --layout-json returns only the causal compiler failu
   assert.equal(receipt.contract, 'fixed-v1');
   assert.equal(receipt.diagnostics.length, 1, JSON.stringify(receipt.diagnostics, null, 2));
   assert.equal(receipt.diagnostics[0].code, 'workflow/column-capacity');
+});
+
+test('a dense automatic first draft routes between columns without crossings', () => {
+  // A generated first draft: five lanes, 150px nodes and no authored routes.
+  const workflow = readJson(path.join(__dirname, 'fixtures', 'workflow-dense-automatic.json'));
+  const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics, null, 2));
 });
 
 process.on('exit', () => fs.rmSync(tmp, { recursive: true, force: true }));

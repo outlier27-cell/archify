@@ -356,3 +356,15 @@ test('nodeLabelLayout reserves the source badge footprint on the right rail', ()
   const both = nodeLabelLayout({ width: 120, height: 64, rows, brand: true, source: true });
   assert.ok(both.ys[0] >= 19 + 2);
 });
+
+test('a too-wide lifecycle names the crowded labels that widened every gap', async () => {
+  const { spawnSync } = await import('node:child_process');
+  const { fileURLToPath } = await import('node:url');
+  const cli = fileURLToPath(new URL('../archify/bin/archify.mjs', import.meta.url));
+  const fixture = fileURLToPath(new URL('./fixtures/lifecycle-crowded-wide.json', import.meta.url));
+  const result = spawnSync(process.execPath, [cli, 'validate', 'lifecycle', fixture, '--json'], { encoding: 'utf8' });
+  const diagnostic = JSON.parse(result.stdout).diagnostics.find((entry) => entry.code === 'lifecycle/too-wide');
+  assert.ok(diagnostic, result.stdout);
+  assert.ok(diagnostic.evidence.spacingWideners.length > 0);
+  assert.match(diagnostic.supportedFixes[0], /found no clear spot at the base spacing, so every gap widened by 28px/);
+});

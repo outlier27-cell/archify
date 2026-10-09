@@ -19,8 +19,8 @@
       "engineeringProfile": null,
       "nodeCount": 12,
       "edgeCount": 11,
-      "artifactBytes": 783567,
-      "artifactSha256": "428c18b6004de7d4ab581b8f3e4d7582bfc11adc74fcbc8bfffe4950f0822034",
+      "artifactBytes": 783730,
+      "artifactSha256": "9e9d633be97f552d402895216ee622e469cd04709da0dfc8d24ee6af363ca124",
       "sourceBytes": 4939,
       "sourceSha256": "d67965d50872c97e4ff3476271e645bf19fab6b3ab44e111bdb44b063e3aa36f",
       "checks": [
@@ -80,7 +80,7 @@
           "minLabelRouteClearance": 29,
           "desktopReadabilityIssues": 0,
           "viewportHeightIssues": 0,
-          "minProjectedNodeTextPx": 6.788321167883212,
+          "minProjectedNodeTextPx": 6.714801444043322,
           "maxBends": 3,
           "routesOverSuggestedBends": 1,
           "maxStretch": 1.225,
@@ -134,7 +134,7 @@
             "id": "user"
           },
           "minimumSourceTextPx": 8,
-          "minimumProjectedTextPx": 6.788321167883212,
+          "minimumProjectedTextPx": 6.714801444043322,
           "semanticTextCount": 29
         },
         "issues": []
@@ -154,10 +154,10 @@
       "engineeringProfile": "deployment-ownership",
       "nodeCount": 12,
       "edgeCount": 12,
-      "artifactBytes": 786294,
-      "artifactSha256": "3589456180f06f94a6ccfc603bf43da31e240c7e2847b6e00b75d396320f9b60",
+      "artifactBytes": 786448,
+      "artifactSha256": "e9f5bdaa095dc900ffe4760838568bd83a1ab5024b46289adcc2d8b5c0bab5f8",
       "sourceBytes": 4734,
-      "sourceSha256": "cb54bad2dfd0c2d02aa5b496bde6839789a0f07f23062343c4458b8d38806c13",
+      "sourceSha256": "610a5614667e8f108bdcf1769c9d7af5c3ce0fb62be3ea50550b10eb752e4bda",
       "checks": [
         {
           "name": "single_svg",
@@ -221,7 +221,7 @@
           "maxStretch": 1.098,
           "routesOverSuggestedStretch": 0,
           "minSegmentPx": 20,
-          "minInteriorSegmentPx": 74,
+          "minInteriorSegmentPx": 104,
           "shortSegmentCount": 0,
           "shortEndpointSegmentCount": 0,
           "shortInteriorSegmentCount": 0,
@@ -240,10 +240,10 @@
         "leadingSpace": {
           "measured": true,
           "emptyTopPx": 85,
-          "emptyTopRatio": 0.117,
+          "emptyTopRatio": 0.108,
           "occupiedTop": 85,
           "viewBoxTop": 0,
-          "canvasHeight": 728,
+          "canvasHeight": 790,
           "typicalNodeHeight": 62,
           "reviewSuggested": false
         },
@@ -287,8 +287,8 @@
       "engineeringProfile": null,
       "nodeCount": 7,
       "edgeCount": 12,
-      "artifactBytes": 778107,
-      "artifactSha256": "b63a836b8f5ce0f99e7d39fad0e2223219e6d3a134b31d9c1255a9bfe96fb253",
+      "artifactBytes": 778261,
+      "artifactSha256": "1a65397a6450427a4a9d51f1087917d9709181a2ccea99a1199fd1559be3fd71",
       "sourceBytes": 3805,
       "sourceSha256": "f8486daa803fff6c295cecca4604c561fbbf9acb2e83326022b5a87639e8afe6",
       "checks": [
@@ -421,8 +421,8 @@
       "engineeringProfile": null,
       "nodeCount": 10,
       "edgeCount": 10,
-      "artifactBytes": 779081,
-      "artifactSha256": "62715cfb5e7475c0b1eed27bf817e8cd352150197cdd40cd0ce66c6b145ad9ef",
+      "artifactBytes": 779234,
+      "artifactSha256": "fdaca4d85a11af6a7845d236d0386926f6d91acbb08439c48f5d6383b911cff3",
       "sourceBytes": 4510,
       "sourceSha256": "dbd5c174af66296caec372e7214cf4df7158b50a563508e16826b95ab8d1cd6c",
       "checks": [
@@ -542,7 +542,7 @@
             "fixedChromePx": 126,
             "pageHeightPx": 1809,
             "overflowPx": 909,
-            "detail": "[composition/viewport-height] Preserve every node, relationship, and label. This 720x900 canvas (ratio 0.8) declares no intrinsic-height fit and is below the 1.55 wide ratio, so the desktop Reader can neither narrow it nor accept vertical scroll: it renders 1683px tall at the full 1346px width and the page reaches 1809px before cards against 900px, a certain visual-check failure. Either compact vertical spacing so meta.viewBox height is at most 464 at this width, or spread content sideways so the width is at least 1395 at this height; for architecture, omitting meta.viewBox lets the renderer size the canvas and declare the fit."
+            "detail": "[composition/viewport-height] Preserve every node, relationship, and label. This 720x900 canvas (ratio 0.8) declares no intrinsic-height fit and is below the 1.55 wide ratio, so the desktop Reader can neither narrow it nor accept vertical scroll: it renders 1683px tall at the full 1346px width and the page reaches 1809px before cards against 900px, a certain visual-check failure. Either compact vertical spacing so meta.viewBox height is at most 464 at this width, or spread content sideways so the width is at least 1395 at this height; for architecture and readable-v2 workflow, omitting meta.viewBox lets the renderer size the canvas and declare the fit."
           }
         ]
       }
@@ -561,8 +561,8 @@
       "engineeringProfile": null,
       "nodeCount": 11,
       "edgeCount": 10,
-      "artifactBytes": 776401,
-      "artifactSha256": "3d0ea9784453a2c6f443bd7701f9dc0df878f1247d912b28ad8683ae19a2a9b4",
+      "artifactBytes": 776554,
+      "artifactSha256": "ef51f025cce61793824fd154245b2bf5df343874a523e2146eff694e59a8ef50",
       "sourceBytes": 4723,
       "sourceSha256": "630be98449925d2716ecb8439f404b2bff5fe65ba905b0ad0baea6d96890c526",
       "checks": [
@@ -728,7 +728,7 @@
             "fixedChromePx": 126,
             "pageHeightPx": 1809,
             "overflowPx": 909,
-            "detail": "[composition/viewport-height] Preserve every node, relationship, and label. This 720x900 canvas (ratio 0.8) declares no intrinsic-height fit and is below the 1.55 wide ratio, so the desktop Reader can neither narrow it nor accept vertical scroll: it renders 1683px tall at the full 1346px width and the page reaches 1809px before cards against 900px, a certain visual-check failure. Either compact vertical spacing so meta.viewBox height is at most 464 at this width, or spread content sideways so the width is at least 1395 at this height; for architecture, omitting meta.viewBox lets the renderer size the canvas and declare the fit."
+            "detail": "[composition/viewport-height] Preserve every node, relationship, and label. This 720x900 canvas (ratio 0.8) declares no intrinsic-height fit and is below the 1.55 wide ratio, so the desktop Reader can neither narrow it nor accept vertical scroll: it renders 1683px tall at the full 1346px width and the page reaches 1809px before cards against 900px, a certain visual-check failure. Either compact vertical spacing so meta.viewBox height is at most 464 at this width, or spread content sideways so the width is at least 1395 at this height; for architecture and readable-v2 workflow, omitting meta.viewBox lets the renderer size the canvas and declare the fit."
           }
         ]
       }
@@ -747,8 +747,8 @@
       "engineeringProfile": null,
       "nodeCount": 10,
       "edgeCount": 10,
-      "artifactBytes": 780401,
-      "artifactSha256": "1ec638f17ae484fe658808f9122de3e83ca20e8d902f3dd8fd385a46baa69e54",
+      "artifactBytes": 780556,
+      "artifactSha256": "8896e6da9307ab452bcf8e0d478f708f0ea4ae517efd330d322bfbec5ce7b9f5",
       "sourceBytes": 5035,
       "sourceSha256": "8a635db9e51a5b1a8d2955b9d66f5b9a450e0a298432ce8f2e2f0be11f372e05",
       "checks": [
@@ -882,8 +882,8 @@
       "engineeringProfile": null,
       "nodeCount": 7,
       "edgeCount": 14,
-      "artifactBytes": 778453,
-      "artifactSha256": "2a034af8c52698684e7f0e1f1f14988ea52043cd5012245c05a02d0b7372f92c",
+      "artifactBytes": 778607,
+      "artifactSha256": "aa5109b63fbbf452da0e8f40e36d7bef45c6989fa456ffbafc95bc9e01204f34",
       "sourceBytes": 3766,
       "sourceSha256": "b8c6c52f1763ede2933c77deb8da59b3e06917bc41d27e66df896136456b859a",
       "checks": [
@@ -1015,7 +1015,7 @@
             "fixedChromePx": 126,
             "pageHeightPx": 1636,
             "overflowPx": 736,
-            "detail": "[composition/viewport-height] Preserve every node, relationship, and label. This 820x920 canvas (ratio 0.89) declares no intrinsic-height fit and is below the 1.55 wide ratio, so the desktop Reader can neither narrow it nor accept vertical scroll: it renders 1510px tall at the full 1346px width and the page reaches 1636px before cards against 900px, a certain visual-check failure. Either compact vertical spacing so meta.viewBox height is at most 529 at this width, or spread content sideways so the width is at least 1426 at this height; for architecture, omitting meta.viewBox lets the renderer size the canvas and declare the fit."
+            "detail": "[composition/viewport-height] Preserve every node, relationship, and label. This 820x920 canvas (ratio 0.89) declares no intrinsic-height fit and is below the 1.55 wide ratio, so the desktop Reader can neither narrow it nor accept vertical scroll: it renders 1510px tall at the full 1346px width and the page reaches 1636px before cards against 900px, a certain visual-check failure. Either compact vertical spacing so meta.viewBox height is at most 529 at this width, or spread content sideways so the width is at least 1426 at this height; for architecture and readable-v2 workflow, omitting meta.viewBox lets the renderer size the canvas and declare the fit."
           }
         ]
       }
@@ -1034,8 +1034,8 @@
       "engineeringProfile": null,
       "nodeCount": 12,
       "edgeCount": 12,
-      "artifactBytes": 784321,
-      "artifactSha256": "fb79dcf636f713603fee104c209ffa08ae6bb32ce0fca43ab5f09cd7d8aaf31a",
+      "artifactBytes": 784476,
+      "artifactSha256": "ae05b0707f89de68ce58cd45a9069ad50cdd77edc79359992288ac83f5382a80",
       "sourceBytes": 4769,
       "sourceSha256": "3bdd77674282009c7c68d588cf8a3c495bc98a3be1b9c45327fd1801a6f83a23",
       "checks": [
@@ -1167,7 +1167,7 @@
             "fixedChromePx": 126,
             "pageHeightPx": 1098,
             "overflowPx": 198,
-            "detail": "[composition/viewport-height] Preserve every node, relationship, and label. This 1080x780 canvas (ratio 1.38) declares no intrinsic-height fit and is below the 1.55 wide ratio, so the desktop Reader can neither narrow it nor accept vertical scroll: it renders 972px tall at the full 1346px width and the page reaches 1098px before cards against 900px, a certain visual-check failure. Either compact vertical spacing so meta.viewBox height is at most 696 at this width, or spread content sideways so the width is at least 1209 at this height; for architecture, omitting meta.viewBox lets the renderer size the canvas and declare the fit."
+            "detail": "[composition/viewport-height] Preserve every node, relationship, and label. This 1080x780 canvas (ratio 1.38) declares no intrinsic-height fit and is below the 1.55 wide ratio, so the desktop Reader can neither narrow it nor accept vertical scroll: it renders 972px tall at the full 1346px width and the page reaches 1098px before cards against 900px, a certain visual-check failure. Either compact vertical spacing so meta.viewBox height is at most 696 at this width, or spread content sideways so the width is at least 1209 at this height; for architecture and readable-v2 workflow, omitting meta.viewBox lets the renderer size the canvas and declare the fit."
           }
         ]
       }
@@ -1186,8 +1186,8 @@
       "engineeringProfile": null,
       "nodeCount": 10,
       "edgeCount": 12,
-      "artifactBytes": 784490,
-      "artifactSha256": "7963901ba300e8c7dec6376fd02a456ea8260cb98240620b38b55dc78e3bcd7d",
+      "artifactBytes": 784643,
+      "artifactSha256": "88e481d8a20d726c1123e616ac4d3ab48a18b482ef8e43ee8754ac66115c5b39",
       "sourceBytes": 3260,
       "sourceSha256": "5ba36f5ce91ed428cb48b599e275424916d82b619b9a3231cbd1bbc3966fc54b",
       "checks": [
@@ -1308,8 +1308,8 @@
       "engineeringProfile": null,
       "nodeCount": 12,
       "edgeCount": 15,
-      "artifactBytes": 791266,
-      "artifactSha256": "69517d2395f4426f82d901defe2cf0238b944a2f7f66035e5ecfb720b60f1d27",
+      "artifactBytes": 791419,
+      "artifactSha256": "0cf925d4f3a4c056639f9fa5f32bf3e0a4676f05f24a306b241b6ae11ee09d56",
       "sourceBytes": 4155,
       "sourceSha256": "e3dc105d03c1c9881160006cdace23cb5d8533803e337caf0ec287c64e775275",
       "checks": [
@@ -1430,8 +1430,8 @@
       "engineeringProfile": null,
       "nodeCount": 10,
       "edgeCount": 9,
-      "artifactBytes": 778107,
-      "artifactSha256": "273fdc8d4f0deb9b150d09d90ee914c5d235ffa9423eaea1a8ba24f9e13ca2cc",
+      "artifactBytes": 778261,
+      "artifactSha256": "747dbf4a3de9ebd096f585ce431e52019557989b3d4fa197f8d88e54aab8e233",
       "sourceBytes": 3197,
       "sourceSha256": "95e051b27a9e4a3307e194c0f666fca4af51470be7e2228d400ff48aea5b353b",
       "checks": [
@@ -1576,8 +1576,8 @@
       "engineeringProfile": null,
       "nodeCount": 6,
       "edgeCount": 5,
-      "artifactBytes": 792602,
-      "artifactSha256": "1a28ccb106911ed2a76d3ee05859be44687ab99da8fe62d6e4ce717f02e827b0",
+      "artifactBytes": 792774,
+      "artifactSha256": "d1f3bd878a9af715e4db96732a4f2b5b191f3cfc8bb1ba57ef6d8a09b2057bfd",
       "sourceBytes": 7321,
       "sourceSha256": "1777a374647084466f4d7ce3a968004be6ab70ac9cf82459b96bed7c556cdfdd",
       "checks": [
@@ -1637,7 +1637,7 @@
           "minLabelRouteClearance": 225,
           "desktopReadabilityIssues": 0,
           "viewportHeightIssues": 0,
-          "minProjectedNodeTextPx": 8.773584905660378,
+          "minProjectedNodeTextPx": 8.378378378378379,
           "maxBends": 2,
           "routesOverSuggestedBends": 0,
           "maxStretch": 1,
@@ -1681,7 +1681,7 @@
             "id": "customer"
           },
           "minimumSourceTextPx": 9,
-          "minimumProjectedTextPx": 8.773584905660378,
+          "minimumProjectedTextPx": 8.378378378378379,
           "semanticTextCount": 92
         },
         "issues": []

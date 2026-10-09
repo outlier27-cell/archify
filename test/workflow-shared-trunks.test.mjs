@@ -250,3 +250,15 @@ test('compiler and artifact checks both report independent shared arrowheads', (
   const checked=checkSvg(t,result.svg.replace(/^[\s\S]*?<svg[^>]*>/,'').replace(/<\/svg>\s*$/,''),'standard');
   assert.equal(checked.receipt.composition.metrics.arrowheadCollisions,1);
 });
+
+test('composition diagnostics name edges by their authored index', () => {
+  const workflow = sharedCrossingWorkflow();
+  workflow.meta.quality_profile = 'showcase';
+  workflow.edges[0].id = 'z-ab';
+  workflow.edges[1].id = 'a-ac';
+  const compiled = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  const diagnostic = compiled.receipt.diagnostics.find(d => d.code === 'composition/proper-crossing');
+  assert.ok(diagnostic, JSON.stringify(compiled.receipt.diagnostics));
+  const [first, second] = [...diagnostic.message.matchAll(/edges\[(\d+)\] id "([^"]+)"/g)].map(match => [Number(match[1]), match[2]]);
+  for (const [index, id] of [first, second]) assert.equal(workflow.edges[index].id, id);
+});
