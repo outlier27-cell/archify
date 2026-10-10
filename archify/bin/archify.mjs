@@ -2253,6 +2253,12 @@ function runNode(args, options = {}) {
     maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER,
     env: options.env ? { ...process.env, ...options.env } : process.env,
   });
+  // spawnSync can report a system failure after a child has exited zero. A
+  // truncated renderer or checker result is never a successful invocation.
+  if (result.error && result.status === 0) {
+    result.archifyRawStatus = result.status;
+    result.status = 1;
+  }
   return result;
 }
 
@@ -2280,7 +2286,7 @@ function checkerOutputLimitDiagnostics(check, limitBytes) {
     evidence: {
       systemCode: check.error.code,
       ...(check.signal ? { signal: check.signal } : {}),
-      status: check.status ?? null,
+      status: check.archifyRawStatus ?? check.status ?? null,
       limitBytes,
       receivedBytes,
     },
@@ -4315,7 +4321,7 @@ function writeDeliveryFailureReceipt(options) {
 }
 
 function reportValidateFailure(options) {
-  reportArtifactFailure({ ...options, command: 'validate' });
+  reportArtifactFailure({ ...options, command: options.command || 'validate' });
 }
 
 function reportArtifactArgumentFailure(command, error) {
@@ -6811,7 +6817,11 @@ async function commandMigrate(args) {
   }
 }
 
-async function commandValidate(args) {
+// `inspect` delegates here in layout-JSON mode, so argument failures must be
+// attributed to the command the caller actually invoked.
+async function commandValidate(args, invocation = {}) {
+  const invokingCommand = invocation.command || 'validate';
+  const reportFailure = (options) => reportValidateFailure({ ...options, command: invokingCommand });
   const qualityArgs = extractQualityArgs(args);
   const repoArgs = extractRepoRootArgs(qualityArgs.rest);
   args = repoArgs.rest;
@@ -6819,7 +6829,7 @@ async function commandValidate(args) {
   const repoRoot = repoArgs.repoRoot;
   const knownOptions = new Set(['--json', '--layout-json']);
   const unknown = args.filter((arg) => arg.startsWith('--') && !knownOptions.has(arg));
-  if (unknown.length) rejectCliArgument(`Unknown validate option "${unknown[0]}".`, {
+  if (unknown.length) rejectCliArgument(`Unknown ${invokingCommand} option "${unknown[0]}".`, {
     code: 'cli/unknown-option',
     subject: { option: unknown[0] },
     supportedFixes: ['remove the unknown option and retry'],
@@ -6830,7 +6840,7 @@ async function commandValidate(args) {
   const [type, input] = rest;
   if (!type || !input || rest.length !== 2) rejectCliArgument(usage(), {
     code: 'cli/usage',
-    supportedFixes: ['use: archify validate <type> <input.json> [options]'],
+    supportedFixes: [`use: archify ${invokingCommand} <type> <input.json> [options]`],
   });
   const renderer = rendererPath(type);
 
@@ -6855,7 +6865,7 @@ async function commandValidate(args) {
     else validateAuthoredOutputPath(document.meta.output);
   } catch (error) {
     const diagnostics = error.archifyDiagnostics || [inputDiagnostic(error, inputPath)];
-    reportValidateFailure({
+    reportFailure({
       json,
       stage: diagnostics.some((entry) => entry.code.startsWith('input/')) ? 'input' : 'render',
       type,
@@ -6887,7 +6897,7 @@ async function commandValidate(args) {
         // receipt was produced (for example, input JSON could not be read).
       }
       const failure = rendererFailure(result);
-      reportValidateFailure({
+      reportFailure({
         json,
         stage: failure.diagnostics.some((entry) => entry.code.startsWith('input/')) ? 'input' : 'render',
         type,
@@ -6918,7 +6928,7 @@ async function commandValidate(args) {
     });
     if (render.status !== 0) {
       const failure = rendererFailure(render);
-      report = () => reportValidateFailure({
+      report = () => reportFailure({
         json,
         stage: failure.diagnostics.some((entry) => entry.code.startsWith('input/')) ? 'input' : 'render',
         type,
@@ -6939,7 +6949,7 @@ async function commandValidate(args) {
         exitCode = check.status || 1;
         const outputLimit = checkerOutputLimitDiagnostics(check, checkMaxBuffer);
         if (outputLimit) {
-          report = () => reportValidateFailure({
+          report = () => reportFailure({
             json,
             stage: 'check',
             type,
@@ -6956,7 +6966,7 @@ async function commandValidate(args) {
           } catch {
             checker = { ok: false, diagnostic: 'Artifact checker failed without a parseable receipt.' };
           }
-          report = () => reportValidateFailure({
+          report = () => reportFailure({
             json,
             stage: 'check',
             type,
@@ -7018,7 +7028,7 @@ async function commandValidate(args) {
       await temporary.cleanup();
     } catch (error) {
       exitCode = 1;
-      report = () => reportValidateFailure({
+      report = () => reportFailure({
         json,
         stage: 'cleanup',
         type,
@@ -7074,9 +7084,13 @@ try {
       break;
     case 'inspect':
       if (args[0] !== 'architecture') {
-        fail('inspect is currently supported for architecture diagrams only.');
+        rejectCliArgument('inspect is currently supported for architecture diagrams only.', {
+          code: 'cli/unsupported-option',
+          subject: { command: 'inspect', type: args[0] },
+          supportedFixes: ['use an architecture diagram', 'use validate <type> <input.json> --layout-json for workflow diagrams'],
+        });
       }
-      commandValidate([...args, '--layout-json']);
+      await commandValidate([...args, '--layout-json'], { command: 'inspect' });
       break;
     case 'check':
       await commandCheck(args);
@@ -7107,7 +7121,7 @@ try {
   }
 } catch (error) {
   if (!error.archifyArgument) throw error;
-  if (['validate', 'deliver', 'finalize'].includes(command) && args.includes('--json')) {
+  if (['validate', 'deliver', 'finalize', 'inspect'].includes(command) && args.includes('--json')) {
     reportArtifactArgumentFailure(command, error);
   } else {
     fail(error.message);

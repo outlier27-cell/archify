@@ -27,6 +27,34 @@ Before requesting final review, explain:
 
 Use [the PR template](.github/PULL_REQUEST_TEMPLATE.md); link existing receipts or CI output instead of transcribing long logs. Classify impact by behavior and callers, not file extension or diff size.
 
+## PR improvement check
+
+Before requesting final review of a behavior-changing PR, assess the changed
+behavior, direct callers, and affected tests with the project Skills:
+
+- [test-value](.agents/skills/test-value/SKILL.md): use its implementation or
+  pre-commit review mode to decide which tests to add, adapt, reuse, or retire.
+  Protect user outcomes and real failure boundaries at proportionate cost.
+- [simplify-codebase](.agents/skills/simplify-codebase/SKILL.md): use Focused
+  Survey mode when the diff introduces or touches duplicate logic/state, dead
+  paths, redundant layers, or another concrete complexity concern. Trace the
+  relevant consumers before recommending a cut.
+
+Keep this check within the PR's changed ownership boundaries. A conclusion of
+“no worthwhile improvement” is valid. Pure prose or generated-only refreshes
+with no behavior change may skip it; authored Skill instructions and behavioral
+build inputs still need assessment. Apply proved improvements within the task's
+existing authorization. Report changes that would retire a supported capability
+or compatibility contract for maintainer decision.
+
+Summarize useful findings, implemented improvements, or the reason for skipping
+in the PR's existing problem/impact and test sections. Reuse applicable evidence
+under [Choose evidence by impact](#choose-evidence-by-impact); this check adds no
+separate audit report or CI gate. Repository instructions govern scope and
+publication authority. Treat the two vendored Skills as read-only guidance in
+ordinary PRs; update their pinned sources through a dedicated reviewed change.
+See [Skill sources](.agents/README.md) for provenance and update procedure.
+
 ## Choose evidence by impact
 
 | Impact | Typical change | Evidence to prepare |
@@ -114,6 +142,24 @@ The Node 18, 20, and 24 compatibility lanes run the same core product smoke via
 their responsibility is affected and in complete verification. The separate
 browser, WebM, Windows, and package gates retain their distinct claims. Do not
 repeat an unchanged complete run locally just because CI is also running it.
+
+For full CI, Node 22 runs every discovered test file across two independent
+machines using `node scripts/run-tests.mjs --shard=1/2` and `--shard=2/2`.
+One shard also runs generated checks and the Hermes adapter contract once,
+using the same installed dependencies. The existing `test (22)` check requires
+both shards to succeed without reinstalling dependencies afterward. Other scopes do not
+start these shards. Node 18, 20 and 24 compatibility checks start after scope
+classification, without waiting for the complete regression shards.
+`--list --shard=1/2` shows the selected files; shards cannot
+be combined with explicit files or test-name filtering. Locally and in tagged
+releases, `npm run test:full` still runs the complete inventory without sharding.
+
+The Windows Node 22 lane owns the complete filesystem and fault-injection
+matrices. Node 24 runs the core CLI smoke instead of repeating those matrices.
+Both lanes, including tagged releases, still run the controlled case-sensitive
+NTFS, UNC, extended-path, and 8.3-path scenarios. Use
+`node scripts/run-windows-path-tests.mjs --list` (or `--smoke --list`) to inspect
+the selected groups without running tests or creating Windows fixtures.
 
 The test runners accept `--concurrency=N` to tune the number of simultaneous
 test files on Node 18.19+, for example `npm run test:focus -- test/geometry.test.mjs --concurrency=4`. Headless

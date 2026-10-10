@@ -1063,6 +1063,37 @@ await import(${JSON.stringify(pathToFileURL(cli).href)});
   });
 }
 
+for (const [command, args] of [
+  ['inspect', ['inspect', 'architecture', path.join(skillRoot, 'examples/web-app.architecture.json'), '--json']],
+  ['validate', ['validate', 'architecture', path.join(skillRoot, 'examples/web-app.architecture.json'), '--layout-json', '--json']],
+]) {
+  test(`cli: ${command} rejects renderer ENOBUFS with status zero in layout mode`, () => {
+    const wrapper = path.join(tmp, `renderer-spawn-error-${command}.mjs`);
+    fs.writeFileSync(wrapper, `
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+const original = childProcess.spawnSync;
+childProcess.spawnSync = (executable, childArgs, options) => {
+  if (String(childArgs?.[0]).endsWith('render-architecture.mjs')) {
+    return { status: 0, signal: null, stdout: '{"ok":true', stderr: '', error: Object.assign(new Error('buffer exceeded'), { code: 'ENOBUFS' }) };
+  }
+  return original(executable, childArgs, options);
+};
+syncBuiltinESMExports();
+process.argv = [process.execPath, ${JSON.stringify(cli)}, ...${JSON.stringify(args)}];
+await import(${JSON.stringify(pathToFileURL(cli).href)});
+`);
+    const result = spawnSync(process.execPath, [wrapper], { cwd: skillRoot, encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    const receipt = JSON.parse(result.stdout);
+    assert.equal(receipt.ok, false);
+    assert.equal(receipt.command, command);
+    assert.equal(receipt.stage, 'render');
+    assert.equal(receipt.diagnostics[0].code, 'internal/renderer-process');
+    assert.doesNotMatch(result.stdout, /\{"ok":true$/);
+  });
+}
+
 test('cli: check reports an output-limit failure with a classified receipt', () => {
   const input = path.join(skillRoot, 'examples/web-app.architecture.json');
   const artifact = path.join(tmp, 'check-output-limit.html');
@@ -4454,9 +4485,10 @@ test('cli: validate rejects unknown flags, layout-json assignment typos, and ext
   }
 });
 
-test('cli: validate and deliver keep argument failures machine-readable with --json', () => {
+test('cli: validate, deliver, and inspect keep argument failures machine-readable with --json', () => {
   const workflow = path.join(skillRoot, 'examples/agent-tool-call.workflow.json');
   const sequence = path.join(skillRoot, 'examples/cache-miss-request.sequence.json');
+  const architecture = path.join(skillRoot, 'examples/web-app.architecture.json');
   const cases = [
     {
       args: ['validate', '--json'],
@@ -4544,6 +4576,30 @@ test('cli: validate and deliver keep argument failures machine-readable with --j
       command: 'deliver',
       code: 'cli/usage',
     },
+    {
+      args: ['inspect', 'architecture', architecture, '--json', '--bogus'],
+      command: 'inspect',
+      code: 'cli/unknown-option',
+      subject: { option: '--bogus' },
+    },
+    {
+      args: ['inspect', 'architecture', '--json'],
+      command: 'inspect',
+      code: 'cli/usage',
+    },
+    {
+      args: ['inspect', 'architecture', architecture, 'extra.json', '--json'],
+      command: 'inspect',
+      code: 'cli/usage',
+    },
+    {
+      // The architecture-only selector guard runs before the delegate, so it
+      // must raise a rejectable argument failure rather than fail() early.
+      args: ['inspect', 'workflow', workflow, '--json'],
+      command: 'inspect',
+      code: 'cli/unsupported-option',
+      subject: { type: 'workflow' },
+    },
   ];
 
   for (const { args, command, code, subject = {} } of cases) {
@@ -4567,6 +4623,31 @@ test('cli: validate and deliver keep argument failures machine-readable with --j
   }
 });
 
+test('cli: inspect argument failures exit 2 with a clean, truthful diagnostic', () => {
+  const architecture = path.join(skillRoot, 'examples/web-app.architecture.json');
+
+  // Without `await`, the delegated async validate call rejects past the
+  // top-level catch: exit 1, a raw Node stack trace, and a "validate" message.
+  const unknown = run(['inspect', 'architecture', architecture, '--bogus']);
+  assert.equal(unknown.status, 2, unknown.stderr);
+  assert.equal(unknown.stdout, '');
+  assert.equal(unknown.stderr.trim(), 'Unknown inspect option "--bogus".');
+  assert.doesNotMatch(unknown.stderr, /^\s+at /m);
+  assert.equal(unknown.stderr.includes('Node.js v'), false);
+
+  for (const args of [
+    ['inspect', 'architecture'],
+    ['inspect', 'architecture', architecture, 'extra.json'],
+  ]) {
+    const result = run(args);
+    assert.equal(result.status, 2, `${args.join(' ')}\n${result.stderr}\n${result.stdout}`);
+    assert.equal(result.stdout, '');
+    assert.match(result.stderr, /^Usage:/m);
+    assert.doesNotMatch(result.stderr, /^\s+at /m);
+    assert.equal(result.stderr.includes('Node.js v'), false);
+  }
+});
+
 test('cli: inspect emits architecture layout json', () => {
   const input = path.resolve(skillRoot, '../examples/archify-repo-grid.architecture.json');
   const result = run(['inspect', 'architecture', input]);
@@ -4585,6 +4666,21 @@ test('cli: inspect remains architecture-only while workflow uses validate --layo
   assert.equal(result.status, 2);
   assert.match(result.stderr, /inspect is currently supported for architecture diagrams only/);
   assert.equal(result.stdout, '');
+  assert.doesNotMatch(result.stderr, /^\s+at /m);
+
+  // `--json` must reach the same machine-readable argument receipt as every
+  // other rejected `inspect` invocation instead of exiting before it.
+  const json = run(['inspect', 'workflow', input, '--json']);
+  assert.equal(json.status, 2, json.stderr || json.stdout);
+  assert.equal(json.stderr, '');
+  const failure = JSON.parse(json.stdout);
+  assert.equal(failure.ok, false);
+  assert.equal(failure.command, 'inspect');
+  assert.equal(failure.stage, 'arguments');
+  assert.equal(failure.diagnostics[0].code, 'cli/unsupported-option');
+  assert.deepEqual(failure.diagnostics[0].subject, { command: 'inspect', type: 'workflow' });
+  assert.ok(failure.diagnostics[0].supportedFixes.length > 0);
+  assert.equal('stack' in failure, false);
 });
 
 test('cli: validate returns renderer errors for bad input', () => {
