@@ -1064,6 +1064,82 @@ test('cli: compare reports an output-limit failure with the same diagnostic', ()
   assert.equal(failure.diagnostics[0].evidence.systemCode, 'ENOBUFS');
 });
 
+for (const command of ['validate', 'deliver', 'migrate', 'compare', 'check']) {
+  test(`cli: ${command} rejects checker ENOBUFS with status zero`, () => {
+    const input = path.join(skillRoot, 'examples/web-app.architecture.json');
+    const out = path.join(tmp, `spawn-error-${command}.html`);
+    const prior = '<!doctype html><title>trusted artifact</title>\n';
+    fs.writeFileSync(out, prior);
+    const args = command === 'validate' ? ['validate', 'architecture', input, '--json']
+      : command === 'deliver' ? ['deliver', 'architecture', input, out, '--json']
+      : command === 'migrate' ? ['migrate', 'workflow', path.join(__dirname, 'fixtures/v1-workflow-700x400.workflow.json'), path.join(tmp, 'spawn-error.workflow.json'), '--to-schema', '2', '--json']
+      : command === 'compare' ? ['compare', 'architecture', input, input, out, '--json']
+      : ['check', out];
+    const wrapper = path.join(tmp, `spawn-error-${command}.mjs`);
+    fs.writeFileSync(wrapper, `
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+const original = childProcess.spawnSync;
+childProcess.spawnSync = (executable, args, options) => {
+  if (String(args?.[0]).endsWith('check-render-output.mjs')) {
+    return { status: 0, signal: null, stdout: '{"ok":true}', stderr: '', error: Object.assign(new Error('buffer exceeded'), { code: 'ENOBUFS' }) };
+  }
+  return original(executable, args, options);
+};
+syncBuiltinESMExports();
+process.argv = [process.execPath, ${JSON.stringify(cli)}, ...${JSON.stringify(args)}];
+await import(${JSON.stringify(pathToFileURL(cli).href)});
+`);
+    const result = spawnSync(process.execPath, [wrapper], { cwd: skillRoot, encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    const receipt = JSON.parse(result.stdout);
+    assert.equal(receipt.ok, false);
+    const entry = receipt.diagnostics.find(({ code }) => code === 'artifact/check-output-limit');
+    assert.ok(entry, result.stdout);
+    assert.equal(entry.evidence.systemCode, 'ENOBUFS');
+    assert.equal(entry.evidence.status, 0);
+    assert.equal(entry.evidence.receivedBytes, Buffer.byteLength('{"ok":true}'));
+    if (command === 'deliver' || command === 'compare') assert.equal(fs.readFileSync(out, 'utf8'), prior);
+  });
+}
+
+for (const [command, args] of [
+  ['inspect', ['inspect', 'architecture', path.join(skillRoot, 'examples/web-app.architecture.json'), '--json']],
+  ['validate', ['validate', 'architecture', path.join(skillRoot, 'examples/web-app.architecture.json'), '--layout-json', '--json']],
+]) {
+  test(`cli: ${command} rejects renderer ENOBUFS with status zero in layout mode`, () => {
+    const wrapper = path.join(tmp, `renderer-spawn-error-${command}.mjs`);
+    fs.writeFileSync(wrapper, `
+import childProcess from 'node:child_process';
+import { syncBuiltinESMExports } from 'node:module';
+const original = childProcess.spawnSync;
+childProcess.spawnSync = (executable, childArgs, options) => {
+  if (String(childArgs?.[0]).endsWith('render-architecture.mjs')) {
+    return {
+      status: 0,
+      signal: null,
+      stdout: JSON.stringify({ contract: 'archify.renderer.failure.v1', diagnostics: [] }),
+      stderr: '',
+      error: Object.assign(new Error('buffer exceeded'), { code: 'ENOBUFS' }),
+    };
+  }
+  return original(executable, childArgs, options);
+};
+syncBuiltinESMExports();
+process.argv = [process.execPath, ${JSON.stringify(cli)}, ...${JSON.stringify(args)}];
+await import(${JSON.stringify(pathToFileURL(cli).href)});
+`);
+    const result = spawnSync(process.execPath, [wrapper], { cwd: skillRoot, encoding: 'utf8' });
+    assert.equal(result.status, 1, result.stderr || result.stdout);
+    const receipt = JSON.parse(result.stdout);
+    assert.equal(receipt.ok, false);
+    assert.equal(receipt.command, command);
+    assert.equal(receipt.stage, 'render');
+    assert.equal(receipt.diagnostics[0].code, 'internal/renderer-process');
+    assert.equal(receipt.contract, undefined);
+  });
+}
+
 test('cli: check reports an output-limit failure with a classified receipt', () => {
   const input = path.join(skillRoot, 'examples/web-app.architecture.json');
   const artifact = path.join(tmp, 'check-output-limit.html');

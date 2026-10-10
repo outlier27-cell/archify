@@ -8,8 +8,9 @@ import { cli, skillRoot, git, fixture } from './helpers/repository-evidence-fixt
 
 // Real promisor objects and a recording transport exercise Git's lazy fetch,
 // while the helper prevents any network access even on the unfixed verifier.
-for (const fallback of [false, true]) {
-  test(`partial-clone evidence stays local through ${fallback ? 'fallback' : 'batch'} reads`, (t) => {
+for (const [fallback, ignoreNoLazyFetch] of [[false, false], [true, false], [false, true]]) {
+  const scenario = ignoreNoLazyFetch ? 'Git ignoring NO_LAZY_FETCH' : `${fallback ? 'fallback' : 'batch'} reads`;
+  test(`partial-clone evidence stays local through ${scenario}`, (t) => {
     const data = fixture();
     t.after(() => fs.rmSync(data.root, { recursive: true, force: true }));
     git(data.root, 'config', 'uploadpack.allowFilter', 'true');
@@ -31,22 +32,27 @@ for (const fallback of [false, true]) {
       ARCHIFY_TRANSPORT_TRACE: trace.replaceAll('\\', '/'),
     };
     const wrapper = path.join(data.root, 'force-fallback.mjs');
-    if (fallback) fs.writeFileSync(wrapper, `
+    if (fallback || ignoreNoLazyFetch) fs.writeFileSync(wrapper, `
 import childProcess from 'node:child_process';
 import { syncBuiltinESMExports } from 'node:module';
 import fs from 'node:fs';
 const original = childProcess.spawnSync;
 childProcess.spawnSync = (executable, args, options) => {
-  if (executable === 'git' && args.includes('--batch-check')) {
+  if (${fallback} && executable === 'git' && args.includes('--batch-check')) {
     fs.appendFileSync(${JSON.stringify(path.join(data.root, 'fallback.log'))}, 'forced batch failure;');
     return { status: 1, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
+  }
+  if (${ignoreNoLazyFetch} && executable === 'git') {
+    // Emulate an older Git ignoring NO_LAZY_FETCH, retaining real transports.
+    options = { ...options, env: { ...options.env, GIT_NO_LAZY_FETCH: '0' } };
+    fs.appendFileSync(${JSON.stringify(path.join(data.root, 'compatibility.log'))}, 'ignored NO_LAZY_FETCH;');
   }
   return original(executable, args, options);
 };
 syncBuiltinESMExports();
 `);
     // Propagate the injection into the renderer process which owns Git reads.
-    if (fallback) env.NODE_OPTIONS = `${process.env.NODE_OPTIONS || ''} --import=${pathToFileURL(wrapper).href}`;
+    if (fallback || ignoreNoLazyFetch) env.NODE_OPTIONS = `${process.env.NODE_OPTIONS || ''} --import=${pathToFileURL(wrapper).href}`;
     const invoke = (args, repo = partial) => spawnSync(process.execPath, [
       cli, ...args, '--repo-root', repo, '--json',
     ], { cwd: skillRoot, encoding: 'utf8', env });
@@ -74,6 +80,7 @@ syncBuiltinESMExports();
     assert.deepEqual(fs.readFileSync(path.join(partial, '.git/config')), config);
     assert.deepEqual(fs.readdirSync(path.join(partial, '.git/objects/pack')).sort(), packs);
     if (fallback) assert.ok(fs.existsSync(path.join(data.root, 'fallback.log')), 'the renderer must exercise the forced fallback');
+    if (ignoreNoLazyFetch) assert.ok(fs.existsSync(path.join(data.root, 'compatibility.log')), 'the renderer must exercise the compatibility case');
 
     // The user explicitly prepares the missing objects. Verification then
     // succeeds without remote transport, just as it does in a complete clone.

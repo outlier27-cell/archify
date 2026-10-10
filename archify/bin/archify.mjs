@@ -2258,9 +2258,12 @@ function runNode(args, options = {}) {
     maxBuffer: options.maxBuffer ?? DEFAULT_MAX_BUFFER,
     env: options.env ? { ...process.env, ...options.env } : process.env,
   });
-  // The child can exit before a piped-output overflow is observed. A capture
-  // error still means the operation failed, even when its exit status is zero.
-  if (result.error && result.status === 0) result.status = 1;
+  // spawnSync can report a system failure after a child has exited zero. A
+  // truncated renderer or checker result is never a successful invocation.
+  if (result.error && result.status === 0) {
+    result.archifyRawStatus = result.status;
+    result.status = 1;
+  }
   return result;
 }
 
@@ -2288,7 +2291,7 @@ function checkerOutputLimitDiagnostics(check, limitBytes) {
     evidence: {
       systemCode: check.error.code,
       ...(check.signal ? { signal: check.signal } : {}),
-      status: check.status ?? null,
+      status: check.archifyRawStatus ?? check.status ?? null,
       limitBytes,
       receivedBytes,
     },
@@ -4320,10 +4323,6 @@ function writeDeliveryFailureReceipt(options) {
     diagnostics,
   });
   return recorded;
-}
-
-function reportValidateFailure(options) {
-  reportArtifactFailure({ ...options, command: 'validate' });
 }
 
 function reportArtifactArgumentFailure(command, error) {
@@ -6824,6 +6823,7 @@ async function commandMigrate(args) {
 // attributed to the command the caller actually invoked.
 async function commandValidate(args, invocation = {}) {
   const invokingCommand = invocation.command || 'validate';
+  const reportFailure = (options) => reportArtifactFailure({ ...options, command: invokingCommand });
   const qualityArgs = extractQualityArgs(args);
   const repoArgs = extractRepoRootArgs(qualityArgs.rest);
   args = repoArgs.rest;
@@ -6867,7 +6867,7 @@ async function commandValidate(args, invocation = {}) {
     else validateAuthoredOutputPath(document.meta.output);
   } catch (error) {
     const diagnostics = error.archifyDiagnostics || [inputDiagnostic(error, inputPath)];
-    reportValidateFailure({
+    reportFailure({
       json,
       stage: diagnostics.some((entry) => entry.code.startsWith('input/')) ? 'input' : 'render',
       type,
@@ -6887,19 +6887,21 @@ async function commandValidate(args, invocation = {}) {
       env: rendererEnv(quality, repoRoot, true),
     });
     if (result.status !== 0) {
-      try {
-        const receipt = JSON.parse(result.stdout);
-        if (receipt?.contract && Array.isArray(receipt.diagnostics)) {
-          process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
-          process.exitCode = result.status ?? 1;
-          return;
+      if (!result.error) {
+        try {
+          const receipt = JSON.parse(result.stdout);
+          if (receipt?.contract && Array.isArray(receipt.diagnostics)) {
+            process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+            process.exitCode = result.status ?? 1;
+            return;
+          }
+        } catch {
+          // Fall through to the renderer failure contract when no compiler
+          // receipt was produced (for example, input JSON could not be read).
         }
-      } catch {
-        // Fall through to the renderer failure contract when no compiler
-        // receipt was produced (for example, input JSON could not be read).
       }
       const failure = rendererFailure(result);
-      reportValidateFailure({
+      reportFailure({
         json,
         stage: failure.diagnostics.some((entry) => entry.code.startsWith('input/')) ? 'input' : 'render',
         type,
@@ -6930,7 +6932,7 @@ async function commandValidate(args, invocation = {}) {
     });
     if (render.status !== 0) {
       const failure = rendererFailure(render);
-      report = () => reportValidateFailure({
+      report = () => reportFailure({
         json,
         stage: failure.diagnostics.some((entry) => entry.code.startsWith('input/')) ? 'input' : 'render',
         type,
@@ -6953,7 +6955,7 @@ async function commandValidate(args, invocation = {}) {
         exitCode = check.status ?? 1;
         const outputLimit = checkerOutputLimitDiagnostics(check, checkMaxBuffer);
         if (outputLimit) {
-          report = () => reportValidateFailure({
+          report = () => reportFailure({
             json,
             stage: 'check',
             type,
@@ -6970,7 +6972,7 @@ async function commandValidate(args, invocation = {}) {
           } catch {
             checker = { ok: false, diagnostic: 'Artifact checker failed without a parseable receipt.' };
           }
-          report = () => reportValidateFailure({
+          report = () => reportFailure({
             json,
             stage: 'check',
             type,
@@ -7031,7 +7033,7 @@ async function commandValidate(args, invocation = {}) {
       await temporary.cleanup();
     } catch (error) {
       exitCode = 1;
-      report = () => reportValidateFailure({
+      report = () => reportFailure({
         json,
         stage: 'cleanup',
         type,
