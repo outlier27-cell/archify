@@ -1,7 +1,9 @@
-# Bottom Node index row prototype (#664)
+# Bottom Node index row comparison (#664)
 
-Review-only experiment synchronized to dev `70a6dfa1`. It does not change the default
-viewer, generated template, ZIP, or diagram renderers.
+The maintainer-selected compact-row treatment is now integrated into the default
+desktop bottom Viewer index. The review variants below remain as the decision
+record; production styling lives in `viewer/viewer.css` and is regenerated into
+`archify/assets/template.html`.
 
 `prototype.css` replaces bottom-index columns with full-width group sections
 and a wrapping grid of items. Existing group/node order, counts, text,
@@ -21,14 +23,18 @@ The script saves HTML, PNG, and JSON observations for Sample Web App and a
 1440×900 and 390×900, light/dark, ordinary mode, and unchanged SVG contents.
 It checks text/order/color identity, SVG identity, document width, text
 clipping, programmatic focus, pointer-enter preview, and click selection
-against the column baseline. Native Tab/Enter and panel-toggle interaction
-still need an integration pass before adopting this as a default.
+against the column baseline. The production browser regression additionally
+uses native Tab and Enter input, native hover, and the bottom/side panel toggle:
+
+```powershell
+$env:ARCHIFY_CHROME = 'C:\Program Files\Google\Chrome\Application\chrome.exe'
+npm run test:browser -- test/bottom-node-index-browser.test.mjs
+```
 
 ## Results and tradeoffs
 
-At 1440px, Sample Web App's index height changes from 338.69px to 289.38px
-(about 15% less); the uneven 26-node fixture changes from 852.69px to
-610.38px (about 28% less). Node labels/subtitles remain at existing font sizes.
+At 1440px, the compact proposal reduced Sample Web App's index height from
+338.69px to 228.94px. Node labels/subtitles remain at existing font sizes.
 
 At 390px, preserving all text increases height: Sample Web App becomes
 667.38px instead of 435.25px, and the long-text fixture becomes 1726.38px
@@ -87,6 +93,15 @@ winner. Desktop Sample compact/group-column screenshots were visually inspected.
 | Long labels / 1440 | [Compact](screenshots/stress-1440-light-compact.png) | [Columns](screenshots/stress-1440-light-continuation.png) |
 | Sample / 390 | [Compact](screenshots/sample-web-app-390-light-compact.png) | [Columns](screenshots/sample-web-app-390-light-continuation.png) |
 | Long labels / 390 | [Compact](screenshots/stress-390-light-compact.png) | [Columns](screenshots/stress-390-light-continuation.png) |
+
+## Integrated evidence
+
+The checked-in baseline was captured from the pre-integration column layout;
+the integrated capture uses the same Sample Web App, 1440px desktop viewport,
+dark theme and default camera. The browser check captures it before selection,
+so the index is readable without transient focus state.
+
+![Integrated Sample Web App bottom index](screenshots/sample-web-app-1440-dark-integrated.png)
 
 ## Checked-in comparisons
 
