@@ -1075,7 +1075,13 @@ import { syncBuiltinESMExports } from 'node:module';
 const original = childProcess.spawnSync;
 childProcess.spawnSync = (executable, childArgs, options) => {
   if (String(childArgs?.[0]).endsWith('render-architecture.mjs')) {
-    return { status: 0, signal: null, stdout: '{"ok":true', stderr: '', error: Object.assign(new Error('buffer exceeded'), { code: 'ENOBUFS' }) };
+    return {
+      status: 0,
+      signal: null,
+      stdout: JSON.stringify({ contract: 'archify.renderer.failure.v1', diagnostics: [] }),
+      stderr: '',
+      error: Object.assign(new Error('buffer exceeded'), { code: 'ENOBUFS' }),
+    };
   }
   return original(executable, childArgs, options);
 };
@@ -1090,7 +1096,7 @@ await import(${JSON.stringify(pathToFileURL(cli).href)});
     assert.equal(receipt.command, command);
     assert.equal(receipt.stage, 'render');
     assert.equal(receipt.diagnostics[0].code, 'internal/renderer-process');
-    assert.doesNotMatch(result.stdout, /\{"ok":true$/);
+    assert.equal(receipt.contract, undefined);
   });
 }
 

@@ -6885,16 +6885,18 @@ async function commandValidate(args, invocation = {}) {
       env: rendererEnv(quality, repoRoot, true),
     });
     if (result.status !== 0) {
-      try {
-        const receipt = JSON.parse(result.stdout);
-        if (receipt?.contract && Array.isArray(receipt.diagnostics)) {
-          process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
-          process.exitCode = result.status ?? 1;
-          return;
+      if (!result.error) {
+        try {
+          const receipt = JSON.parse(result.stdout);
+          if (receipt?.contract && Array.isArray(receipt.diagnostics)) {
+            process.stdout.write(`${JSON.stringify(receipt, null, 2)}\n`);
+            process.exitCode = result.status ?? 1;
+            return;
+          }
+        } catch {
+          // Fall through to the renderer failure contract when no compiler
+          // receipt was produced (for example, input JSON could not be read).
         }
-      } catch {
-        // Fall through to the renderer failure contract when no compiler
-        // receipt was produced (for example, input JSON could not be read).
       }
       const failure = rendererFailure(result);
       reportFailure({
