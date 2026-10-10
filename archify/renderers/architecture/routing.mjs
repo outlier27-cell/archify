@@ -983,12 +983,22 @@ export function createRouter(components, connections = [], {
   }
 
   function crossingCount(conn, points, resolvedRoutes) {
-    return resolvedRoutes.reduce((total, entry) => total + Number(
-      !(relationshipsShareEndpoint(conn, entry.conn)
-        && (!distinctAutomaticPorts || hasAuthoredRouteGeometry(entry.conn) || entry.conn.labelAt || conn.labelAt))
-      && points.slice(1).some((end, index) => entry.points.slice(1).some((otherEnd, otherIndex) =>
-        properSegmentIntersection(points[index], end, entry.points[otherIndex], otherEnd))),
-    ), 0);
+    let count = 0;
+    for (const entry of resolvedRoutes) {
+      if (relationshipsShareEndpoint(conn, entry.conn)
+          && (!distinctAutomaticPorts || hasAuthoredRouteGeometry(entry.conn) || entry.conn.labelAt || conn.labelAt)) continue;
+      let crosses = false;
+      for (let index = 1; index < points.length && !crosses; index += 1) {
+        for (let otherIndex = 1; otherIndex < entry.points.length; otherIndex += 1) {
+          if (properSegmentIntersection(points[index - 1], points[index], entry.points[otherIndex - 1], entry.points[otherIndex])) {
+            crosses = true;
+            break;
+          }
+        }
+      }
+      if (crosses) count += 1;
+    }
+    return count;
   }
 
   function readabilityCost(conn, routed, resolvedRoutes) {

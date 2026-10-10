@@ -19,7 +19,7 @@ function run(diagram, extra = []) {
   const input = path.join(directory, 'candidate.waterfall.json');
   const output = path.join(directory, 'candidate.html');
   fs.writeFileSync(input, JSON.stringify(diagram));
-  return { ...spawnSync(process.execPath, [renderer, input, output, ...extra], { cwd: directory, encoding: 'utf8' }), output };
+  return { ...spawnSync(process.execPath, [renderer, input, output, ...extra], { cwd: directory, encoding: 'utf8', timeout: 10000 }), input, output };
 }
 function layoutOf(diagram) {
   const result = run(diagram, ['--layout-json']);
@@ -58,11 +58,74 @@ test('waterfall: bar geometry is exactly the recorded timing on one axis', () =>
   assert.deepEqual(report.rows.map((row) => row.id), ['request', 'auth', 'inventory', 'discount', 'payment', 'save']);
 });
 
+test('waterfall: large timestamps terminate when tick increments are below floating-point resolution', () => {
+  const diagram = clone(small);
+  diagram.spans = [{ id: 'request', name: 'Request', start: 1e16, end: 1e16 + 2 }];
+  const result = run(diagram, ['--layout-json']);
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+  const report = JSON.parse(result.stdout);
+  assert.equal(report.wall, 2);
+  assert.equal(report.rows[0].label, '2 ms');
+  assert.ok(Number.isFinite(report.rows[0].x0));
+  assert.ok(Number.isFinite(report.rows[0].x1));
+  assert.ok(report.rows[0].x1 > report.rows[0].x0);
+});
+
+test('waterfall: unrepresentable derived timing is rejected without writing invalid geometry', () => {
+  for (const span of [
+    { id: 'request', name: 'Request', start: 1e308, duration: 1e308 },
+    { id: 'request', name: 'Request', start: 0, duration: Number.MIN_VALUE },
+  ]) {
+    const diagram = clone(small);
+    diagram.spans = [span];
+    const result = run(diagram);
+    assert.equal(result.status, 1, result.stderr || result.error?.message);
+    assert.match(result.stderr, /finite/);
+    assert.equal(fs.existsSync(result.output), false);
+    const cli = spawnSync(process.execPath, [path.join(skillRoot, 'bin/archify.mjs'), 'validate', 'waterfall', result.input, '--json'], { encoding: 'utf8', timeout: 10000 });
+    assert.equal(cli.status, 1, cli.stderr || cli.stdout);
+    const receipt = JSON.parse(cli.stdout);
+    const diagnostic = receipt.diagnostics.find(({ code }) => code === 'waterfall/invalid-timing');
+    assert.ok(diagnostic, cli.stdout);
+    assert.ok(diagnostic.supportedFixes.length > 0, cli.stdout);
+  }
+});
+
+test('waterfall: finite very large timing labels do not overflow while formatting', () => {
+  const diagram = clone(small);
+  diagram.spans = [{ id: 'request', name: 'Request', start: 1e307, end: 1.1e307 }];
+  const result = run(diagram);
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+  const html = fs.readFileSync(result.output, 'utf8');
+  assert.doesNotMatch(html, /(?:NaN|Infinity|∞)/);
+});
+
 test('waterfall: percentages name their denominator and are never summed into the parent', () => {
   const html = fs.readFileSync(run(small).output, 'utf8');
   assert.match(html, /data-node-id="payment"[^>]*aria-label="[^"]*400–1,050 ms · 650 ms · 54% of 1,200 ms wall-clock/);
   assert.match(html, /data-waterfall-total="1200"[^>]*>Wall-clock 1,200 ms/);
   assert.match(html, /data-waterfall-evidence="illustrative"/);
+});
+
+test('waterfall: small fractional values keep nonzero duration labels', () => {
+  for (const duration of [0.004, 0.00004, 1e-8]) {
+    const diagram = clone(small);
+    diagram.spans = [{ id: 'request', name: 'Request', start: 0, duration }];
+    const result = run(diagram);
+    assert.equal(result.status, 0, result.stderr);
+    const html = fs.readFileSync(result.output, 'utf8');
+    const durationText = `${String(duration).replace('.', '\\.')} ms`;
+    assert.match(html, new RegExp(durationText));
+    assert.match(html, new RegExp(`data-node-id="request"[^>]*aria-label="[^"]*${durationText}[^"]*"`));
+    const tickLabels = [...html.matchAll(/class="t-muted wf-num"[^>]*text-anchor="middle">([^<]+)<\/text>/g)].map((match) => match[1]);
+    assert.ok(tickLabels.length > 1, 'axis must render tick labels');
+    for (let i = 1; i < tickLabels.length; i += 1) {
+      assert.notEqual(tickLabels[i], tickLabels[i - 1], 'adjacent ticks must have distinct labels');
+    }
+    assert.ok(new Set(tickLabels).size > 1, 'distinct positive ticks must not all round to zero');
+    const report = layoutOf(diagram);
+    assert.notEqual(report.rows[0].label, '0 ms');
+  }
 });
 
 test('waterfall: a short operation keeps its duration label beside the bar', () => {

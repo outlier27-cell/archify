@@ -11,6 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ChromeVisualBrowser, findChrome } from '../archify/bin/visual-check.mjs';
 import { DIAGRAM_TYPES, DIAGRAM_TYPE_LABELS } from '../scripts/site-copy.mjs';
 import { SCENARIO_RECIPES } from '../archify/recipes/scenarios.mjs';
+import { CASES } from '../website/src/data/gallery-presentation.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -584,7 +585,7 @@ test('real Chrome preserves language through entry, navigation, selection, refre
     assert.equal(await evaluate(browser, sessionId, 'document.querySelector(".nav-logo-path").textContent'), '/ 验证作品集');
     assert.deepEqual(await evaluate(browser, sessionId, `Array.from(document.querySelectorAll('[data-filter]')).map(function (button) {
       return button.textContent;
-    })`), ['全部配方 / 12', '架构图', '工作流', '时序图', '数据流', '生命周期', '实体关系图']);
+    })`), [`全部配方 / ${CASES.length}`, ...DIAGRAM_TYPES.map(type => DIAGRAM_TYPE_LABELS.zh[type])]);
 
     await evaluate(browser, sessionId, 'document.querySelector(\'[data-filter="architecture"]\').click()');
     state = await evaluate(browser, sessionId, `({
@@ -627,7 +628,7 @@ test('real Chrome preserves language through entry, navigation, selection, refre
     assert.equal(await evaluate(browser, sessionId, 'document.querySelector(".nav-logo-path").textContent'), '/ proof lab');
     assert.deepEqual(await evaluate(browser, sessionId, `Array.from(document.querySelectorAll('[data-filter]')).map(function (button) {
       return button.textContent;
-    })`), ['All / 12', 'Architecture', 'Workflow', 'Sequence', 'Data flow', 'Lifecycle', 'Entity-relationship']);
+    })`), [`All / ${CASES.length}`, ...DIAGRAM_TYPES.map(type => DIAGRAM_TYPE_LABELS.en[type])]);
 
     loaded = browser.cdp.waitFor('Page.loadEventFired', sessionId);
     await browser.cdp.send('Page.reload', {}, sessionId);
@@ -647,7 +648,7 @@ test('real Chrome preserves language through entry, navigation, selection, refre
     assert.equal(await evaluate(browser, sessionId, 'document.querySelector(".nav-logo-path").textContent'), '/ 场景指南');
     assert.deepEqual(await evaluate(browser, sessionId, `Array.from(document.querySelectorAll('#filters [data-filter]')).map(function (button) {
       return button.textContent;
-    })`), ['全部配方', '架构图', '工作流', '时序图', '数据流', '生命周期', '实体关系图']);
+    })`), ['全部配方', ...DIAGRAM_TYPES.map(type => DIAGRAM_TYPE_LABELS.zh[type])]);
 
     await evaluate(browser, sessionId, 'document.querySelector(\'#filters [data-filter="sequence"]\').click()');
     state = await evaluate(browser, sessionId, `({
@@ -666,7 +667,7 @@ test('real Chrome preserves language through entry, navigation, selection, refre
       selected: true,
       visibleCount: 2,
       onlySequence: true,
-      labels: ['全部配方', '架构图', '工作流', '时序图', '数据流', '生命周期', '实体关系图'],
+      labels: ['全部配方', ...DIAGRAM_TYPES.map(type => DIAGRAM_TYPE_LABELS.zh[type])],
     });
 
     if (builtSite) {

@@ -265,6 +265,7 @@ test('Semantic Lens preserves selection, legend preview and panel contracts', {
     await run(`Archify.semanticLens.select('backend',{updateUrl:false})`);
     assert.equal(await run('location.hash'), '#unrelated=1');
     await run(`Archify.semanticLens.select('database')`); assert.equal(await run('location.search'), '?theme=dark&keep=yes');
+    const idleCopyLabel = await run(`document.getElementById('semantic-lens-copy').getAttribute('aria-label')`);
     // Never touch the host clipboard: replace both the preferred API and fallback.
     for (const mode of ['success', 'reject', 'absent', 'failure', 'throw']) {
       const copied = await run(`(async()=>{
@@ -272,13 +273,15 @@ test('Semantic Lens preserves selection, legend preview and panel contracts', {
         const expected=location.href.replace(/#.*$/,'')+'#lens=backend~database';
         Object.defineProperty(navigator,'clipboard',{configurable:true,value:${mode === 'success' ? "{writeText:v=>{captured=v;return Promise.resolve();}}" : mode === 'reject' ? "{writeText:()=>Promise.reject(new Error('fixture'))}" : 'undefined'}});
         document.execCommand=command=>{commands++;captured=document.activeElement.value;if(${JSON.stringify(mode)}==='throw')throw new Error('fixture');return ${JSON.stringify(mode)}!=='failure';};
-        try {const value=await Archify.semanticLens.copyLink();return {value,commands,correct:captured===expected,fields:document.querySelectorAll('textarea[readonly]').length,text:document.getElementById('semantic-lens-copy').textContent};}
+        try {const value=await Archify.semanticLens.copyLink();return {value,commands,correct:captured===expected,fields:document.querySelectorAll('textarea[readonly]').length,text:document.getElementById('semantic-lens-copy').textContent,label:document.getElementById('semantic-lens-copy').getAttribute('aria-label')};}
         finally {document.execCommand=exec;if(descriptor)Object.defineProperty(navigator,'clipboard',descriptor);else delete navigator.clipboard;}
       })()`);
       assert.equal(copied.value, !['failure', 'throw'].includes(mode)); assert.equal(copied.commands, mode === 'success' ? 0 : 1);
       assert.equal(copied.correct, true); assert.equal(copied.fields, 0);
       assert.match(copied.text, copied.value ? /Copied/ : /Copy failed/i);
+      assert.equal(copied.label, copied.text, 'accessible copy feedback matches the visible result');
       await run(`lensWait(()=>document.getElementById('semantic-lens-copy').textContent==='Copy link')`);
+      assert.equal(await run(`document.getElementById('semantic-lens-copy').getAttribute('aria-label')`), idleCopyLabel);
       records.push({ scenario: 'copy-' + mode, ...copied });
     }
     await snapshot('copy-feedback-restored');
@@ -362,7 +365,7 @@ test('Semantic Lens preserves selection, legend preview and panel contracts', {
         assert.deepEqual(exported, { clean: true, viewBox: true });
       }
     }
-    await load('trace'); await run(`Archify.semanticLens.select('backend')`);
+    await load('trace'); await run(`Archify.motionGovernor.resume()`); await run(`Archify.semanticLens.select('backend')`);
     const animation = await run(`getComputedStyle(document.querySelector('.semantic-lens-flow')).animationName`);
     assert.equal(animation, 'archify-semantic-lens-flow');
     await run(`lensWait(()=>lensEnds.some(e=>e.trusted&&e.name==='archify-semantic-lens-flow'))`);
