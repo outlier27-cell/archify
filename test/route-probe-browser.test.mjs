@@ -185,7 +185,7 @@ test('Route Probe preserves directed paths, Journey and export contracts', {
   });
 
   await t.test('native Journey controls, finite playback, pause and layered Escape preserve path state', async () => {
-    await load('trace'); await route();
+    await load('trace'); await run(`Archify.motionGovernor.resume()`); await route();
     await run(`document.querySelector('[data-route-journey-index="0"]').focus()`); await key('ArrowLeft', 'ArrowLeft', 37);
     assert.equal(await run('document.activeElement.dataset.routeJourneyIndex'), '0');
     await key('End', 'End', 35); await key('ArrowRight', 'ArrowRight', 39); assert.equal(await run('document.activeElement.dataset.routeJourneyIndex'), '4');
@@ -212,7 +212,7 @@ test('Route Probe preserves directed paths, Journey and export contracts', {
   });
 
   await t.test('controlled clocks preserve elapsed dwell, fresh steps, stale generations and pulse cleanup', async () => {
-    await load('trace'); await route();
+    await load('trace'); await run(`Archify.motionGovernor.resume()`); await route();
     const timing = await run(`routeClock(({jobs,last,advance,fire})=>{
       const p=Archify.routeProbe;const started=p.playJourney(),first=last(1100);advance(400);p.pauseJourney();const paused=p.result();p.playJourney();const resumed=jobs.at(-1).delay;fire(jobs.at(-1));const advanced=p.result();const fresh=jobs.at(-1).delay;
       p.clear({preserveView:true});const afterClear=p.result();fire(first);const stale=p.result();
@@ -267,7 +267,7 @@ test('Route Probe preserves directed paths, Journey and export contracts', {
     for (const [name, action] of [
       ['focus', `Archify.focus.set('api',{toggle:false})`], ['lens', `Archify.semanticLens.select('backend')`],
     ]) {
-      await load('trace'); await route(); await run('Archify.routeProbe.playJourney()'); await run(action);
+      await load('trace'); await run(`Archify.motionGovernor.resume()`); await route(); await run('Archify.routeProbe.playJourney()'); await run(action);
       const s = await snapshot(name + '-takeover'); assert.equal(s.active, null); assert.equal(s.overlays, 0); assert.equal(s.pulses, 0);
     }
     for (const [name, action] of [
@@ -275,12 +275,12 @@ test('Route Probe preserves directed paths, Journey and export contracts', {
       ['print-fixture', `dispatchEvent(new Event('beforeprint'))`],
       ['hidden-fixture', `Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'))`],
     ]) {
-      await load('trace'); await route(); await run('Archify.routeProbe.playJourney()'); await run(action);
+      await load('trace'); await run(`Archify.motionGovernor.resume()`); await route(); await run('Archify.routeProbe.playJourney()'); await run(action);
       const s = await snapshot(name + '-pause'); assert.equal(s.active, 'result'); assert.equal(s.result.playing, false); assert.equal(s.result.journey, 0);
       if (name === 'hidden-fixture') { await run(`delete document.hidden;document.dispatchEvent(new Event('visibilitychange'))`); assert.equal(await run('Archify.routeProbe.isJourneyPlaying()'), false); }
       if (name === 'still') { await run('Archify.motionGovernor.resume()'); assert.equal(await run('Archify.routeProbe.isJourneyPlaying()'), false); }
     }
-    await load(); await route(); assert.equal(await run('Archify.routeProbe.playJourney()'), true);
+    await load(); await run(`Archify.motionGovernor.resume()`); await route(); assert.equal(await run('Archify.routeProbe.playJourney()'), true);
     await run('Archify.routeProbe.pauseJourney()');
     await run('Archify.view.zoomIn()'); const view = await run('Archify.view.state()');
     assert.equal(await run('Archify.routeProbe.clear({preserveView:true,updateUrl:false})===undefined'), true);

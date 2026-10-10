@@ -84,7 +84,9 @@ const RULES = [
   },
   {
     // "Label "X" (~475px) is wider than component "users" (120px)"
-    match: (diagnostic) => diagnostic.code === 'layout/constraint'
+    // Architecture reports this failure as architecture/component-label-overflow;
+    // every other renderer still classifies it as layout/constraint.
+    match: (diagnostic) => (diagnostic.code === 'layout/constraint' || diagnostic.code === 'architecture/component-label-overflow')
       && /Label "(.+)" \(~[\d.]+px\) is wider than component "([^"]+)" \(([\d.]+)px\)/.test(diagnostic.message || ''),
     apply(diagnostic, doc, context) {
       const match = diagnostic.message.match(/Label "(.+)" \(~([\d.]+)px\) is wider than component "([^"]+)" \(([\d.]+)px\)/);

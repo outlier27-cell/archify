@@ -30,8 +30,10 @@ import {
   cleanFlowProblems,
   cleanLabelRouteClearanceProblems,
   cleanRouteRhythmProblems,
+  collectAmbiguousCorridors,
   legacyDefaultFromSide,
   legacyDefaultToSide,
+  properSegmentIntersection,
   rectsOverlap,
   roundedPath,
   routePointsValue,
@@ -244,7 +246,13 @@ const types = new Map(measuredTypes.map((type) => {
   }
 }
 
-const relationships = asArray(cd.relationships);
+const relationships = asArray(cd.relationships).map((relationship) => {
+  if (!Array.isArray(relationship.via) || relationship.via.length) return relationship;
+  // 空路径与省略字段等价，统一主干和普通路由的判断，同时保留作者原始文档。
+  const automatic = { ...relationship };
+  delete automatic.via;
+  return automatic;
+});
 
 const typeSteps = new Map();
 for (const [index, relationship] of relationships.entries()) {
@@ -400,6 +408,7 @@ function autoRouted(relationship) {
 }
 
 const busPaths = new Map();
+const busGroups = new Map();
 {
   const groups = new Map();
   for (const relationship of routable) {
@@ -430,23 +439,80 @@ const busPaths = new Map();
         .every((type) => !segmentIntersectsRect({ start: points[index], end: point }, type)));
     });
     if (!clear) continue;
-    members.forEach((relationship, index) => busPaths.set(relationship, paths[index]));
+    members.forEach((relationship, index) => {
+      busPaths.set(relationship, paths[index]);
+      busGroups.set(relationship, members);
+    });
   }
 }
 
-const router = createRouter(types, routable.filter((relationship) => !busPaths.has(relationship)), {
-  sideFor,
-  maxPortSpacing: PORT_SPACING,
-  // As for the ERD: re-plan a route against the complete scene when it crosses
-  // or bends needlessly, and look for a detour that crosses nothing before the
-  // obstacle search that may cross earlier routes. The showcase gate rejects
-  // any proper crossing, so the shorter crossing route only buys a repair.
-  preferReadableRoutes: true,
-  crossingFreeGridFirst: true,
-  // A detour keeps a readable gap from every type it only passes instead of
-  // running along its border at the grid's 2-unit clearance.
-  componentGapPx: 10,
-});
+let separateFallbackRoutes = false;
+function ordinaryRouter() {
+  return createRouter(types, routable.filter((relationship) => !busPaths.has(relationship)), {
+    sideFor,
+    maxPortSpacing: PORT_SPACING,
+    distinctAutomaticPorts: separateFallbackRoutes,
+    // As for the ERD: re-plan a route against the complete scene when it crosses
+    // or bends needlessly, and look for a detour that crosses nothing before the
+    // obstacle search that may cross earlier routes. The showcase gate rejects
+    // any proper crossing, so the shorter crossing route only buys a repair.
+    preferReadableRoutes: true,
+    crossingFreeGridFirst: true,
+    // A detour keeps a readable gap from every type it only passes instead of
+    // running along its border at the grid's 2-unit clearance.
+    componentGapPx: 10,
+  });
+}
+
+function busRouteConflict(left, right) {
+  for (const [leftField, leftPoint] of [['from', left.points[0]], ['to', left.points.at(-1)]]) {
+    for (const [rightField, rightPoint] of [['from', right.points[0]], ['to', right.points.at(-1)]]) {
+      if (left.relation[leftField] === right.relation[rightField]
+        && Math.hypot(leftPoint[0] - rightPoint[0], leftPoint[1] - rightPoint[1]) < MARKER_HEIGHT - 0.0001) return true;
+    }
+  }
+  if (collectAmbiguousCorridors({
+    routedRelations: [left, right],
+    includeSharedEndpoints: () => true,
+  }).length) return true;
+  return left.points.slice(1).some((end, index) => right.points.slice(1)
+    .some((otherEnd, otherIndex) => properSegmentIntersection(
+      left.points[index], end, right.points[otherIndex], otherEnd,
+    )));
+}
+
+let router;
+for (;;) {
+  router = ordinaryRouter();
+  if (!busPaths.size) break;
+  const routes = routable.map((relation) => ({
+    relation, points: busPaths.get(relation) || router.pathFor(relation).points,
+  }));
+  const rejected = new Set();
+  for (let leftIndex = 0; leftIndex < routes.length; leftIndex += 1) {
+    const left = routes[leftIndex];
+    const leftGroup = busGroups.get(left.relation);
+    for (let rightIndex = leftIndex + 1; rightIndex < routes.length; rightIndex += 1) {
+      const right = routes[rightIndex];
+      const rightGroup = busGroups.get(right.relation);
+      // 只有同一主干组可以共享端口和线段；其他路线仍保留各自的关系符号。
+      if ((!leftGroup && !rightGroup) || leftGroup === rightGroup) continue;
+      if (!busRouteConflict(left, right)) continue;
+      if (leftGroup) rejected.add(leftGroup);
+      if (rightGroup) rejected.add(rightGroup);
+    }
+  }
+  if (!rejected.size) break;
+  // 回退后的独立关系即使共享目标，也不能重新合并成没有语义归属的走廊。
+  separateFallbackRoutes = true;
+  // 整组回退后重新规划，避免新路线撞到剩余主干；每轮只删除组，次数有界。
+  for (const group of rejected) {
+    for (const relationship of group) {
+      busPaths.delete(relationship);
+      busGroups.delete(relationship);
+    }
+  }
+}
 function pathFor(relationship) {
   const points = busPaths.get(relationship);
   return points ? { points, d: roundedPath(points, 8) } : router.pathFor(relationship);

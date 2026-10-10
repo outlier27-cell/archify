@@ -14,6 +14,7 @@ import {
   CAPTURE_VIEWPORTS,
   ChromeVisualBrowser,
   findChrome,
+  persistBrowserCheckFailure,
   VISUAL_CHECK_VIEWPORTS,
 } from './visual-check.mjs';
 import { startDeliveryUpdateCheck } from './delivery-update.mjs';
@@ -612,6 +613,13 @@ export function compactFinalizeReceipt(receipt) {
     addDiagnostic(entry, index);
   }
   for (const [index, entry] of allDiagnostics.entries()) addDiagnostic(entry, index);
+  const truncated = allDiagnostics.length > selectedDiagnostics.length;
+  const omittedCounts = new Map();
+  if (truncated) {
+    for (const [index, entry] of allDiagnostics.entries()) {
+      omittedCounts.set(entry.code, (omittedCounts.get(entry.code) || 0) + (selectedIndexes.has(index) ? 0 : 1));
+    }
+  }
   const compact = {
     schemaVersion: 1,
     ok: receipt.ok,
@@ -627,7 +635,8 @@ export function compactFinalizeReceipt(receipt) {
     diagnosticSummary: {
       total: allDiagnostics.length,
       shown: selectedDiagnostics.length,
-      truncated: allDiagnostics.length > selectedDiagnostics.length,
+      truncated,
+      ...(truncated ? { omittedByCode: Object.fromEntries([...omittedCounts].filter(([, count]) => count > 0)) } : {}),
     },
     evidence: receipt.evidence,
     ...(receipt.update && receipt.update.status !== 'unavailable'
@@ -782,22 +791,12 @@ export async function runFinalize({
   // update check in parallel instead of timing out on every delivery.
   const updateCheck = startUpdateCheck({ env, deadlineMs: FINALIZE_UPDATE_DEADLINE_MS });
 
-  // Only launch/attach the blank browser here. The normal browser gate still
-  // verifies current delivery provenance before it consumes this one-shot factory.
-  const chromePath = runBrowserCheck ? resolveChrome({ env }) : null;
+  // Resolve and launch Chrome only after delivery and strict artifact checks pass.
+  // Invalid candidates must not start a browser that cannot inspect an artifact.
+  let chromePath = null;
   let browser;
   let browserStartupError;
   let browserTransferred = false;
-  if (chromePath) {
-    try {
-      browser = createBrowser(chromePath, { env });
-      // Deliver/check may fail before inspect() awaits startup. Handle the
-      // rejection now while retaining the same promise for the browser gate.
-      browser.sessionPromise.catch(() => {});
-    } catch (error) {
-      browserStartupError = error;
-    }
-  }
   const browserFactory = () => {
     if (browserStartupError) throw browserStartupError;
     if (browserTransferred || !browser) throw new Error('The finalize browser is unavailable or already consumed.');
@@ -821,13 +820,39 @@ export async function runFinalize({
       const inProcess = stage === 'browser-check' && runBrowserCheck;
       let result;
       if (inProcess) {
-        const checked = await runBrowserCheck({
-          artifactPath: resolvedOutput,
-          outDir: resolvedOutDir,
-          chromePath,
-          resolveChrome: () => chromePath,
-          browserFactory,
-        });
+        try {
+          chromePath = resolveChrome({ env });
+          if (chromePath) {
+            browser = createBrowser(chromePath, { env });
+            // Retain the startup rejection for the browser gate without emitting
+            // an unhandled rejection before inspect() awaits the same promise.
+            browser.sessionPromise.catch(() => {});
+          }
+        } catch (error) {
+          browserStartupError = error;
+        }
+        // Discovery errors have no executable for the browser factory. Record
+        // a failed gate instead of treating them as ordinary Chrome absence.
+        const checked = browserStartupError && !chromePath
+          ? { exitCode: 1, receipt: persistBrowserCheckFailure(resolvedOutput, {
+            schemaVersion: 1, ok: false, command: 'browser-check', status: 'fail',
+            evidenceKind: 'automated-browser', visualReview: 'not-requested',
+            error: browserStartupError.message,
+            diagnostics: [{
+              code: 'viewer/browser-check-runtime', severity: 'error',
+              message: 'browser-check could not discover Chrome.',
+              subject: { artifact: resolvedOutput },
+              evidence: { reason: browserStartupError.message },
+              supportedFixes: ['resolve the reported Chrome discovery error, then rerun browser-check'],
+            }],
+          }, { outDir: resolvedOutDir }) }
+          : await runBrowserCheck({
+            artifactPath: resolvedOutput,
+            outDir: resolvedOutDir,
+            chromePath,
+            resolveChrome: () => chromePath,
+            browserFactory,
+          });
         result = { status: checked.exitCode, stdout: JSON.stringify(checked.receipt) };
       } else {
         result = await runCommand({ stage, cliPath, args, cwd,

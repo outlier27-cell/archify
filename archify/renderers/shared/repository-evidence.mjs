@@ -308,6 +308,21 @@ export function verifyRepositoryEvidence(diagramType, diagram, repoRootInput) {
           return type.status === 0 && type.stdout.trim() === 'blob';
         })();
       if (!objectIsBlob) {
+        // A promisor blob can exist in the pinned tree without being stored
+        // locally. Do not tell the caller to change a correct source path.
+        const tree = runGit(realRoot, ['ls-tree', '-z', revision, '--', source.path]);
+        const knownBlob = tree.status === 0 && tree.stdout.split('\0').some((entry) => {
+          const separator = entry.indexOf('\t');
+          return entry.slice(separator + 1) === source.path
+            && /^\d+ blob [a-f0-9]+$/.test(entry.slice(0, separator));
+        });
+        if (knownBlob) {
+          evidenceFailure('repository-evidence/object-unavailable', `${where} exists at revision ${revision}, but its content is unavailable in the local repository.`, {
+            subject: { path: where, ...nodeSubject },
+            evidence: { sourcePath: source.path, revision },
+            supportedFixes: ['explicitly fetch the pinned source objects into the local checkout, then retry verification'],
+          });
+        }
         evidenceFailure('repository-evidence/file-missing', `${where} does not identify a file at revision ${revision}.`, {
           subject: { path: where, ...nodeSubject },
           evidence: { sourcePath: source.path, revision },

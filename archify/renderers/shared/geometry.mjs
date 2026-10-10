@@ -1952,12 +1952,26 @@ export function suggestLabelPairFix(a, b) {
   ].join('\n');
 }
 
+/**
+ * The two placements that separate b from a, in the order the prose hint
+ * offers them. Shared so the text hint and its structured repair cannot
+ * offer different coordinates.
+ */
+export function componentSeparationOptions(a, b, minGap = 8) {
+  // Ceil, not round: on fractional geometry a rounded right/below coordinate
+  // can land a fraction of a pixel short of minGap, and the advised position
+  // would never clear the diagnostic that offered it.
+  return [
+    { pos: [Math.ceil(a.x + a.width + minGap), Math.round(b.y)], relation: `right of "${a.id}"` },
+    { pos: [Math.round(b.x), Math.ceil(a.y + a.height + minGap)], relation: 'below' },
+  ];
+}
+
 /** Hint when two components/nodes are too close. */
 export function suggestComponentSeparation(a, b, minGap = 8) {
-  const rightX = Math.round(a.x + a.width + minGap);
-  const belowY = Math.round(a.y + a.height + minGap);
+  const [right, below] = componentSeparationOptions(a, b, minGap);
   return [
     `  "${a.id}" ${formatRect(a)}; "${b.id}" ${formatRect(b)}`,
-    `  Suggested fix: move "${b.id}" pos to [${rightX}, ${Math.round(b.y)}] (right of "${a.id}") or [${Math.round(b.x)}, ${belowY}] (below)`,
+    `  Suggested fix: move "${b.id}" pos to [${right.pos[0]}, ${right.pos[1]}] (${right.relation}) or [${below.pos[0]}, ${below.pos[1]}] (${below.relation})`,
   ].join('\n');
 }

@@ -314,6 +314,23 @@ test('render output check: rejects a diagonal segment inside a polyline', () => 
   assert.match(check.details[0], /segment 1/);
 });
 
+test('render output check: measures a non-Latin legend label with the shared text model', () => {
+  // The renderer's footprint for "\u03a3\u03cd\u03c3\u03c4\u03b7\u03bc\u03b1" at font-size 10 ends near x=103
+  // (measured with textUnits), so a route that begins at x=160 is clear of it. A
+  // Latin-1-only heuristic bills those seven characters at 1.8 units each and
+  // stretches the box to x=186, reporting a crossing that does not exist.
+  const { code, result } = checkHtml('legend-non-latin-clear', `
+    <path d="M 200 140 L 160 140" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+    <!-- Legend -->
+    <text x="40" y="120" class="t-primary" font-size="10">Legend</text>
+    <rect x="40" y="132" width="14" height="9" class="c-backend"/>
+    <text x="60" y="140" class="t-muted" font-size="10">\u03a3\u03cd\u03c3\u03c4\u03b7\u03bc\u03b1</text>
+  `);
+  const clearance = result.checks.find((entry) => entry.name === 'legend_clearance');
+  assert.equal(code, 0, JSON.stringify(clearance, null, 2));
+  assert.equal(result.ok, true);
+});
+
 test('render output check: rejects arrows crossing legend text', () => {
   const { code, result } = checkHtml('legend-crossing', `
     <path d="M 20 112 L 180 112" class="a-dashed" stroke-width="1.4" marker-end="url(#arrowhead-dashed)"/>

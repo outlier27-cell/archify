@@ -77,7 +77,7 @@ export const DEFECTS = {
   },
   'node-long-label': {
     appliesTo: ALL_TYPES,
-    expectedCodes: { default: ['layout/constraint'] },
+    expectedCodes: { architecture: ['architecture/component-label-overflow'], default: ['layout/constraint'] },
     inject(doc, { type, nodeIndex } = {}) {
       const nodes = doc[COLLECTIONS[type].nodes];
       const node = nodeAt(doc, type, nodeIndex);

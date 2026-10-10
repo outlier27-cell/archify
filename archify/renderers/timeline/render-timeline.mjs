@@ -84,7 +84,12 @@ const timezone = tl.meta.timezone || 'UTC';
     fail('timeline/invalid-timezone', `meta.timezone "${timezone}" is not a recognised IANA time zone.`,
       { path: '/meta/timezone' }, { timezone }, ['Use an IANA zone such as "UTC", "Europe/Berlin", or "Asia/Shanghai".']);
   }
-  const laneIds = new Set(asArray(tl.lanes).map((lane) => lane.id));
+  const laneIds = new Set();
+  for (const [index, lane] of asArray(tl.lanes).entries()) {
+    if (laneIds.has(lane.id)) fail('timeline/duplicate-lane-id', `Lane id "${lane.id}" is declared twice.`,
+      { path: `/lanes/${index}/id` }, { id: lane.id }, ['Give every lane a unique id and update its event references.']);
+    laneIds.add(lane.id);
+  }
   const seen = new Set();
   for (const [index, event] of asArray(tl.events).entries()) {
     if (seen.has(event.id)) fail('timeline/duplicate-id', `Event id "${event.id}" is declared twice.`, { path: `/events/${index}/id` }, { id: event.id }, ['Give every event a unique id.']);
@@ -106,16 +111,19 @@ const timezone = tl.meta.timezone || 'UTC';
 
 // ---- Time zone formatting ------------------------------------------------------
 const partsFormat = new Intl.DateTimeFormat('en-US', {
-  timeZone: timezone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
+  timeZone: timezone, hourCycle: 'h23', era: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit',
 });
 function wall(ms) {
   const parts = Object.fromEntries(partsFormat.formatToParts(new Date(ms)).map((part) => [part.type, part.value]));
-  return { y: parts.year, mo: parts.month, d: parts.day, h: parts.hour, mi: parts.minute, s: parts.second };
+  return { y: parts.era === 'BC' ? String(1 - Number(parts.year)) : parts.year, mo: parts.month, d: parts.day, h: parts.hour, mi: parts.minute, s: parts.second };
 }
 // Offset of the display zone at an instant, in ms (local wall clock - UTC).
 function zoneOffset(ms) {
   const w = wall(ms);
-  return Date.UTC(+w.y, +w.mo - 1, +w.d, +w.h, +w.mi, +w.s) - Math.floor(ms / 1000) * 1000;
+  const local = new Date(0);
+  local.setUTCFullYear(+w.y, +w.mo - 1, +w.d);
+  local.setUTCHours(+w.h, +w.mi, +w.s, 0);
+  return local.getTime() - Math.floor(ms / 1000) * 1000;
 }
 function offsetLabel(ms) {
   const minutes = Math.round(zoneOffset(ms) / MINUTE);

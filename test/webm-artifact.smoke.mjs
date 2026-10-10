@@ -1004,6 +1004,7 @@ try {
             await captureJourneySource(function () { Archify.routeProbe.selectJourneyIndex(Math.floor(snapshot.nodeIds.length / 2)); });
             await captureJourneySource(function () { Archify.routeProbe.selectJourneyIndex(snapshot.nodeIds.length - 1); });
             Archify.routeProbe.showOverview({ reveal: false });
+            Archify.motionGovernor.resume();
             var started = Archify.routeProbe.playJourney();
             if (!started) throw new Error('Route Journey could not enter playing state for invariance check');
             await captureJourneySource(function () {});
