@@ -22,7 +22,7 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
   const input = path.join(scratch, 'motion.json');
   const file = path.join(scratch, 'motion.html');
   const source = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples/web-app.architecture.json'), 'utf8'));
-  source.meta.animation = 'trace';
+  delete source.meta.animation;
   source.meta.visual_preset = 'signal-flow';
   fs.writeFileSync(input, JSON.stringify(source));
   execFileSync(process.execPath, [path.join(skillRoot, 'renderers/architecture/render-architecture.mjs'), input, file]);
@@ -396,8 +396,11 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
   });
 
   await t.test('recording constructor/error/empty failures clean up and public run disables WebM', async () => {
+    await load();
+    let previousTracks = 0;
+    // Consecutive failures must release their own resources without a page
+    // reload doing the cleanup for them. Keep the unsupported startup separate.
     for (const fault of ['constructor','error','empty']) {
-      await load();
       await run(`window.MediaRecorder=class {
         static isTypeSupported(){return true;}
         constructor(){if(${JSON.stringify(fault)}==='constructor')throw new Error('recorder constructor');this.state='inactive';this.mimeType='video/webm';}
@@ -405,7 +408,11 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
         requestData(){} stop(){this.state='inactive';this.onstop();}
       };`);
       assert.equal(await run('Archify.motion.recordWebm({duration:250,fps:10}).then(()=>false,()=>true)'),true);
-      const state=await record('webm-'+fault);assert.ok(state.urls.every(u=>u.revoked));assert.ok(state.tracks.length>0);assert.ok(state.tracks.every(s=>s==='ended'));
+      const state=await record('webm-'+fault);
+      assert.ok(state.urls.every(u=>u.revoked));
+      assert.ok(state.tracks.length>previousTracks, `${fault}: the attempt must acquire its own stream`);
+      assert.ok(state.tracks.every(s=>s==='ended'));
+      previousTracks = state.tracks.length;
     }
     await load({extra:'&fault=unsupported'});
     await run(`Archify.exportMenu.run('webm')`);
