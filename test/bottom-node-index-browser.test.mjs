@@ -73,6 +73,36 @@ test('Bottom node index preserves readable rows and native Viewer interaction', 
   assert.equal(bottom.descriptionWhiteSpace, 'normal');
   assert.equal(bottom.nameOverflowWrap, 'anywhere');
   assert.equal(bottom.groupDisplay, 'flex');
+  async function assertFirstLineAlignment() {
+    const items = await run(`(() => [...document.querySelectorAll('[data-outline-node]')].map(item => {
+      const firstLine = element => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return [...range.getClientRects()];
+      };
+      const lines = firstLine(item.querySelector('strong'));
+      const name = lines[0];
+      const dot = item.querySelector('.node-outline-dot').getBoundingClientRect();
+      const small = item.querySelector('small');
+      const description = small && firstLine(small)[0];
+      const center = rect => rect.top + rect.height / 2;
+      return {
+        id: item.dataset.outlineNode,
+        nameLines: lines.length,
+        hasDescription: !!small,
+        dotOffset: center(dot) - center(name),
+        descriptionOffset: description ? center(description) - center(name) : 0,
+      };
+    }))()`);
+    for (const item of items) {
+      // Different font sizes have slightly different optical centers. The
+      // swatch must still sit beside the first line, even when text wraps.
+      assert.ok(Math.abs(item.dotOffset) <= 2, `${item.id}: swatch misses the first text line (${item.dotOffset}px)`);
+      assert.ok(Math.abs(item.descriptionOffset) <= 2, `${item.id}: description misses the first text line`);
+    }
+    return items;
+  }
+  await assertFirstLineAlignment();
   if (evidence) {
     const capture = await send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true });
     fs.writeFileSync(path.join(evidence, 'sample-web-app-1440-dark-integrated.png'), Buffer.from(capture.data, 'base64'));
@@ -128,4 +158,31 @@ test('Bottom node index preserves readable rows and native Viewer interaction', 
   await run('Archify.readerLayout.whenStable()');
   assert.equal(await run('document.documentElement.getAttribute("data-reader-rail")'), 'bottom');
   assert.equal(await run('document.querySelectorAll("[data-outline-node]").length > 0'), true);
+
+  const wrappedInput = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples/web-app.architecture.json'), 'utf8'));
+  wrappedInput.components = wrappedInput.components.filter(node => ['users', 'worker'].includes(node.id));
+  wrappedInput.boundaries = [];
+  wrappedInput.connections = [];
+  wrappedInput.components.find(node => node.id === 'users').label = '跨区域订单处理与权限校验服务 / Regional authorization and audit service';
+  wrappedInput.components.find(node => node.id === 'users').sublabel = 'Tenant-aware decisions with durable audit records and cross-region recovery';
+  wrappedInput.components.find(node => node.id === 'users').pos = [40, 40];
+  wrappedInput.components.find(node => node.id === 'users').size = [600, 80];
+  wrappedInput.components.find(node => node.id === 'worker').pos = [700, 40];
+  delete wrappedInput.components.find(node => node.id === 'worker').sublabel;
+  const wrappedPath = path.join(scratch, 'wrapped.json');
+  const wrappedArtifact = path.join(scratch, 'wrapped.html');
+  fs.writeFileSync(wrappedPath, JSON.stringify(wrappedInput));
+  execFileSync(process.execPath, [path.join(skillRoot, 'renderers/architecture/render-architecture.mjs'), wrappedPath, wrappedArtifact]);
+  const wrappedLoaded = browser.cdp.waitFor('Page.loadEventFired', session);
+  await send('Page.navigate', { url: pathToFileURL(wrappedArtifact).href + '?theme=light' });
+  await wrappedLoaded;
+  await run('document.fonts.ready.then(() => Archify.readerLayout.whenStable())');
+  if (await run('document.documentElement.getAttribute("data-reader-rail")') === 'true') {
+    await click('#rail-placement');
+    await run('Archify.readerLayout.whenStable()');
+  }
+  assert.equal(await run('document.documentElement.getAttribute("data-reader-rail")'), 'bottom');
+  const wrappedItems = await assertFirstLineAlignment();
+  assert.ok(wrappedItems.find(item => item.id === 'users').nameLines > 1);
+  assert.equal(wrappedItems.find(item => item.id === 'worker').hasDescription, false);
 });

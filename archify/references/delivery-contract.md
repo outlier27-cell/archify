@@ -293,13 +293,16 @@ them directly for focused diagnosis, recovery, or when only one gate is
 required. A finalize failure does not relax any gate and does not turn a
 preserved older artifact into a current successful delivery.
 
-`finalize` overlaps private Chrome startup with delivery and strict checking.
-It loads the artifact only after those gates pass and current provenance is
-verified. The browser gate retains every viewport, theme, and stability check;
-the browser closes at completion or an earlier failure. Its full stage receipt
-records `execution: "in-process"` and the equivalent standalone `command` for
-replay. Use total finalize duration to compare performance because Chrome
-startup overlaps the earlier stages.
+`finalize` discovers and starts private Chrome only after delivery and strict
+checking pass. Failed input, repository-evidence, delivery, or artifact checks
+therefore do not launch a browser. It loads the artifact only after current
+provenance is verified. The browser gate retains every viewport, theme, and
+stability check; the browser closes at completion or a browser-stage failure.
+Its full stage receipt records `execution: "in-process"` and the equivalent
+standalone `command` for replay. Chrome startup no longer overlaps the earlier
+stages, so successful runs may take slightly longer. This avoids unnecessary
+startup on invalid candidates; it does not fix host sandbox restrictions on
+Chrome startup or relax a browser gate.
 
 The pair commit is recoverable, not a claim that two filesystem paths change
 atomically or are durable across power loss. Journal finalization is part of

@@ -122,3 +122,17 @@ Before:
 After:
 
 ![Sample Web App bottom index with grouped rows](screenshots/sample-web-app-1440-light-rows.png)
+
+## First-line alignment follow-up
+
+The production bottom index now aligns swatches, names and descriptions on their
+first text baseline. This corrects the swatches sitting about 4px above the text
+center under top alignment, while keeping wrapped names attached to their first
+line. The browser regression reproduces the previous offset and covers both
+wrapped bilingual text and nodes without descriptions.
+
+The capture below uses the regenerated Sample Web App in light theme at a
+1440 CSS-pixel viewport. The existing comparison captures above remain the
+earlier decision record.
+
+![Bottom index with aligned swatches and text](screenshots/sample-web-app-1440-light-aligned.png)
