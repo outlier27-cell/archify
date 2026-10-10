@@ -430,14 +430,29 @@ html[data-present="true"]:not([data-embed="true"]) #btn-present {
   color: var(--frontend-stroke);
 }
 
-/* The reader owns only the outer scale. Wide diagrams and measured tall workflows keep one authored
-   SVG/viewBox while the runtime chooses a desktop width from the actual
-   vertical budget. This avoids device-specific files and breakpoint
-   jumps between a laptop and a tall monitor. */
+/* The reader owns only the outer scale. Compact automatic sequences fit at
+   their authored text size or larger. Long sequences and waterfall rows
+   favor reading width and page scroll; other diagrams keep height fitting.
+   Small automatic canvases retain a modest scale inside a usable shell.
+   Every strategy preserves the authored SVG/viewBox and semantic geometry. */
 .container {
   width: 100%;
   max-width: var(--archify-reader-width, 1440px);
   margin: 0 auto;
+}
+html[data-reader-area="true"] .diagram-container {
+  min-height: var(--archify-diagram-min-height);
+  display: flex;
+  align-items: center;
+}
+html[data-reader-area="true"] .diagram-container > svg { flex-shrink: 0; }
+/* The original SVG legend can use the outer corner while the capped or fitted
+   diagram stays centered. The container still clips all outer paint. */
+.diagram-container:has([data-reader-legend-corner]) > svg { overflow: visible; }
+.diagram-container [data-reader-legend-corner] {
+  transform-origin: 0 0;
+  transform-box: view-box;
+  transform: var(--archify-reader-legend-transform);
 }
 html[data-reader-narrow="true"]:not([data-present="true"]) .diagram-container > svg {
   min-width: 0;
@@ -642,7 +657,7 @@ html[data-preset="editorial"] .diagram-container::after {
   pointer-events: none;
 }
 html[data-embed="true"][data-preset="editorial"] .diagram-container::after { display: none; }
-html[data-motion-capable="true"][data-preset="signal-flow"][data-ambient-motion="running"] .diagram-container::before {
+html[data-motion-capable="true"][data-preset="signal-flow"][data-ambient-entry="running"] .diagram-container::before {
   content: "";
   position: absolute;
   inset: 0;
@@ -4009,41 +4024,6 @@ svg [data-node-id]:focus-visible {
   filter: drop-shadow(0 0 7px var(--frontend-stroke));
   outline: none;
 }
-/* Verified Source Beacons are installed at runtime only for nodes whose
-   repository evidence passed the local revision/blob/line checks. They
-   live inside the owning node so every focus, route, story, and guided
-   view keeps one coherent opacity state. Export serialization removes
-   them before producing the canonical SVG or any derived visual. */
-.source-evidence-beacon {
-  pointer-events: none;
-  opacity: 1;
-  transition: filter 160ms ease;
-}
-.source-evidence-beacon rect {
-  fill: color-mix(in srgb, var(--mask) 92%, var(--backend-stroke));
-  stroke: color-mix(in srgb, var(--backend-stroke) 82%, var(--panel-border));
-  stroke-width: 1;
-  vector-effect: non-scaling-stroke;
-}
-.source-evidence-beacon text {
-  fill: var(--backend-stroke);
-  font-size: 7px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-anchor: middle;
-  text-transform: uppercase;
-}
-svg [data-node-id]:hover .source-evidence-beacon,
-svg [data-node-id]:focus-visible .source-evidence-beacon,
-svg [data-node-id][data-focus-selected] .source-evidence-beacon {
-  opacity: 1;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--backend-stroke) 72%, transparent));
-}
-svg[data-preset="signal-flow"] .source-evidence-beacon { opacity: 0.9; }
-svg[data-preset="blueprint"] .source-evidence-beacon rect {
-  rx: 0.8px;
-  filter: none;
-}
 svg [data-legend-kind][role="button"] { cursor: pointer; }
 svg [data-legend-kind]:focus { outline: none; }
 svg [data-legend-hit] {
@@ -4534,69 +4514,48 @@ svg[data-preset="blueprint"][data-relationship-preview-active] [data-relationshi
 .c-region         { fill: rgba(251, 191, 36, 0.05); stroke: var(--cloud-stroke); stroke-dasharray: 8,4; }
 .c-lane           { fill: var(--lane-fill); stroke: var(--lane-stroke); stroke-dasharray: 6,6; }
 
-/* Optional trace animation, enabled only by meta.animation = "trace".
-   The ordinary viewer performs one ambient pass and then restores the
-   authored solid/security/async line language. WebM samples the same
-   authored geometry into an explicit canvas timeline. */
-html[data-ambient-motion="running"] svg[data-animation="trace"] [data-animate="edge"] {
-  animation: archify-edge-flow 2.4s linear 1;
-  animation-delay: calc(var(--step, 0) * 160ms);
+/* Live flows continuously over authored paths; original line language and
+   markers remain static. Node entry is bounded to one pass per document. */
+.ambient-edge-flow {
+  fill: none;
+  stroke: var(--arrow-emphasis);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-dasharray: 6 30;
+  opacity: 0.58;
+  pointer-events: none;
+  display: none;
 }
-html[data-ambient-motion="running"] svg[data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] {
-  animation: archify-edge-flow 2.4s linear 1;
-  animation-delay: calc(var(--step, 0) * 160ms);
+html[data-ambient-motion="running"][data-motion="live"]:not([data-motion-owner]):not([data-embed]):not([data-share-playback]):not([data-document-hidden]) .ambient-edge-flow {
+  display: inline;
+  animation: archify-ambient-flow var(--ambient-flow-duration, 2.4s) linear infinite;
 }
-html[data-ambient-motion="running"] svg[data-animation="trace"] [data-animate="node"] {
+/* Collapsed tree descendants hide their adjacent decorative flow too. */
+[data-tree-hidden] + .ambient-edge-flow { display: none !important; animation: none !important; }
+svg[data-preset="signal-flow"] { --ambient-flow-duration: 2s; }
+svg[data-preset="blueprint"] .ambient-edge-flow { stroke-linecap: square; }
+svg[data-preset="editorial"] .ambient-edge-flow { opacity: 0.45; }
+html[data-ambient-entry="running"] svg[data-animation="trace"] [data-animate="node"] {
   transform-box: fill-box;
   transform-origin: center;
   animation: archify-node-pulse 3.6s ease-in-out 1;
   animation-delay: calc(var(--step, 0) * 160ms);
 }
-svg[data-preset="signal-flow"][data-animation="trace"] [data-animate="edge"] {
-  stroke-linecap: round;
-  filter: drop-shadow(0 0 3px var(--arrow-emphasis));
-  animation-duration: 1.75s;
-}
-svg[data-preset="signal-flow"][data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] { animation-duration: 1.75s; }
-svg[data-preset="signal-flow"][data-animation="trace"] [data-animate="node"] {
-  animation-duration: 3.1s;
-}
-svg[data-preset="blueprint"][data-animation="trace"] [data-animate="edge"] {
-  stroke-linecap: square;
-  filter: none;
-  animation-duration: 2.15s;
-}
-svg[data-preset="blueprint"][data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] { animation-duration: 2.15s; }
+svg[data-preset="signal-flow"][data-animation="trace"] [data-animate="node"] { animation-duration: 3.1s; }
 svg[data-preset="blueprint"][data-animation="trace"] [data-animate="node"] {
   animation-name: archify-blueprint-node-pulse;
   animation-duration: 3.8s;
 }
-svg[data-preset="editorial"][data-animation="trace"] [data-animate="edge"] {
-  filter: none;
-  animation-duration: 2.2s;
-}
-svg[data-preset="editorial"][data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] { animation-duration: 2.2s; }
 svg[data-preset="editorial"][data-animation="trace"] [data-animate="node"] {
   animation-name: archify-editorial-node-pulse;
   animation-duration: 3.5s;
 }
-/* Embedded proofs stay static so proof grids are calm instead of leaving
-   ambient trace loops on. */
-html[data-embed="true"] svg[data-animation="trace"] [data-animate],
-html[data-share-playback="true"] svg[data-animation="trace"] [data-animate] {
-  animation: none !important;
-  stroke-dashoffset: 0;
+@keyframes archify-ambient-flow {
+  from { stroke-dashoffset: 36; }
+  to { stroke-dashoffset: 0; }
 }
-html[data-embed="true"] svg[data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"],
-html[data-share-playback="true"] svg[data-animation="trace"] [data-graph-role="automatic-crossover"]:has(> [data-animate="edge"]) > [data-graph-role="automatic-crossover-underlay"] {
-  animation: none !important;
-  stroke-dashoffset: 0;
-}
-@keyframes archify-edge-flow {
-  0% { stroke-dasharray: 10 8; stroke-dashoffset: 54; opacity: 0.42; }
-  88% { stroke-dasharray: 10 8; stroke-dashoffset: 0; opacity: 1; }
-  99.9% { stroke-dasharray: 10 8; stroke-dashoffset: 0; opacity: 1; }
-  100% { stroke-dashoffset: 0; opacity: 1; }
+@media print {
+  .ambient-edge-flow { display: none !important; animation: none !important; }
 }
 @keyframes archify-node-pulse {
   0%, 72%, 100% { filter: none; stroke-width: 1.5; }
@@ -4663,6 +4622,7 @@ html[data-share-playback="true"] svg[data-animation="trace"] [data-graph-role="a
   50% { opacity: 0.48; transform: scale(0.78); }
 }
 @media (prefers-reduced-motion: reduce) {
+  .ambient-edge-flow { display: none !important; animation: none !important; }
   html[data-preset="signal-flow"] .diagram-container::before {
     animation: none !important;
   }
@@ -4702,6 +4662,5 @@ html[data-share-playback="true"] svg[data-animation="trace"] [data-graph-role="a
     filter: none;
   }
   .relationship-pulse-overlay { display: none !important; }
-  .source-evidence-beacon,
   svg [data-node-id], svg [data-edge-from], svg [data-detail], svg [data-detail-anchor], svg [data-legend-hit], svg { transition: none !important; }
 }

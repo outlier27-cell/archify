@@ -223,12 +223,15 @@ test('one joint wait preserves real Reader/Chrome convergence at the CLI boundar
         return __jointCompare(immediate);
       })()`, true), label);
     }
-    function clearStage(raw, label) {
-      assert.ok(raw.reserve > 0, `${label}: reserve`);
-      assert.ok(raw.gap >= 9, `${label}: stage gap ${raw.gap}`);
+    function clearStage(raw, label, { requireRail = true } = {}) {
+      const dock = raw.boxes.find(([selector]) => selector === '.diagram-nav')[1];
+      assert.ok(dock[4] > 0 && dock[5] > 0, `${label}: navigation must be visible`);
+      assert.ok(raw.gap >= 9.99, `${label}: stage gap ${raw.gap}`);
       assert.equal(raw.overlap, 0, `${label}: dock/stage overlap`);
-      assert.equal(raw.rail, 'true', label);
-      assert.equal(raw.rootRail, 'true', label);
+      if (requireRail) assert.ok(raw.reserve > 0, `${label}: reserve`);
+      const expectedRail = raw.reserve > 0 ? 'true' : null;
+      assert.equal(raw.rail, expectedRail, label);
+      assert.equal(raw.rootRail, expectedRail, label);
       assert.ok(raw.dimensions[2] <= raw.dimensions[0], `${label}: horizontal containment`);
     }
     function unchanged(before, after, label) {
@@ -288,13 +291,18 @@ test('one joint wait preserves real Reader/Chrome convergence at the CLI boundar
         Archify.viewerChromeLayout.whenStable = function() { __jointCalls.chrome++; return chrome(); };
       ` });
       const states = [];
+      let reservedCliStates = 0;
       const result = await runVisualCheck({ artifactPath: instrumented, chromePath: chrome,
         browserFactory: async () => ({
           inspect: async options => {
             const metrics = await browser.inspect(options);
             assert.deepEqual(await evaluate('__jointCalls'), { joint: 1, chrome: 0 }, 'one CLI joint call; no legacy Chrome call');
             const raw = compare(await evaluate('__jointCompare(__jointAtResolution)', true), `cli-${options.width}-${options.height}-${options.theme}`);
-            clearStage(raw, 'CLI');
+            // The capped SVG may leave space for navigation inside the normal
+            // canvas on large screens. Both 1440px theme states still exercise
+            // an actual reserved rail; every state retains strict clearance.
+            clearStage(raw, 'CLI', { requireRail: options.width === 1440 });
+            if (raw.reserve > 0) reservedCliStates += 1;
             assert.deepEqual(raw.dimensions.slice(0, 2), [options.width, options.height], 'actual raw viewport');
             assert.deepEqual([metrics.innerWidth, metrics.innerHeight], [options.width, options.height], 'actual CLI metrics viewport');
             assert.equal(raw.theme, options.theme);
@@ -308,6 +316,7 @@ test('one joint wait preserves real Reader/Chrome convergence at the CLI boundar
         }),
       });
       assert.equal(result.exitCode, 0, JSON.stringify(result.receipt));
+      assert.ok(reservedCliStates >= 2, 'both 1440px CLI theme states must exercise an actual reserved rail');
       assert.deepEqual(states, [[1440, 900, 'light'], [1600, 1000, 'light'], [1920, 1080, 'light'],
         [2048, 1320, 'light'], [1440, 900, 'dark'], [2048, 1320, 'dark']]);
       assert.deepEqual(result.receipt.containment.viewports.map(value => [value.width, value.height]), states.slice(0, 4).map(value => value.slice(0, 2)));

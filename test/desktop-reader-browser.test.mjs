@@ -74,7 +74,9 @@ test('default sequence and dataflow canvases fit the real desktop reader without
         } else {
           assert.equal(result.exitCode, 0, `${type}: ${JSON.stringify(result.receipt.diagnostics)}`);
           assert.equal(result.receipt.readability.status, 'pass');
-          assert.ok(result.receipt.containment.viewports.every((v) => v.ok && v.readerFit === 'intrinsic-height'));
+          const readerFit = type === 'sequence' ? 'width-first' : 'intrinsic-height';
+          assert.ok(result.receipt.containment.viewports.every((v) => v.ok && v.readerFit === readerFit),
+            `${type}: ${JSON.stringify(result.receipt.containment.viewports)}`);
         }
       }
     }
@@ -183,9 +185,13 @@ test('production showcase is readable in the real 1440 by 900 adaptive reader', 
     const artifactSource = fs.readFileSync(artifact, 'utf8');
     const svgRoot = artifactSource.match(/<svg\b[^>]*>/)?.[0];
     assert.ok(svgRoot, 'production fixture must contain an SVG root');
-    // The comfortable primary-text preference uses the available width here;
-    // the viewport cap still wins over the preferred reading size.
-    assert.match(svgRoot, /viewBox="0 0 1376 728"/);
+    // Guard what a reader sees, not one exact canvas: the showcase keeps the
+    // full 1376 authored width, and its height may change when the layout gets
+    // more correct (the audit archive sits outside the private network frame,
+    // and the DR region keeps clear of the production region).
+    const viewBox = svgRoot.match(/viewBox="0 0 (\d+) (\d+)"/);
+    assert.ok(viewBox, svgRoot);
+    assert.equal(Number(viewBox[1]), 1376);
     assert.match(svgRoot, /data-reader-fit="intrinsic-height"/);
     assert.match(svgRoot, /data-reader-min-text="7\.5"/);
 
@@ -203,9 +209,13 @@ test('production showcase is readable in the real 1440 by 900 adaptive reader', 
       ));
       for (const observation of [desktop, darkDesktop]) {
         assert.ok(observation);
-        assert.equal(observation.readerWidth, 1376);
-        assert.ok(observation.readerWidth <= 1376);
-        assert.equal(observation.diagramWidth, 1346);
+        // The intrinsic-height Reader may narrow the diagram so the whole
+        // showcase fits the 1440x900 first screen. That is fine as long as it
+        // never exceeds the reading cap, keeps the 30px frame inset, and the
+        // projected text still meets the 7.5px reading target below.
+        assert.ok(observation.readerWidth <= 1376, JSON.stringify(observation));
+        assert.ok(observation.readerWidth >= 1200, JSON.stringify(observation));
+        assert.equal(observation.diagramWidth, observation.readerWidth - 30, JSON.stringify(observation));
         assert.equal(observation.viewBoxWidth, 1376);
         assert.ok(Number.isFinite(observation.minimumProjectedNodeTextPx));
         assert.ok(observation.minimumProjectedNodeTextPx >= MIN_PROJECTED_NODE_TEXT_PX);
@@ -214,14 +224,10 @@ test('production showcase is readable in the real 1440 by 900 adaptive reader', 
         assert.ok(observation.minimumProjectedNodeText.trim().length > 0);
         assert.equal(observation.readabilityOk, true);
         assert.equal(observation.overflowX, false, JSON.stringify(observation));
-        if (observation.overflowY) {
-          assert.equal(observation.verticalScrollAccepted, true, JSON.stringify(observation));
-          assert.equal(observation.readerLayout, 'adaptive', JSON.stringify(observation));
-          assert.equal(observation.readerOverflow, 'authored', JSON.stringify(observation));
-          assert.equal(observation.readerFit, 'intrinsic-height', JSON.stringify(observation));
-        } else {
-          assert.equal(observation.verticalScrollAccepted, false, JSON.stringify(observation));
-        }
+        // The production showcase is the gallery's first impression: it must
+        // read whole on a laptop screen without page scroll.
+        assert.equal(observation.overflowY, false, JSON.stringify(observation));
+        assert.equal(observation.verticalScrollAccepted, false, JSON.stringify(observation));
       }
     }
   } finally {
@@ -412,7 +418,33 @@ test('offline intrinsic workflows fit while authored overflow still identifies l
   }
 });
 
-test('issue #250 tall intrinsic workflow fits every required desktop viewport', {
+// Every unpinned three-lane, five-column workflow measures 528 viewBox units
+// tall. Width-first reading enlarges it to 1.5x, so the 1600x1000 page ends
+// 1px past the viewport. The Reader ignored overflow up to 1px while
+// visual-check rejects any rounded-up remainder, so browser-check failed
+// a first draft that every earlier gate had accepted.
+test('a 1px width-first remainder is declared instead of failing browser containment', {
+  skip: chromePath ? false : 'Set ARCHIFY_CHROME to run the real browser regression.',
+}, async () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-reader-remainder-'));
+  try {
+    const artifact = path.join(tmp, 'three-lane-remainder.html');
+    execFileSync(process.execPath, [path.join(skillRoot, 'bin/archify.mjs'), 'deliver', 'workflow',
+      path.join(skillRoot, '..', 'test', 'fixtures/workflow-viewport/three-lane-remainder.workflow.json'),
+      artifact, '--quality', 'showcase', '--json'], { cwd: skillRoot });
+    assert.match(fs.readFileSync(artifact, 'utf8'), /viewBox="0 0 \d+ 528" data-reader-fit="width-first"/);
+    const result = await runVisualCheck({ artifactPath: artifact, chromePath });
+    assert.equal(result.exitCode, 0, JSON.stringify(result.receipt));
+    assert.equal(result.receipt.containment.status, 'pass');
+    const tall = result.receipt.containment.viewports.find(({ width, height }) => width === 1600 && height === 1000);
+    assert.ok(tall, JSON.stringify(result.receipt.containment));
+    assert.ok(tall.scrollHeight <= tall.innerHeight || tall.readerOverflow === 'authored', JSON.stringify(tall));
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('issue #250 tall intrinsic workflow uses reading width and permits readable page scroll', {
   skip: chromePath ? false : 'Set ARCHIFY_CHROME to run the real browser regression.',
 }, async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-issue-250-reader-'));
@@ -438,8 +470,10 @@ test('issue #250 tall intrinsic workflow fits every required desktop viewport', 
     assert.equal(result.receipt.containment.viewports.length, 4);
     for (const viewport of result.receipt.containment.viewports) {
       assert.equal(viewport.overflowX, false, JSON.stringify(viewport, null, 2));
-      assert.equal(viewport.overflowY, false, JSON.stringify(viewport, null, 2));
-      assert.equal(viewport.scrollHeight, viewport.height, JSON.stringify(viewport, null, 2));
+      assert.equal(viewport.readerFit, 'width-first');
+      assert.equal(viewport.overflowY, viewport.verticalScrollAccepted, JSON.stringify(viewport, null, 2));
+      assert.ok(viewport.scrollHeight >= viewport.height, JSON.stringify(viewport, null, 2));
+      assert.ok(viewport.diagramWidth <= viewport.viewBoxWidth * 1.5 + 1);
       assert.ok(viewport.minimumProjectedNodeTextPx >= MIN_PROJECTED_NODE_TEXT_PX);
     }
     assert.deepEqual(
@@ -458,7 +492,7 @@ test('issue #250 tall intrinsic workflow fits every required desktop viewport', 
   }
 });
 
-test('issue #250 five-stage stack fits below source scale without crossing the readability floor', {
+test('issue #250 five-stage stack retains reading scale within the automatic enlargement cap', {
   skip: chromePath ? false : 'Set ARCHIFY_CHROME to run the real browser regression.',
 }, async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-issue-250-five-stage-'));
@@ -479,15 +513,18 @@ test('issue #250 five-stage stack fits below source scale without crossing the r
     const result = await runVisualCheck({ artifactPath: artifact, chromePath });
     assert.equal(result.exitCode, 0, JSON.stringify(result.receipt, null, 2));
     for (const viewport of result.receipt.containment.viewports) {
-      assert.equal(viewport.overflowY, false, JSON.stringify(viewport, null, 2));
-      assert.equal(viewport.scrollHeight, viewport.height, JSON.stringify(viewport, null, 2));
+      assert.equal(viewport.overflowX, false, JSON.stringify(viewport, null, 2));
+      assert.equal(viewport.readerFit, 'width-first');
+      assert.equal(viewport.overflowY, viewport.verticalScrollAccepted, JSON.stringify(viewport, null, 2));
+      assert.ok(viewport.scrollHeight >= viewport.height, JSON.stringify(viewport, null, 2));
+      assert.ok(viewport.diagramWidth <= viewport.viewBoxWidth * 1.5 + 1);
       assert.ok(viewport.minimumProjectedNodeTextPx >= MIN_PROJECTED_NODE_TEXT_PX);
     }
     const desktop = result.receipt.containment.viewports.find(({ width, height }) => (
       width === DESKTOP_READABILITY_VIEWPORT.width && height === DESKTOP_READABILITY_VIEWPORT.height
     ));
     assert.ok(desktop);
-    assert.ok(desktop.diagramWidth < desktop.viewBoxWidth, JSON.stringify(desktop, null, 2));
+    assert.ok(desktop.diagramWidth >= desktop.viewBoxWidth, 'use available reading width instead of shrinking the stack: ' + JSON.stringify(desktop, null, 2));
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
   }

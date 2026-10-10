@@ -22,10 +22,12 @@ test('community catalog: real build rejects invalid metadata before displaying P
     fixture.write(fixture.entry);
     const accepted = fixture.build();
     assert.equal(accepted.status, 0, accepted.stdout + accepted.stderr);
-    const html = fs.readFileSync(path.join(fixture.dist, 'community.html'), 'utf8');
-    assert.ok(html.includes('https://example.com/receipt'));
-    assert.ok(html.includes('https://example.com/example'));
-    assert.ok(!html.includes(payload), 'untrusted markup must be escaped during SSR');
+    for (const file of ['community.html', 'zh/community.html']) {
+      const html = fs.readFileSync(path.join(fixture.dist, file), 'utf8');
+      assert.ok(html.includes('https://example.com/receipt'), file);
+      assert.ok(html.includes('https://example.com/example'), file);
+      assert.ok(!html.includes(payload), `${file}: untrusted markup must be escaped during SSR`);
+    }
   } finally {
     fixture.close();
   }

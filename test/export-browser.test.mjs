@@ -22,7 +22,7 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
   const input = path.join(scratch, 'motion.json');
   const file = path.join(scratch, 'motion.html');
   const source = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples/web-app.architecture.json'), 'utf8'));
-  source.meta.animation = 'trace';
+  delete source.meta.animation;
   source.meta.visual_preset = 'signal-flow';
   fs.writeFileSync(input, JSON.stringify(source));
   execFileSync(process.execPath, [path.join(skillRoot, 'renderers/architecture/render-architecture.mjs'), input, file]);
@@ -127,6 +127,22 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
       assert.deepEqual(await run('Object.keys(Archify.exportMenu).sort()'), ['close','downloadReachShareCard','downloadRouteShareCard','isOpen','open','run','shareCard','syncReachShare','syncRouteShare'].sort());
       assert.deepEqual(await run('Object.keys(Archify.motion).sort()'), ['canRecord','recordWebm']);
       assert.deepEqual(await run(`[...document.querySelectorAll('#export-menu [data-format="jpeg"],#export-menu [data-format="webp"],#export-menu [data-format="webm"],#export-menu [data-action="copy"]')].map(e=>e.disabled)`), [true,true,true,true]);
+      const controls = await run(`(() => {
+        const visible = element => { const r = element.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(element).visibility !== 'hidden'; };
+        const facts = element => { const r = element.getBoundingClientRect(); return { id: element.id, width: r.width, height: r.height, name: (element.getAttribute('aria-label') || element.textContent).trim(), tabIndex: element.tabIndex }; };
+        return {
+          toolbar: [...document.querySelectorAll('#btn-theme, #btn-preset, #btn-present, #btn-export')].filter(visible).map(facts),
+          dock: [...document.querySelectorAll('.diagram-nav button')].filter(visible).map(facts),
+        };
+      })()`);
+      assert.equal(controls.toolbar.length, 4, 'primary controls remain visible');
+      assert.ok(controls.toolbar.every(control => control.height >= 44 && control.name && control.tabIndex >= 0), JSON.stringify(controls));
+      if (width <= 720) assert.ok(controls.dock.every(control => control.width >= 44 && control.height >= 44 && control.name && control.tabIndex >= 0), JSON.stringify(controls));
+      await run("document.getElementById('btn-theme').focus()");
+      await key('Tab', 'Tab', 9);
+      const nextControl = await run('document.activeElement.id');
+      assert.ok(nextControl !== 'btn-theme' && controls.toolbar.some(control => control.id === nextControl),
+        'native Tab reaches another named toolbar control without freezing their order');
       await run(`document.getElementById('btn-export').focus()`);
       await key('ArrowUp', 'ArrowUp', 38);
       const last = await run(`document.activeElement.dataset.format||document.activeElement.dataset.action`);
@@ -154,6 +170,8 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
       assert.equal(await run('Archify.preset.isOpen()'), false);
       await run('Archify.semanticLens.open();Archify.exportMenu.open()');
       assert.equal(await run('Archify.semanticLens.isOpen()'), false);
+      const menu = await run(`(() => { const r = document.getElementById('export-menu').getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: innerWidth, height: innerHeight }; })()`);
+      assert.ok(menu.left >= -1 && menu.right <= menu.width + 1 && menu.top >= -1 && menu.bottom <= menu.height + 1, JSON.stringify(menu));
       const state = await record('menu-' + width);
       assert.equal(state.open, true);assert.equal(state.expanded, 'true');assert.deepEqual(state.console, []);
     }
@@ -170,6 +188,16 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
         const shot = await send('Page.captureScreenshot', { format: 'png' });
         fs.writeFileSync(path.join(evidence, theme + '-menu.png'), Buffer.from(shot.data, 'base64'));
       }
+      await run('Archify.exportMenu.close(false); Archify.view.zoomOut()');
+      await run('Archify.layoutStability.whenStable()');
+      const indicator = await run(`(() => { const detail = document.querySelector('[data-view-detail]'), percent = document.querySelector('[data-view-percent]'); return { detailVisible: !detail.hidden, detail: detail.textContent.trim(), percent: percent.textContent, scale: Archify.view.state().scale }; })()`);
+      assert.equal(indicator.detailVisible, true);
+      assert.ok(indicator.detail && !indicator.detail.includes('%'), 'detail has its own label');
+      assert.equal(indicator.percent, Math.round(indicator.scale * 100) + '%');
+      assert.notEqual(indicator.percent, '100%');
+      await click('[data-view="reset"]');
+      await run('Archify.layoutStability.whenStable()');
+      assert.deepEqual(await run("({detailHidden: document.querySelector('[data-view-detail]').hidden, percent: document.querySelector('[data-view-percent]').textContent})"), { detailHidden: true, percent: '100%' });
     }
   });
 
@@ -284,7 +312,9 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
           fs.writeFileSync(svgFile, svgText);
           const figure = await run(`(()=>{const v=document.querySelector('.diagram-container svg').viewBox.baseVal;const sub=(document.querySelector('.header .subtitle')||{}).textContent;const header=document.querySelector('.header h1')?32+(sub&&sub.trim()?24:0)+18:0;return [(v.width+104)*4,(v.height+104+header)*4];})()`);
           const rasterSizes = [];
-          for (const format of ['png', 'jpeg', 'webp']) {
+          // All modes exercise real raster sizing. Shared MIME/quality encoding
+          // branches additionally run on architecture in both themes.
+          for (const format of mode === 'architecture' ? ['png', 'jpeg', 'webp'] : ['png']) {
             await run(`Archify.exportMenu.run('${format}')`);
             const result = await run(`(async()=>{const blob=exportDownloads.at(-1).blob;const image=await createImageBitmap(blob);const dimensions=[image.width,image.height];image.close();return {dimensions,type:blob.type};})()`);
             assert.deepEqual(result.dimensions, figure, `${mode} ${theme} ${format}: native 4x framed raster`);
@@ -366,8 +396,11 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
   });
 
   await t.test('recording constructor/error/empty failures clean up and public run disables WebM', async () => {
+    await load();
+    let previousTracks = 0;
+    // Consecutive failures must release their own resources without a page
+    // reload doing the cleanup for them. Keep the unsupported startup separate.
     for (const fault of ['constructor','error','empty']) {
-      await load();
       await run(`window.MediaRecorder=class {
         static isTypeSupported(){return true;}
         constructor(){if(${JSON.stringify(fault)}==='constructor')throw new Error('recorder constructor');this.state='inactive';this.mimeType='video/webm';}
@@ -375,7 +408,11 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
         requestData(){} stop(){this.state='inactive';this.onstop();}
       };`);
       assert.equal(await run('Archify.motion.recordWebm({duration:250,fps:10}).then(()=>false,()=>true)'),true);
-      const state=await record('webm-'+fault);assert.ok(state.urls.every(u=>u.revoked));assert.ok(state.tracks.length>0);assert.ok(state.tracks.every(s=>s==='ended'));
+      const state=await record('webm-'+fault);
+      assert.ok(state.urls.every(u=>u.revoked));
+      assert.ok(state.tracks.length>previousTracks, `${fault}: the attempt must acquire its own stream`);
+      assert.ok(state.tracks.every(s=>s==='ended'));
+      previousTracks = state.tracks.length;
     }
     await load({extra:'&fault=unsupported'});
     await run(`Archify.exportMenu.run('webm')`);

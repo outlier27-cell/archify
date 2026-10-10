@@ -33,9 +33,6 @@ const CASES = {
     input: 'examples/deployment-release.lifecycle.json',
     relations: 'transitions',
     relationIndexes: [0, 5, 1, 4],
-    // v2 layout: pin labels into the free corridor between the main and
-    // waiting rows so they clear every state rect.
-    labelPoints: [[200, 175], [200, 195], [200, 215], [200, 235]],
   },
 };
 
@@ -167,7 +164,11 @@ test('sequence legend stays below a late message with a note', () => {
       assert.ok(end >= lateY && end <= legendTitle - 12, `lifeline end ${end}: last message ${lateY}, legend title ${legendTitle}`);
     }
   }
-  assert.ok(Number(fs.readFileSync(automatic.output, 'utf8').match(/<svg viewBox="0 0 920 (\d+)"/)[1]) > 760);
+  // Few-participant automatic spread packs width (560); height still grows past
+  // the old 760 floor so the legend clears the late note.
+  const automaticViewBox = fs.readFileSync(automatic.output, 'utf8').match(/<svg viewBox="0 0 (\d+) (\d+)"/);
+  assert.equal(Number(automaticViewBox[1]), 560);
+  assert.ok(Number(automaticViewBox[2]) > 760, automaticViewBox[2]);
 });
 
 test('sequence repair height also holds a wrapped legend', () => {

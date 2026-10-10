@@ -61,14 +61,14 @@ const FIXTURES = {
     ],
   },
   lifecycle: {
-    schema_version: 1,
+    schema_version: 3,
     diagram_type: 'lifecycle',
-    meta: { title: 'No Waiting or Failure', viewBox: [720, 566] },
-    lanes: [{ id: 'main', label: 'Lifecycle' }],
+    meta: { title: 'No Waiting or Failure' },
+    mainPath: ['started', 'running', 'completed'],
     states: [
-      { id: 'started', type: 'start', label: 'Started', lane: 'main', col: 0 },
-      { id: 'running', type: 'active', label: 'Running', lane: 'main', col: 1 },
-      { id: 'completed', type: 'success', label: 'Completed', lane: 'main', col: 2 },
+      { id: 'started', type: 'start', label: 'Started' },
+      { id: 'running', type: 'active', label: 'Running' },
+      { id: 'completed', type: 'success', label: 'Completed' },
     ],
     transitions: [
       { from: 'started', to: 'running' },
@@ -410,3 +410,17 @@ test('measured legend rows share baselines and stay within the viewBox for local
 });
 
 process.on('exit', () => fs.rmSync(tmp, { recursive: true, force: true }));
+
+test('legend entries reserve the width of their rendered label font', async () => {
+  const { renderLegend } = await import('../archify/renderers/shared/legend.mjs');
+  const label = 'post-start-input-writer';
+  const svg = renderLegend({
+    entries: [{ kind: 'a', label }, { kind: 'b', label: 'next' }],
+    layout: { x: 0, baselineY: 100, width: 2000, fontSize: 8 },
+    renderSwatch: () => '<rect/>',
+  });
+  const [first, second] = [...svg.matchAll(/data-legend-x="([\d.]+)"/g)].map((match) => Number(match[1]));
+  const fontSize = Number(svg.match(/<text x="[\d.]+" y="[\d.]+" class="t-muted" font-size="([\d.]+)"/)[1]);
+  // Monospace label text advances 0.6em per ASCII character after the swatch.
+  assert.ok(second - first >= 14 + 8 + label.length * fontSize * 0.6, JSON.stringify({ first, second, fontSize }));
+});

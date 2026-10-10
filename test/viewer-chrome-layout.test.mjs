@@ -13,6 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(__dirname, '..', 'archify');
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-viewer-chrome-layout-'));
 const chromePath = process.env.ARCHIFY_CHROME ? findChrome() : null;
+const renderedArtifacts = new Map();
 
 const CASES = {
   architecture: 'web-app.architecture.json',
@@ -23,7 +24,9 @@ const CASES = {
 };
 
 function render(mode, example) {
-  const output = path.join(tmp, `${mode}.html`);
+  const key = JSON.stringify([mode, example]);
+  if (renderedArtifacts.has(key)) return renderedArtifacts.get(key);
+  const output = path.join(tmp, `${mode}-${renderedArtifacts.size}.html`);
   execFileSync(process.execPath, [
     path.join(skillRoot, 'bin', 'archify.mjs'),
     'render',
@@ -31,6 +34,7 @@ function render(mode, example) {
     path.join(skillRoot, 'examples', example),
     output,
   ]);
+  renderedArtifacts.set(key, output);
   return output;
 }
 
@@ -709,17 +713,14 @@ test('localized multiline Legends remain clear across required viewports, themes
   skip: chromePath ? false : 'Set ARCHIFY_CHROME to run the real browser regression.',
 }, async () => {
   const browser = new ChromeVisualBrowser(chromePath);
-  const viewports = [[1440, 900], [1600, 1000], [1920, 1080], [2048, 1320]];
-  const cases = viewports.flatMap(([width, height]) => (
-    ['light', 'dark'].flatMap((theme) => (
-      ['classic', 'signal-flow', 'blueprint', 'editorial'].map((preset) => ({
-        width,
-        height,
-        theme,
-        preset,
-      }))
-    ))
-  ));
+  // Cover every supported viewport and every theme/preset pair without the
+  // 32-state Cartesian product of shared collision code.
+  const cases = [
+    [1440, 900, 'light', 'classic'], [1440, 900, 'dark', 'signal-flow'],
+    [1600, 1000, 'light', 'blueprint'], [1600, 1000, 'dark', 'editorial'],
+    [1920, 1080, 'dark', 'classic'], [1920, 1080, 'light', 'signal-flow'],
+    [2048, 1320, 'dark', 'blueprint'], [2048, 1320, 'light', 'editorial'],
+  ].map(([width, height, theme, preset]) => ({ width, height, theme, preset }));
   try {
     const sessionId = await load(browser, render('architecture', CASES.architecture), { width: 1920, height: 1080 });
     await evaluate(browser, sessionId, `(function () {

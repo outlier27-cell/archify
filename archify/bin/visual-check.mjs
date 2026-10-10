@@ -1890,7 +1890,7 @@ function observation({ width, height, theme, metrics }) {
     && !overflowX
     && readabilityOk
     && Number.isFinite(minimumProjectedNodeTextPx)
-    && ((readerLayout === 'adaptive' && readerOverflow === 'authored' && readerFit === 'intrinsic-height')
+    && ((readerLayout === 'adaptive' && readerOverflow === 'authored' && (readerFit === 'intrinsic-height' || readerFit === 'width-first'))
       || (readerFit === 'authored-height' && metrics.diagramType === 'architecture'
         && metrics.documentScrollUnclipped === true))
   );
@@ -2081,7 +2081,7 @@ export function verticalBudgetFixes(entry) {
         ? `the page is ${excess}px too tall (${stacked}); the Reader already narrowed the stage to its ${entry.diagramWidth}px minimum, so the SVG height only follows meta.viewBox: keep every node and relationship and reduce the viewBox height to at most ${targetViewBoxHeight} (from ${page.viewBoxHeight}) by tightening vertical gaps and empty rows`
         : `the page is ${excess}px too tall (${stacked}) and the SVG alone exceeds the viewport at the minimum reader width; split the diagram into two`);
     } else {
-      fixes.push(`the page is ${excess}px too tall (${stacked}); the SVG spans the full ${entry.diagramWidth}px reader width because its viewBox ratio is below 1.55 and it declares no intrinsic-height fit, so the Reader can neither narrow it nor accept readable vertical scroll: either remove meta.viewBox so the renderer sizes the canvas and declares the fit, or make the viewBox at least 1.55x wider than tall`);
+      fixes.push(`the page is ${excess}px too tall (${stacked}); the SVG spans the full ${entry.diagramWidth}px reader width because its viewBox ratio is below 1.55 and it declares no automatic Reader fit, so the Reader can neither narrow it nor accept readable vertical scroll: either remove meta.viewBox so the renderer sizes the canvas and declares the fit, or make the viewBox at least 1.55x wider than tall`);
     }
   }
   if (page.cardsPx >= excess) {

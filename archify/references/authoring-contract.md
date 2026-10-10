@@ -80,7 +80,7 @@ chooses one primary locale for the Viewer; follow an explicit primary-language
 request, then prompt order or conversation dominance.
 
 Bundled Viewer catalogs are enrolled in `locales/manifest.json`: currently
-`en`, `zh-CN`, `es`, and `ko`. For these, `meta.locale` alone selects the full
+`en`, `zh-CN`, `zh-TW`, `es`, and `ko`. For these, `meta.locale` alone selects the full
 catalog. Tags match case-insensitively (`zh-cn` selects `zh-CN`), but region
 and script variants are distinct: `zh-Hant`, `es-MX`, or `ko-KR` select no
 bundled catalog.
@@ -154,8 +154,8 @@ Generate one responsive artifact for laptops and external displays, preserving t
 
 - Node anchors start at side midpoints. `left`/`right` change the horizontal endpoint; `top`/`bottom` change the vertical endpoint. For an automatic Architecture relationship, unobstructed facing ports whose axis offset is under 16px may share one horizontal or vertical axis when both endpoints retain the 16px corner gutter. If exactly one endpoint belongs to a spread group, only its unshared counterpart moves; relationships spread at both endpoints keep their distinct ports and outside bridge unless a reciprocal facing pair can jointly use separate straight lanes while preserving endpoint spacing, labels, and all surrounding route and obstacle clearances.
 - A side is a direction contract. The first and final route segment must be perpendicular and outward/inward in the named direction.
-- In architecture, data-flow, and lifecycle diagrams, explicit `route: "straight"` requests one direct segment, which may be diagonal when endpoint sides are not pinned. The artifact checker preserves this intent; explicit sides, opaque-node clearance, and other quality gates still apply. `via` takes precedence and retains existing rules, including data-flow's requirement for orthogonal via segments.
-- Automatic Port Spread is a default renderer behavior for architecture, workflow, data-flow, and lifecycle diagrams. Shared automatic endpoints spread deterministically and symmetrically with a 16px corner gutter. It does not apply to sequence messages, single relationships, or explicit `via`, `channelX`, `channelY`, `labelAt`, or non-`auto` routes.
+- In architecture and data-flow diagrams, explicit `route: "straight"` requests one direct segment, which may be diagonal when endpoint sides are not pinned. The artifact checker preserves this intent; explicit sides, opaque-node clearance, and other quality gates still apply. `via` takes precedence and retains existing rules, including data-flow's requirement for orthogonal via segments.
+- Automatic Port Spread is a default renderer behavior for architecture, workflow, and data-flow diagrams. Shared automatic endpoints spread deterministically and symmetrically with a 16px corner gutter. It does not apply to sequence messages, single relationships, or explicit `via`, `channelX`, `channelY`, `labelAt`, or non-`auto` routes.
 - Showcase route rhythm: every nonzero segment must be at least 8px; every interior segment must be at least 16px. When spread ports are nearly parallel, the router uses a 24px endpoint stub and a 16px outside bridge instead of manufacturing a tiny dogleg.
 - Showcase route compactness: an explicit Architecture route fails with `composition/excessive-route-detour` when its orthogonal length is at least 2.5 times an obstacle-aware legal route, adds at least 200px, and sends a control point at least 96px beyond the content envelope. The evidence records both lengths, ratio, excess, bounds, and excursion. Remove an unnecessary `via` or move the diagnosed corridor inward instead of enlarging the canvas. Related relationships that overlap on the same outer corridor by at least 32px are treated as an intentional bus and remain valid.
 - Shared endpoint corridors are allowed only when they remain semantically unambiguous. Unrelated collinear overlap of 8px or more fails showcase.
@@ -275,7 +275,7 @@ Compare diagnostics by code, subject, and stage instead of total count alone.
 5. Fix label-to-node, label-to-label, then label-to-route clearance.
 6. Fix labels that leave the canvas: move the label with `labelAt`/`labelDx`/`labelDy`/`labelSegment`, or widen `meta.viewBox`. Suggested `labelDx`/`labelDy` values replace the authored field; they are not added to it.
 
-Run `validate` after every edit. Consume `diagnostics[]` by stable `code`, exact `subject`, measured `evidence`, and `supportedFixes`. If the diagnostic gives `labelAt`, use that point instead of estimating another offset.
+After every edit, rerun the complete `finalize` as the delivery contract requires; use `validate` only for focused diagnosis between finalize runs. Consume `diagnostics[]` by stable `code`, exact `subject`, measured `evidence`, and `supportedFixes`. If the diagnostic gives `labelAt`, use that point instead of estimating another offset.
 
 ## Mode placement
 
@@ -283,15 +283,16 @@ Run `validate` after every edit. Consume `diagnostics[]` by stable `code`, exact
 
 Choose overview or mechanism detail using [Composition and meaning](authoring-defaults.md#composition-and-meaning). Use one obvious primary reading path, which may step across meaningful rows when the requested topology needs room. Keep the overview readable at its chosen abstraction; expand implementation details when they answer the reader's question. Group only real ownership, trust, process, or deployment boundaries. Boundaries do not replace relationships.
 
-Grid placement is preferred when the schema supports it. Free positions are appropriate for a bounded exception, not for prose-level coordinate planning. Keep external actors outside the system boundary when that is factually true.
+Grid placement is preferred when the schema supports it. Free positions are appropriate for a bounded exception, not for prose-level coordinate planning. Keep external actors outside the system boundary when that is factually true. A boundary is drawn as the padded box around all of its members, so place them as one compact axis-aligned cluster (no empty bay that lets a non-member sit inside the padded frame) and keep every non-member outside that box; `layout/boundary-encloses-non-member` reports a component the box swallows in showcase quality. Standard retains its existing acceptance behavior.
 
 ### Workflow
 
 Lanes express responsibility or phase. Columns `0..5` express logical
-progression. Start new workflows on `readable-v2`; retain `fixed-v1` only for
-legacy geometry compatibility. Keep the happy path monotonic, preserve semantic
-edge labels, and route retries and exception returns outside the main lane
-corridor.
+progression. Each `(lane, col)` hosts at most one node — two nodes in the same
+cell fail with `workflow/node-overlap`. Start new workflows on `readable-v2`;
+retain `fixed-v1` only for legacy geometry compatibility. Keep the happy path
+monotonic, preserve semantic edge labels, and route retries and exception
+returns outside the main lane corridor.
 
 #### Workflow viewport repair
 
@@ -316,11 +317,23 @@ not settle viewport fit. These are repair directions, not guaranteed coordinates
 
 ### Sequence
 
-Participants are ordered by conversation role. Messages own their vertical order. Use return/async/security variants for meaning, not decoration; sequence does not use Automatic Port Spread.
+Participants are ordered by conversation role. Messages own their vertical order. Use return/async/security variants for meaning, not decoration; sequence does not use Automatic Port Spread. A segment's `from`/`to` edges must stay at least 4px off every message arrow (`message.y`): an edge along an arrow leaves the reader unable to tell which phase the message belongs to, and showcase quality reports `sequence/segment-message-border-run`. Standard retains its existing acceptance behavior.
+
+First-draft shape: every message needs an `id`, `from`, `to`, `label`, and integer `y` at least 160. `from` and `to` must be different participants — self-messages are unsupported (`sequence/self-message-unsupported`). Optional phase bands are `segments[]` with only `from`, `to`, and `label` (no segment `id`). Inventing `pos`/`size` on participants fails schema validation — order alone places them. Omit `meta.viewBox` so automatic height fits the timeline + legend (minimum 327px readable band) instead of a fixed 760px floor, and so 2–3 participant spreads pack below the 920px default when labels fit (4+ stay at 920px; long labels still widen).
 
 ### Dataflow
 
 Stages express transformation or custody. Rows separate parallel streams. Label only data contracts, classifications, or cross-boundary movement that is not obvious.
+
+First-draft shape: declare `stages[]` (each a `{label}`), then place every node with integer `stage` and `row` — not `pos`/`size`. Flows are `flows[]` with `from`, `to`, and optional `label`.
+
+Omit `meta.viewBox` to fit canvas width to all stages and nodes in either quality
+profile, including explicit node widths. Width uses content + 24px right padding
+with a 480px minimum (five default stages still need ~1068); left-edge overflow
+still needs a node repair. An authored viewBox stays fixed. Showcase node growth, readable typography, content height, port bridges
+and bounded label placement apply only when the canvas and all node widths are
+omitted. `--quality` overrides `meta.quality_profile`; without it, the renderer
+uses `ARCHIFY_QUALITY_PROFILE` when set, otherwise the JSON profile.
 
 ### ERD
 
@@ -337,15 +350,17 @@ replace a field list.
 
 Before placing boxes, classify tables into functional domains using verified table
 names, comments, module paths, and foreign-key meaning. Put the domain name in
-`tag` and give each domain one solid block of grid cells: a single row, a single
-column, or a full block, with every cell of the block holding one of its tables.
+`tag` and give each domain one solid rectangle of grid cells: a single row, a
+single column, or a filled rectangular block — not an L or a diagonal — with
+every cell of the rectangle holding one of its tables.
 All tables with the same tag stay together; do not interleave unrelated tables
-between members. A domain that fills one such block is drawn as a labelled band
-behind its tables, so the
+between members. A domain that fills one such rectangle is drawn as a labelled
+band behind its tables, so the
 grouping is visible without reading every box;
-a tag whose tables do not fill one block earns no band, and because the band is
-the only place a domain name is drawn the renderer reports `erd/domain-not-drawn`
-rather than publishing a diagram that cannot name the domain. Absolute
+a tag whose tables do not fill one rectangle earns no band, and because the band
+is the only place a domain name is drawn the renderer reports
+`erd/domain-not-drawn` rather than publishing a diagram that cannot name the
+domain. Absolute
 coordinates have no grid cells at all, so a tagged table always needs `row`/`col`.
 Order parent/core tables
 toward the shared boundary and
@@ -353,7 +368,10 @@ place their direct children beside or beneath them. Columns read left to right a
 rows read top to bottom, so a relationship between neighbouring columns is one
 straight corridor. Never place an unrelated entity between two aligned anchors;
 the router can detour around it, but the clear corridor is shorter and reads
-better. Use `row`/`col` for this normal grouped layout, and only use explicit
+better. A junction table has two parents: put it in a cell beside or between
+both, not beneath one of them with tables stacked between it and the other,
+and keep every table that shares its domain tag in one solid rectangle of cells. A relationship must connect two different entities; a self-reference such as manager_id stays as a foreign-key column (and optionally a card), not an `employees`→`employees` edge.
+Use `row`/`col` for this normal grouped layout, and only use explicit
 `pos`/`via` after a diagnostic identifies a concrete geometry problem.
 
 State every key role a column carries in `key`, and the real references in
@@ -434,6 +452,11 @@ with a single triangle. Members never truncate: a type grows to its widest
 member up to `layout.typeMaxW` and longer members wrap at parameter boundaries.
 See [`../renderers/class/README.md`](../renderers/class/README.md).
 
+First-draft shape: types use `row`/`col` (not `pos`/`size`), fields go in
+`attributes[]`, operations in `methods[]` with `parameters` as one string such as
+`"msg: Message"` (not an array of objects). Enum members are attributes with only
+`name`. Relationships need an `id`, `from`, `to`, and `kind`.
+
 ### Timeline
 
 A timeline answers "when did what happen, and how far apart?". Every event
@@ -446,8 +469,9 @@ invented or approximate times as observed, and never fill gaps with events the
 input does not contain.
 
 Use `lanes` for sources or categories (release, monitoring, response); every
-event then names one. `kind` (`change`, `alert`, `action`, `recovery`) only
-colours the card. Events are drawn in time order whatever the authored order;
+event then names one. Each event's visible text is `title` (not `label`). `kind`
+(`default`, `change`, `alert`, `action`, `recovery`) only
+colours the card; inventing values such as `milestone` fails schema validation. Events are drawn in time order whatever the authored order;
 simultaneous and close events stack. By default a quiet period longer than 8×
 the median gap and 10% of the span is drawn as a fixed-width break labelled
 with the omitted duration; `layout.breaks: "none"` keeps one proportional axis.
@@ -473,21 +497,31 @@ unless the input states the dependency. See
 
 ### Lifecycle
 
-Schema v2 (new diagrams): each populated lane is one row, `main` first,
-`terminal` last, others in `lanes[]` order. `col` `0..4` is one shared x grid,
-so a state placed in the column of the state it leaves gets a straight vertical
-transition. Every transition, including the main path, is authored; there is no
-implied rail. The renderer sizes the canvas, widens a column gap for a
-same-row label, and routes automatic transitions orthogonally through row gaps.
-Keep labels short: a gap carrying several parallel lines has little room.
+Schema v3 is the only lifecycle contract. `mainPath` lists the happy path from
+the initial state; every consecutive pair needs a transition. The renderer owns
+all geometry: the main path is one row, transitions back to an earlier phase
+(or skipping ahead) become arcs above it, and every other state sits below the
+state it branches from, one row deeper per step away from the main path.
+Exits that several consecutive phases share (for example “cancel” from any
+running phase) are drawn once from a composite frame around those phases; give
+them the same label. There are no lanes, columns, sizes, or routing controls.
 
-Schema v1 (legacy): main phases use columns `0..4`; event and terminal bands
-use columns `0..2`, and event/terminal column `N` aligns with main column
-`N + 2`. Every lane other than `main` and `terminal` shares one middle band;
-states in the same column there need distinct `yOffset` values.
+Keep the main path to the phases a reader follows, at most about six states,
+and keep transition labels short. A recoverable failure needs a real transition
+back to an active state; a card saying “retry” is not topology.
 
-In both versions a recoverable failure needs a real transition back to an
-active state. A card saying “retry” is not topology.
+Pick each state's `type` by what the reader should notice, since color and the
+corner sigil follow it: `waiting` for a pause on a person, time, or input;
+`decision` for a review or branch point; `success` or `failure` for a good or
+bad outcome; `neutral` for parked states and outcomes that are neither;
+`external` when an outside party holds the work; `active` otherwise. From a
+Mermaid `stateDiagram`, `[*] -->` names the first `mainPath` state, a state
+with `--> [*]` is an outcome (`success`, `failure`, or `neutral`; it is drawn as
+final when it has no other outgoing transition), and `<<choice>>` becomes a
+`decision` state. Flatten a composite `state X { ... }` into its inner states
+and repeat its exit from each of them with one label; consecutive main-path
+phases sharing that exit are framed automatically. Concurrent regions (`--`)
+have no lifecycle form: draw one lifecycle per region.
 
 ## Repository evidence
 
@@ -589,7 +623,8 @@ workflow/dataflow nodes, sequence participants, or lifecycle states. Choose
 `calendar`, `clock`, `person`, `briefcase`, `flag`, or `moon` for everyday concepts;
 the complete catalog (including existing technical and lifecycle symbols) is
 `common.schema.json#/$defs/nodeIcon`. Use `icon: "none"` to hide the corner symbol.
-Omitting `icon` keeps the type-based default. These inline SVG symbols are
+Omitting `icon` keeps the type-based default; lifecycle `start`, `active`, and
+`neutral` states default to no symbol. These inline SVG symbols are
 renderer-owned and export with the diagram; URLs and raw SVG are not accepted.
 
 Icon selection changes only the corner symbol. The node's type still determines

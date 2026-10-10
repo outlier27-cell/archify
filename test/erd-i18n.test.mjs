@@ -74,7 +74,7 @@ test('ERD accepts partial translations through validate, render and deliver', t 
 
 test('ERD empty translations preserve locale-only artifacts byte for byte', t => {
   const directory = workspace(t);
-  for (const locale of ['en', 'zh-CN', 'es', 'ko']) {
+  for (const locale of ['en', 'zh-CN', 'zh-TW', 'es', 'ko']) {
     const baseline = run(directory, fixture(undefined, locale));
     assert.equal(baseline.status, 0, baseline.stderr);
     const before = html(directory);

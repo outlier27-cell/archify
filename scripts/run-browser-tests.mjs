@@ -1,46 +1,31 @@
 #!/usr/bin/env node
 
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { findChrome } from '../archify/bin/visual-check.mjs';
+import { testRunnerOptions } from './test-runner-options.mjs';
+
+import { browserTestFiles as testFiles } from './browser-test-inventory.mjs';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-// Shared by PR CI and tag releases. WebM decoding stays in test:webm.
-const testFiles = [
-  'finalize-browser.test.mjs',
-  'desktop-reader-browser.test.mjs',
-  'reader-readability-maintained-browser.test.mjs',
-  'reader-layout-browser.test.mjs',
-  'reader-layout-settle-browser.test.mjs',
-  'reader-cards-overflow-browser.test.mjs',
-  'joint-layout-browser.test.mjs',
-  'sequence-header-clearance.test.mjs',
-  'compact-header-clearance.test.mjs',
-  'architecture-reading-size-browser.test.mjs',
-  'lifecycle-rail-browser.test.mjs',
-  'lifecycle-band-title.test.mjs',
-  'export-cleanup-browser.test.mjs',
-  'offline-font-browser.test.mjs',
-  'i18n.test.mjs',
-  'semantic-radar.test.mjs',
-  'viewer-chrome-layout.test.mjs',
-  'viewer-camera-browser.test.mjs',
-  'motion-governor-browser.test.mjs',
-  'finder-browser.test.mjs',
-  'intent-trace-browser.test.mjs',
-  'semantic-lens-browser.test.mjs',
-  'route-probe-browser.test.mjs',
-  'focus-browser.test.mjs',
-  'crossover-state-browser.test.mjs',
-  'semantic-passport-move-browser.test.mjs',
-  'export-browser.test.mjs',
-  'viewer-identifiers-browser.test.mjs',
-  'repository-evidence.test.mjs',
-  'repository-evidence-types-browser.test.mjs',
-  'tree-branches-browser.test.mjs',
-  'class-motion-browser.test.mjs',
-];
+
+let options;
+try {
+  if (new Set(testFiles).size !== testFiles.length) throw new Error('Browser inventory contains duplicate files');
+  options = testRunnerOptions(process.argv.slice(2), {
+    repoRoot, testFiles: testFiles.map(file => path.join('test', file)), allowShards: true,
+  });
+} catch (error) {
+  console.error(error.message);
+  process.exit(1);
+}
+if (options.list) {
+  console.log(options.files.join('\n'));
+  process.exit(0);
+}
 
 const chrome = findChrome();
 if (!chrome) {
@@ -48,15 +33,20 @@ if (!chrome) {
   process.exit(1);
 }
 
-const args = ['--test'];
-const [major, minor] = process.versions.node.split('.').map(Number);
-if (major > 18 || (major === 18 && minor >= 19)) args.push('--test-concurrency=2');
-args.push(...testFiles.map((file) => path.join('test', file)));
-const result = spawnSync(process.execPath, args, {
-  cwd: repoRoot,
-  env: { ...process.env, ARCHIFY_CHROME: chrome },
-  stdio: 'inherit',
-});
+console.error(`Browser tests: ${options.files.length} files, concurrency ${options.concurrency}${options.shard ? `, shard ${options.shard.index}/${options.shard.count}` : ''}`);
+// Browser fixtures also deliver artifacts and check for updates. Give each
+// invocation its own cache, just like the ordinary repository test runner.
+const updateCache = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'archify-browser-update-')));
+let result;
+try {
+  result = spawnSync(process.execPath, options.args, {
+    cwd: repoRoot,
+    env: { ...process.env, ARCHIFY_CHROME: chrome, ARCHIFY_UPDATE_CACHE_DIRECTORY: updateCache },
+    stdio: 'inherit',
+  });
+} finally {
+  fs.rmSync(updateCache, { recursive: true, force: true });
+}
 if (result.error) throw result.error;
 if (result.signal) console.error(`browser test runner terminated by ${result.signal}`);
-process.exitCode = result.status ?? 1;
+process.exitCode = result.signal ? 1 : (result.status ?? 1);

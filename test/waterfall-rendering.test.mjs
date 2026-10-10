@@ -31,6 +31,9 @@ test('waterfall: both examples render and pass the showcase artifact checks', ()
   for (const diagram of [small, large]) {
     const result = run(diagram);
     assert.equal(result.status, 0, result.stderr);
+    const root = fs.readFileSync(result.output, 'utf8').match(/<svg\b[^>]*>/)?.[0];
+    assert.match(root, /data-reader-fit="width-first"/);
+    assert.match(root, /data-reader-min-text="7\.5"/);
     const receipt = JSON.parse(spawnSync(process.execPath, [checker, result.output], { encoding: 'utf8' }).stdout);
     assert.equal(receipt.ok, true, JSON.stringify(receipt.checks.filter((entry) => !entry.ok)));
     assert.equal(receipt.composition.summary.errors, 0);
@@ -95,4 +98,21 @@ test('waterfall: invalid timing and parent cycles are refused', () => {
   assert.match(failure((d) => { delete d.spans[1].duration; }), /must be marked status "incomplete"/);
   assert.match(failure((d) => { d.spans[1].parent = 'missing'; }), /waterfall\/missing-parent/);
   assert.match(failure((d) => { d.spans[0].parent = 'auth'; }), /waterfall\/cycle/);
+});
+
+test('waterfall: services past the five colours share a legend entry instead of a duplicated colour', () => {
+  const services = ['gateway', 'auth', 'cart', 'pricing', 'tax', 'inventory', 'postgres'];
+  const diagram = clone(small);
+  diagram.spans = [
+    { id: 'root', name: 'POST /checkout', service: services[0], start: 0, duration: 700 },
+    ...services.slice(1).map((service, index) => ({ id: `s${index}`, name: `${service} call`, service, parent: 'root', start: index * 100, duration: 80 })),
+  ];
+  const result = run(diagram);
+  assert.equal(result.status, 0, result.stderr);
+  const html = fs.readFileSync(result.output, 'utf8');
+  const labels = [...html.matchAll(/data-legend-semantic-kind="service:[^"]*"[\s\S]*?<text[^>]*>([^<]+)<\/text>/g)].map((match) => match[1]);
+  assert.equal(labels.length, 5, labels.join(' | '));
+  assert.ok(labels.includes('gateway · inventory'), labels.join(' | '));
+  assert.ok(labels.includes('auth · postgres'), labels.join(' | '));
+  assert.ok(labels.includes('cart'), labels.join(' | '));
 });

@@ -9,17 +9,24 @@ const hasClass = (node, name) => (attr(node, 'class') || '').split(/\s+/).includ
 const pages = ['index', 'gallery', 'guide', 'start', 'community'];
 
 test('all five built pages expose one shared top navigation and the correct current page', () => {
-  for (const page of pages) {
-    const dom = parse(fs.readFileSync(new URL(`../dist/${page}.html`, import.meta.url), 'utf8'));
+  for (const lang of ['en', 'zh']) for (const page of pages) {
+    const file = page === 'index' ? (lang === 'zh' ? 'zh.html' : 'index.html') : `${lang === 'zh' ? 'zh/' : ''}${page}.html`;
+    const hrefFor = target => `https://tt-a1i.github.io/archify/${lang === 'zh' ? 'zh/' : ''}${target}.html`;
+    const dom = parse(fs.readFileSync(new URL(`../dist/${file}`, import.meta.url), 'utf8'));
+    const bases = nodes(dom).filter(node => node.tagName === 'base');
+    assert.equal(bases.length, 1, file);
+    assert.equal(attr(bases[0], 'href'), lang === 'zh' && page !== 'index' ? '../' : './', file);
+    const baseUri = new URL(attr(bases[0], 'href'), `https://tt-a1i.github.io/archify/${file}`);
+    const resolvedHref = node => new URL(attr(node, 'href'), baseUri).href;
     const nav = nodes(dom).find(node => node.tagName === 'nav' && hasClass(node, 'site-nav'));
     assert.ok(nav, page);
     const links = nodes(nav).filter(node => node.tagName === 'a' && hasClass(node, 'nav-link'));
-    assert.deepEqual(links.map(node => attr(node, 'href')), [
-      'guide.html', 'gallery.html', 'start.html', 'community.html', 'https://github.com/tt-a1i/archify',
+    assert.deepEqual(links.map(resolvedHref), [
+      ...['guide', 'gallery', 'start', 'community'].map(hrefFor), 'https://github.com/tt-a1i/archify',
     ], page);
-    assert.deepEqual(links.filter(node => attr(node, 'aria-current') === 'page').map(node => attr(node, 'href')),
-      page === 'index' ? [] : [`${page}.html`], page);
-    const community = links.find(node => attr(node, 'href') === 'community.html');
+    assert.deepEqual(links.filter(node => attr(node, 'aria-current') === 'page').map(resolvedHref),
+      page === 'index' ? [] : [hrefFor(page)], page);
+    const community = links.find(node => resolvedHref(node) === hrefFor('community'));
     if (page === 'index' || page === 'guide') {
       assert.equal(attr(community, 'data-i18n'), page === 'index' ? 'nav-community' : 'navCommunity', page);
     } else {
@@ -34,5 +41,9 @@ test('all five built pages expose one shared top navigation and the correct curr
 test('the homepage retains its footer catalog link alongside the top entry', () => {
   const dom = parse(fs.readFileSync(new URL('../dist/index.html', import.meta.url), 'utf8'));
   const footer = nodes(dom).find(node => node.tagName === 'footer');
-  assert.ok(nodes(footer).some(node => node.tagName === 'a' && attr(node, 'href') === 'community.html'));
+  const base = nodes(dom).filter(node => node.tagName === 'base');
+  assert.equal(base.length, 1);
+  assert.equal(attr(base[0], 'href'), './');
+  const baseUri = new URL(attr(base[0], 'href'), 'https://tt-a1i.github.io/archify/index.html');
+  assert.ok(nodes(footer).some(node => node.tagName === 'a' && new URL(attr(node, 'href'), baseUri).href === 'https://tt-a1i.github.io/archify/community.html'));
 });

@@ -3,9 +3,10 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import test from 'node:test';
+import test, { after } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { startPreview } from '../archify/bin/preview.mjs';
+import { validateSchema } from '../archify/renderers/shared/validator.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const skillRoot = path.resolve(here, '..', 'archify');
@@ -42,9 +43,23 @@ function evidencePayload(html) {
   return JSON.parse(match[1]);
 }
 
-// A throwaway origin-matched checkout plus the typed diagram that points at it.
-function fixture({ type, collection, example, first }) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-evidence-types-'));
+function temporaryDirectory(t, prefix) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  return root;
+}
+
+// Initialize identical source history once. Each test copies the whole checkout,
+// including .git, so changing its origin or index cannot affect another test.
+let sourceSeed;
+let seedRoot;
+after(() => {
+  if (seedRoot) fs.rmSync(seedRoot, { recursive: true, force: true });
+});
+function repositorySeed() {
+  if (sourceSeed) return sourceSeed;
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-evidence-seed-'));
+  seedRoot = root;
   fs.mkdirSync(path.join(root, 'src', 'nested'), { recursive: true });
   fs.writeFileSync(path.join(root, 'src', 'router.js'), 'export function route(input) {\n  return input.kind;\n}\n');
   fs.writeFileSync(path.join(root, 'src', 'store.js'), 'export const store = new Map();\n');
@@ -55,6 +70,17 @@ function fixture({ type, collection, example, first }) {
   git(root, 'add', '.');
   git(root, 'commit', '-m', 'fixture');
   const revision = git(root, 'rev-parse', 'HEAD');
+  sourceSeed = { root, revision };
+  return sourceSeed;
+}
+
+// A throwaway origin-matched checkout plus the typed diagram that points at it.
+function fixture(t, { type, collection, example, first }) {
+  const seed = repositorySeed();
+  const root = temporaryDirectory(t, 'archify-evidence-types-');
+  // cpSync copies files rather than hardlinking them or sharing a Git common dir.
+  fs.cpSync(seed.root, root, { recursive: true });
+  const { revision } = seed;
 
   const diagram = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', example), 'utf8'));
   diagram.meta.repository = { url: 'https://github.com/example/evidence-repo', revision };
@@ -70,11 +96,95 @@ function fixture({ type, collection, example, first }) {
   return { root, revision, diagram, node, input, write };
 }
 
-for (const shape of TYPES) {
+// All renderers enter the same repository verifier through loadDiagram. Keep
+// the full rejection matrix once; the type loop below owns each mode's wiring.
+test('shared repository evidence rejects invalid roots, revisions, paths and lines without replacing output', (t) => {
+  const shape = TYPES.find(({ type }) => type === 'architecture');
+  const { type } = shape;
+  const data = fixture(t, shape);
+  const output = path.join(data.root, `must-stay.${type}.html`);
+  fs.writeFileSync(output, 'trusted previous artifact');
+  const deliver = (...args) => {
+    const result = run(['deliver', type, data.input, output, ...args, '--json']);
+    assert.equal(fs.readFileSync(output, 'utf8'), 'trusted previous artifact');
+    return result;
+  };
+
+  // No --repo-root at all.
+  let result = deliver();
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /Pass --repo-root/);
+
+  // Not the Git top-level directory.
+  result = deliver('--repo-root', path.join(data.root, 'src'));
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /must be the Git top-level directory/);
+
+  // Origin does not match the authored repository.
+  git(data.root, 'remote', 'set-url', 'origin', 'https://github.com/example/other-repo.git');
+  result = deliver('--repo-root', data.root);
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /does not match/);
+  git(data.root, 'remote', 'set-url', 'origin', 'git@github.com:example/evidence-repo.git');
+
+  // Commit does not exist locally.
+  const pinned = data.diagram.meta.repository.revision;
+  data.diagram.meta.repository.revision = '0'.repeat(40);
+  data.write();
+  result = deliver('--repo-root', data.root);
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /is not available in the local repository/);
+  data.diagram.meta.repository.revision = pinned;
+
+  // Path escape.
+  data.node.sources = [{ path: '../outside.js' }];
+  data.write();
+  result = deliver('--repo-root', data.root);
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /must stay inside the repository/);
+
+  // Non-POSIX / control-character path.
+  data.node.sources = [{ path: 'src/router.js\n' }];
+  data.write();
+  result = deliver('--repo-root', data.root);
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /repo-relative POSIX path/);
+
+  // Blob does not exist at the pinned revision.
+  data.node.sources = [{ path: 'src/missing.js' }];
+  data.write();
+  result = deliver('--repo-root', data.root);
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /does not identify a file/);
+
+  // Line range beyond the pinned blob.
+  data.node.sources = [{ path: 'src/router.js', line: 4 }];
+  data.write();
+  result = deliver('--repo-root', data.root);
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /has 3 lines/);
+
+  // Inverted line range.
+  data.node.sources = [{ path: 'src/router.js', line: 3, end_line: 2 }];
+  data.write();
+  result = deliver('--repo-root', data.root);
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /must be greater than or equal to line/);
+
+  // end_line without line.
+  data.node.sources = [{ path: 'src/router.js', end_line: 2 }];
+  data.write();
+  result = deliver('--repo-root', data.root);
+  assert.equal(result.status, 1);
+  assert.match(JSON.parse(result.stdout).error, /requires line/);
+
+});
+
+for (const [typeIndex, shape] of TYPES.entries()) {
   const { type, collection, first } = shape;
 
-  test(`${type} repository evidence is revision-verified, receipt-backed, and keyed by node id`, () => {
-    const data = fixture(shape);
+  test(`${type} repository evidence is revision-verified, receipt-backed, and keyed by node id`, (t) => {
+    const data = fixture(t, shape);
     const output = path.join(data.root, `verified.${type}.html`);
     const result = run(['deliver', type, data.input, output, '--repo-root', data.root, '--json']);
     assert.equal(result.status, 0, result.stderr || result.stdout);
@@ -99,94 +209,16 @@ for (const shape of TYPES) {
     );
     assert.equal(evidence.nodes[first][0].label, 'Request router');
 
-    // The verified node must exist in the artifact under the same id, or the
-    // viewer's beacon pass has nothing to attach the SRC affordance to.
+    // Evidence stays keyed to the rendered subject for Focus/Finder lookup.
     assert.match(html, new RegExp(`data-node-id="${first}"`));
-    assert.match(html, /Archify\.sourceEvidence\.installBeacons\(\)/);
+    assert.doesNotMatch(html, /Archify\.sourceEvidence\.installBeacons\(\)|classList\.add\('source-evidence-beacon'\)/);
 
     const svg = html.match(/<svg\b[\s\S]*?<\/svg>/)?.[0] || '';
     assert.doesNotMatch(svg, /src\/router\.js|github\.com\/example\/evidence-repo|source-evidence/);
   });
 
-  test(`${type} repository evidence applies every architecture verification`, () => {
-    const data = fixture(shape);
-    const output = path.join(data.root, `must-stay.${type}.html`);
-    fs.writeFileSync(output, 'trusted previous artifact');
-    const deliver = (...args) => run(['deliver', type, data.input, output, ...args, '--json']);
-
-    // No --repo-root at all.
-    let result = deliver();
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /Pass --repo-root/);
-
-    // Not the Git top-level directory.
-    result = deliver('--repo-root', path.join(data.root, 'src'));
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /must be the Git top-level directory/);
-
-    // Origin does not match the authored repository.
-    git(data.root, 'remote', 'set-url', 'origin', 'https://github.com/example/other-repo.git');
-    result = deliver('--repo-root', data.root);
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /does not match/);
-    git(data.root, 'remote', 'set-url', 'origin', 'git@github.com:example/evidence-repo.git');
-
-    // Commit does not exist locally.
-    const pinned = data.diagram.meta.repository.revision;
-    data.diagram.meta.repository.revision = '0'.repeat(40);
-    data.write();
-    result = deliver('--repo-root', data.root);
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /is not available in the local repository/);
-    data.diagram.meta.repository.revision = pinned;
-
-    // Path escape.
-    data.node.sources = [{ path: '../outside.js' }];
-    data.write();
-    result = deliver('--repo-root', data.root);
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /must stay inside the repository/);
-
-    // Non-POSIX / control-character path.
-    data.node.sources = [{ path: 'src/router.js\n' }];
-    data.write();
-    result = deliver('--repo-root', data.root);
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /repo-relative POSIX path/);
-
-    // Blob does not exist at the pinned revision.
-    data.node.sources = [{ path: 'src/missing.js' }];
-    data.write();
-    result = deliver('--repo-root', data.root);
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /does not identify a file/);
-
-    // Line range beyond the pinned blob.
-    data.node.sources = [{ path: 'src/router.js', line: 4 }];
-    data.write();
-    result = deliver('--repo-root', data.root);
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /has 3 lines/);
-
-    // Inverted line range.
-    data.node.sources = [{ path: 'src/router.js', line: 3, end_line: 2 }];
-    data.write();
-    result = deliver('--repo-root', data.root);
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /must be greater than or equal to line/);
-
-    // end_line without line.
-    data.node.sources = [{ path: 'src/router.js', end_line: 2 }];
-    data.write();
-    result = deliver('--repo-root', data.root);
-    assert.equal(result.status, 1);
-    assert.match(JSON.parse(result.stdout).error, /requires line/);
-
-    assert.equal(fs.readFileSync(output, 'utf8'), 'trusted previous artifact');
-  });
-
-  test(`${type} duplicate evidence node IDs cannot replace a trusted artifact`, () => {
-    const data = fixture(shape);
+  test(`${type} duplicate evidence node IDs cannot replace a trusted artifact`, (t) => {
+    const data = fixture(t, shape);
     const duplicate = structuredClone(data.node);
     duplicate.sources = [{ path: 'src/store.js', line: 1 }];
     data.diagram[collection].push(duplicate);
@@ -222,52 +254,60 @@ for (const shape of TYPES) {
     assert.equal(fs.readFileSync(output, 'utf8'), 'trusted previous artifact');
   });
 
-  test(`${type} repository evidence honors Gitee and GitLab links and local-only mode`, () => {
-    const data = fixture(shape);
+  // GitHub integration is checked above for every type. The full provider,
+  // origin and rejection matrix lives in repository-evidence.test.mjs, using
+  // the same verifier. Each type also proves one alternate configuration is
+  // threaded through its schema, delivery receipt and embedded payload.
+  test(`${type} repository evidence preserves alternate provider settings`, (t) => {
+    const data = fixture(t, shape);
     const output = path.join(data.root, `provider.${type}.html`);
-
-    data.diagram.meta.repository = { url: 'https://gitee.com/example/evidence-repo', revision: data.revision, provider: 'gitee' };
+    const providers = [
+      {
+        repository: { url: 'https://gitee.com/example/evidence-repo', provider: 'gitee' },
+        origin: 'git@gitee.com:example/evidence-repo.git',
+        tree: `https://gitee.com/example/evidence-repo/tree/${data.revision}`,
+        source: `https://gitee.com/example/evidence-repo/blob/${data.revision}/src/router.js#L1-3`,
+      },
+      {
+        repository: { url: 'https://gitlab.com/example/platform/evidence-repo' },
+        origin: 'git@gitlab.com:example/platform/evidence-repo.git',
+        tree: `https://gitlab.com/example/platform/evidence-repo/-/tree/${data.revision}`,
+        source: `https://gitlab.com/example/platform/evidence-repo/-/blob/${data.revision}/src/router.js#L1-3`,
+      },
+      {
+        repository: { url: 'http://git.internal:3000/Platform/evidence-repo', link_mode: 'local-only' },
+        origin: 'http://git.internal:3000/Platform/evidence-repo',
+      },
+    ];
+    const provider = providers[typeIndex % providers.length];
+    data.diagram.meta.repository = { ...provider.repository, revision: data.revision };
     data.write();
-    git(data.root, 'remote', 'set-url', 'origin', 'git@gitee.com:example/evidence-repo.git');
-    let result = run(['deliver', type, data.input, output, '--repo-root', data.root, '--json']);
+    git(data.root, 'remote', 'set-url', 'origin', provider.origin);
+    const result = run(['deliver', type, data.input, output, '--repo-root', data.root, '--json']);
     assert.equal(result.status, 0, result.stderr || result.stdout);
-    let evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
-    assert.equal(evidence.repository.href, `https://gitee.com/example/evidence-repo/tree/${data.revision}`);
-    assert.equal(evidence.nodes[first][0].href, `https://gitee.com/example/evidence-repo/blob/${data.revision}/src/router.js#L1-3`);
-
-    data.diagram.meta.repository.provider = 'github';
-    data.write();
-    result = run(['validate', type, data.input, '--repo-root', data.root, '--json']);
-    assert.equal(result.status, 1);
-    assert.ok(JSON.parse(result.stdout).diagnostics.some((entry) => entry.code === 'repository-evidence/provider-invalid'));
-
-    data.diagram.meta.repository = { url: 'https://gitlab.com/example/platform/evidence-repo', revision: data.revision };
-    data.write();
-    git(data.root, 'remote', 'set-url', 'origin', 'git@gitlab.com:example/platform/evidence-repo.git');
-    result = run(['deliver', type, data.input, output, '--repo-root', data.root, '--json']);
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
-    assert.equal(evidence.repository.href, `https://gitlab.com/example/platform/evidence-repo/-/tree/${data.revision}`);
-    assert.equal(evidence.nodes[first][0].href, `https://gitlab.com/example/platform/evidence-repo/-/blob/${data.revision}/src/router.js#L1-3`);
-
-    data.diagram.meta.repository = { url: 'http://git.internal:3000/Platform/evidence-repo', revision: data.revision, link_mode: 'local-only' };
-    data.write();
-    git(data.root, 'remote', 'set-url', 'origin', 'http://git.internal:3000/Platform/evidence-repo');
-    result = run(['deliver', type, data.input, output, '--repo-root', data.root, '--json']);
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    assert.equal(JSON.parse(result.stdout).evidence.linkMode, 'local-only');
-    evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
-    assert.equal(evidence.repository.linkMode, 'local-only');
-    assert.equal(evidence.repository.href, undefined);
+    const receipt = JSON.parse(result.stdout);
+    assert.equal(receipt.evidence.verified, true);
+    assert.equal(receipt.evidence.references, 2);
+    const evidence = evidencePayload(fs.readFileSync(output, 'utf8'));
+    assert.equal(evidence.verified, true);
+    assert.deepEqual(Object.keys(evidence.nodes), [first]);
     assert.equal(evidence.nodes[first].length, 2);
-    assert.ok(evidence.nodes[first].every((source) => !Object.hasOwn(source, 'href')));
+    assert.equal(evidence.repository.href, provider.tree);
+    assert.equal(evidence.nodes[first][0].href, provider.source);
+    if (provider.repository.link_mode === 'local-only') {
+      assert.equal(receipt.evidence.linkMode, 'local-only');
+      assert.equal(evidence.repository.linkMode, 'local-only');
+      assert.ok(evidence.nodes[first].every((source) => !Object.hasOwn(source, 'href')));
+    }
   });
 
-  test(`${type} evidence diagnostics point at its own node collection`, () => {
-    const data = fixture(shape);
+  test(`${type} failed evidence delivery identifies its node collection and preserves output`, (t) => {
+    const data = fixture(t, shape);
     data.node.sources = [{ path: 'src/missing.js' }];
     data.write();
-    const result = run(['validate', type, data.input, '--repo-root', data.root, '--json']);
+    const output = path.join(data.root, 'trusted.html');
+    fs.writeFileSync(output, 'trusted previous artifact');
+    const result = run(['deliver', type, data.input, output, '--repo-root', data.root, '--json']);
     assert.equal(result.status, 1);
     const receipt = JSON.parse(result.stdout);
     const diagnostic = receipt.diagnostics.find((entry) => entry.code === 'repository-evidence/file-missing');
@@ -276,30 +316,44 @@ for (const shape of TYPES) {
     assert.equal(diagnostic.subject.nodeId, first);
     assert.equal(diagnostic.evidence.sourcePath, 'src/missing.js');
     assert.ok(diagnostic.supportedFixes.length);
+    assert.equal(fs.readFileSync(output, 'utf8'), 'trusted previous artifact');
   });
 
-  test(`${type} sources stay bounded by the shared schema shape`, () => {
-    const data = fixture(shape);
-    data.node.sources = [
-      { path: 'src/router.js' },
-      { path: 'src/router.js' },
-      { path: 'src/router.js' },
-      { path: 'src/router.js' },
-    ];
-    data.write();
-    let result = run(['validate', type, data.input, '--repo-root', data.root]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /must NOT have more than 3 items/);
-
-    data.node.sources = [{ path: 'src/router.js', branch: 'main' }];
-    data.write();
-    result = run(['validate', type, data.input, '--repo-root', data.root]);
-    assert.equal(result.status, 1);
-    assert.match(result.stderr, /must NOT have additional properties/);
+  test(`${type} sources stay bounded by the shared schema shape`, (t) => {
+    // These failures occur before Git verification. Exercise each generated
+    // type validator directly; one CLI witness retains exit/diagnostic wiring.
+    const diagram = JSON.parse(fs.readFileSync(path.join(skillRoot, 'examples', shape.example), 'utf8'));
+    const nodeIndex = diagram[collection].findIndex(node => node.id === first);
+    const node = diagram[collection][nodeIndex];
+    diagram.meta.repository = { url: 'https://github.com/example/evidence-repo', revision: 'a'.repeat(40) };
+    node.sources = [{ path: 'src/router.js' }];
+    assert.doesNotThrow(() => validateSchema(type, diagram));
+    const cliData = type === 'architecture' ? fixture(t, shape) : null;
+    for (const [sources, pattern, code, sourceSuffix] of [
+      [Array.from({ length: 4 }, () => ({ path: 'src/router.js' })), /must NOT have more than 3 items/, 'schema/maxItems', ''],
+      [[{ path: 'src/router.js', branch: 'main' }], /must NOT have additional properties/, 'schema/additionalProperties', '/0'],
+    ]) {
+      node.sources = sources;
+      assert.throws(() => validateSchema(type, diagram), (error) => {
+        assert.match(error.message, pattern);
+        const diagnostic = error.archifyDiagnostics.find(entry => entry.code === code);
+        assert.ok(diagnostic, `${type}: missing ${code}`);
+        assert.equal(diagnostic.subject.diagramType, type);
+        assert.equal(diagnostic.subject.path, `/${collection}/${nodeIndex}/sources${sourceSuffix}`);
+        return true;
+      });
+      if (cliData) {
+        cliData.node.sources = sources;
+        cliData.write();
+        const result = run(['validate', type, cliData.input, '--repo-root', cliData.root]);
+        assert.equal(result.status, 1);
+        assert.match(result.stderr, pattern);
+      }
+    }
   });
 
-  test(`${type} node sources require pinned repository metadata`, () => {
-    const data = fixture(shape);
+  test(`${type} node sources require pinned repository metadata`, (t) => {
+    const data = fixture(t, shape);
     delete data.diagram.meta.repository;
     data.write();
     const result = run(['validate', type, data.input, '--repo-root', data.root, '--json']);
@@ -309,8 +363,8 @@ for (const shape of TYPES) {
     ));
   });
 
-  test(`${type} repository metadata requires at least one verified source`, () => {
-    const data = fixture(shape);
+  test(`${type} repository metadata requires at least one verified source`, (t) => {
+    const data = fixture(t, shape);
     delete data.node.sources;
     data.write();
     const result = run(['validate', type, data.input, '--repo-root', data.root, '--json']);
@@ -330,20 +384,9 @@ test('--repo-root is accepted for every diagram type', () => {
   }
 });
 
-test('repository evidence no longer rejects any supported diagram type', () => {
-  const rejected = run(['validate', 'lifecycle', path.join(skillRoot, 'examples', 'agent-run.lifecycle.json'), '--repo-root', '.']);
-  assert.equal(rejected.status, 0, rejected.stderr);
-  assert.doesNotMatch(rejected.stderr, /architecture diagrams only/);
-  assert.doesNotMatch(
-    fs.readFileSync(path.join(skillRoot, 'renderers', 'shared', 'repository-evidence.mjs'), 'utf8'),
-    /type-unsupported/,
-    'the type-unsupported diagnostic is unreachable and must be removed deliberately',
-  );
-});
-
-test('ordinary typed artifacts still carry no repository evidence', () => {
+test('ordinary typed artifacts still carry no repository evidence', (t) => {
   for (const { type, example } of TYPES) {
-    const output = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'archify-no-evidence-types-')), `${type}.html`);
+    const output = path.join(temporaryDirectory(t, 'archify-no-evidence-types-'), `${type}.html`);
     const result = run(['render', type, path.join(skillRoot, 'examples', example), output]);
     assert.equal(result.status, 0, result.stderr);
     const html = fs.readFileSync(output, 'utf8');
@@ -362,9 +405,9 @@ async function waitForState(url, predicate, timeoutMs = 12000) {
   assert.fail(`preview did not settle; latest state: ${JSON.stringify(latest)}`);
 }
 
-test('live preview publishes verified evidence for a non-architecture type', { timeout: 20000 }, async () => {
+test('live preview publishes verified evidence for a non-architecture type', { timeout: 20000 }, async (t) => {
   const shape = TYPES.find(({ type }) => type === 'lifecycle');
-  const data = fixture(shape);
+  const data = fixture(t, shape);
   const output = path.join(data.root, 'preview.lifecycle.html');
   const preview = await startPreview({
     type: shape.type,
@@ -387,8 +430,8 @@ test('live preview publishes verified evidence for a non-architecture type', { t
   }
 });
 
-test('workflow migration verifies and preserves pinned source evidence before replacement', () => {
-  const data = fixture(TYPES.find(shape => shape.type === 'workflow'));
+test('workflow migration verifies and preserves pinned source evidence before replacement', (t) => {
+  const data = fixture(t, TYPES.find(shape => shape.type === 'workflow'));
   const repository = data.diagram.meta.repository;
   const legacy = JSON.parse(fs.readFileSync(path.join(skillRoot, '..', 'test', 'fixtures/v1-workflow-explicit-coordinates.workflow.json'), 'utf8'));
   legacy.meta.repository = repository;

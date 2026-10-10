@@ -419,7 +419,7 @@
       function relationshipEdgeShapes(edge) {
         if (!edge) return [];
         if (/^(path|line|polyline)$/i.test(edge.tagName || '')) return [edge];
-        return Array.prototype.slice.call(edge.querySelectorAll('path, line, polyline'));
+        return Array.prototype.slice.call(edge.querySelectorAll('path:not([data-ambient-flow-overlay]), line, polyline'));
       }
       function relationshipHitRecords() {
         var recordsByKey = {};
@@ -1550,6 +1550,13 @@
       window.addEventListener('scroll', requestLensPlacement, { passive: true });
       window.addEventListener('resize', requestLensPlacement);
       container.addEventListener('scroll', requestLensPlacement, { passive: true });
+      // Reader and Chrome may finish resizing the stage after window resize.
+      // The absolute Passport does not resize its container when reclamped.
+      if (typeof ResizeObserver === 'function') {
+        new ResizeObserver(function () {
+          if (!chip.hidden) requestLensPlacement();
+        }).observe(container);
+      }
       document.addEventListener('visibilitychange', function () {
         if (document.hidden) removeRelationshipPulse();
       });

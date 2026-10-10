@@ -339,13 +339,21 @@ test('readable-v2 may expand an unlabeled edge around already placed labels', ()
   const route = first.receipt.edges.find(({ id }) => id === 'e04')?.points;
   assert.ok(route);
   assertOrthogonal(route);
-  assert.ok(Math.max(...route.map(([x]) => x)) > 764, JSON.stringify(route));
+  // Straight-first reservation may push the unlabeled edge left (return-left)
+  // or right (outside-right); either escape clears the labeled fan-out region.
+  assert.ok(
+    Math.max(...route.map(([x]) => x)) > 764
+      || Math.min(...route.map(([x]) => x)) < 40,
+    JSON.stringify(route),
+  );
 
+  // An authored canvas at least as large as the intrinsic requirement still
+  // compiles; the exact width may grow when straight-first reorders fan-out.
   const boundedDocument = clone(document);
-  boundedDocument.meta.viewBox = [1378, 692];
+  boundedDocument.meta.viewBox = [...first.receipt.requiredViewBox];
   const bounded = compileWorkflow({ workflow: boundedDocument, qualityProfile: 'standard' });
   assert.equal(bounded.ok, true, JSON.stringify(bounded.diagnostics, null, 2));
-  assert.deepEqual(bounded.receipt.viewBox, [1378, 692]);
+  assert.deepEqual(bounded.receipt.viewBox, first.receipt.requiredViewBox);
 });
 
 test('readable-v2 feeds a measured outside-channel constraint back into layout', () => {
@@ -763,6 +771,136 @@ test('readable-v2 never accepts a same-lane drop through the preset-only fallbac
     assert.equal(result.svg, undefined);
     assert.ok(result.diagnostics.some(({ code }) => code === 'workflow/route-preset-conflict'));
     assert.ok(result.diagnostics.every(({ code }) => code !== 'workflow/explicit-pin-conflict'));
+    assert.equal(result.diagnostics[0].evidence.invariant, 'route preset compatibility');
+  }
+});
+
+test('readable-v2 preset diagnostics identify the blocked node rather than blaming segment rhythm', () => {
+  const document = workflow({
+    lanes: [{ id: 'upper', label: 'Upper' }, { id: 'lower', label: 'Lower' }],
+    nodes: [
+      { id: 'blocker', lane: 'upper', col: 0, type: 'backend', label: 'Blocker' },
+      { id: 'target', lane: 'upper', col: 2, type: 'backend', label: 'Target' },
+      { id: 'source', lane: 'lower', col: 0, type: 'backend', label: 'Source' },
+    ],
+    edges: [{ id: 'return', from: 'source', to: 'target', route: 'up-channel', fromSide: 'top', toSide: 'top' }],
+  });
+  for (const qualityProfile of ['standard', 'showcase']) {
+    const result = compileWorkflow({ workflow: clone(document), qualityProfile });
+    assert.equal(result.ok, false);
+    const diagnostic = result.diagnostics.find(({ code }) => code === 'workflow/route-preset-conflict');
+    assert.ok(diagnostic);
+    assert.equal(diagnostic.evidence.invariant, 'node clearance');
+    assert.equal(diagnostic.evidence.obstacleNode, 'blocker');
+    assert.equal(diagnostic.evidence.obstacleRole, 'unrelated');
+    assert.equal(diagnostic.evidence.segmentIndex, 0);
+    assert.equal(diagnostic.evidence.clearancePx, 2);
+    assert.deepEqual(diagnostic.evidence.from, diagnostic.evidence.points[0]);
+    assert.deepEqual(diagnostic.evidence.to, diagnostic.evidence.points[1]);
+    assert.match(diagnostic.message, /segment 0 intersects node "blocker"/);
+    assert.doesNotMatch(diagnostic.message, /minimum 8px/);
+    assert.deepEqual(document.edges[0], {
+      id: 'return', from: 'source', to: 'target', route: 'up-channel', fromSide: 'top', toSide: 'top',
+    });
+  }
+});
+
+test('readable-v2 preset diagnostics measure the segment that actually violates rhythm', () => {
+  const document = workflow({
+    lanes: [{ id: 'main', label: 'Main' }],
+    nodes: [
+      { id: 'a', lane: 'main', col: 0, type: 'backend', label: 'A', yOffset: -30 },
+      { id: 'b', lane: 'main', col: 0, type: 'backend', label: 'B', yOffset: 30 },
+    ],
+    edges: [{ id: 'ab', from: 'a', to: 'b', route: 'straight', fromSide: 'bottom', toSide: 'top' }],
+  });
+  const result = compileWorkflow({ workflow: document, qualityProfile: 'standard' });
+  assert.equal(result.ok, false);
+  const diagnostic = result.diagnostics.find(({ code }) => code === 'workflow/route-preset-conflict');
+  assert.ok(diagnostic);
+  assert.equal(diagnostic.evidence.invariant, 'readable segment rhythm');
+  assert.equal(diagnostic.evidence.segmentIndex, 0);
+  assert.equal(diagnostic.evidence.actualSegmentPx, 8);
+  assert.equal(diagnostic.evidence.requiredSegmentPx, 28);
+});
+
+test('readable-v2 direct rhythm rejection and acceptance agree at the 28px boundary', () => {
+  for (const qualityProfile of ['standard', 'showcase']) {
+    for (const gap of [27.9998, 28]) {
+      const document = workflow({
+        lanes: [{ id: 'main', label: 'M' }],
+        nodes: [
+          { id: 'a', lane: 'main', col: 0, type: 'backend', label: 'A', yOffset: -(52 + gap) / 2 },
+          { id: 'b', lane: 'main', col: 0, type: 'backend', label: 'B', yOffset: (52 + gap) / 2 },
+        ],
+        edges: [{ id: 'ab', from: 'a', to: 'b', route: 'straight', fromSide: 'bottom', toSide: 'top' }],
+      });
+      const result = compileWorkflow({ workflow: document, qualityProfile });
+      assert.equal(result.ok, gap === 28, JSON.stringify(result.diagnostics));
+      if (result.ok) {
+        assert.deepEqual(result.receipt.edges[0].points, [[94, 138], [94, 166]]);
+      } else {
+        const { evidence } = result.diagnostics.find(({ code }) => code === 'workflow/route-preset-conflict');
+        assert.equal(evidence.invariant, 'readable segment rhythm');
+        assert.equal(evidence.requiredSegmentPx, 28);
+        assert.equal(evidence.segmentIndex, 0);
+        assert.ok(Math.abs(evidence.actualSegmentPx - gap) < 1e-9);
+      }
+    }
+  }
+});
+
+test('readable-v2 endpoint rhythm runs before the separate preset-family rejection', () => {
+  for (const qualityProfile of ['standard', 'showcase']) {
+    for (const offset of [18.9998, 19]) {
+      const document = oneLaneWorkflow([{
+        id: 'ab', from: 'a', to: 'b', route: 'drop', fromSide: 'top', toSide: 'top',
+      }]);
+      document.nodes.forEach((node) => { node.yOffset = offset; });
+      const result = compileWorkflow({ workflow: document, qualityProfile });
+      assert.equal(result.ok, false);
+      const { evidence } = result.diagnostics.find(({ code }) => code === 'workflow/route-preset-conflict');
+      assert.equal(evidence.invariant, offset === 19 ? 'route preset compatibility' : 'readable segment rhythm');
+      if (offset < 19) {
+        assert.equal(evidence.segmentIndex, 0);
+        assert.equal(evidence.requiredSegmentPx, 8);
+        assert.ok(Math.abs(evidence.actualSegmentPx - 7.9998) < 1e-9);
+      } else {
+        assert.equal(evidence.points[0][1] - evidence.points[1][1], 8);
+      }
+    }
+  }
+});
+
+test('readable-v2 interior rhythm precedes node clearance and accepts a cleared 16px segment', () => {
+  for (const qualityProfile of ['standard', 'showcase']) {
+    for (const gap of [15.9998, 16, 16.0002]) {
+      const document = workflow({
+        lanes: [{ id: 'main', label: 'M' }],
+        nodes: [
+          { id: 'a', lane: 'main', col: 2, type: 'backend', label: 'A', height: 32 },
+          { id: 'b', lane: 'main', col: 0, type: 'backend', label: 'B', height: 32, yOffset: gap },
+        ],
+        edges: [{ id: 'ab', from: 'a', to: 'b', route: 'outside-right', fromSide: 'right', toSide: 'right' }],
+      });
+      const result = compileWorkflow({ workflow: document, qualityProfile });
+      assert.equal(result.ok, gap > 16, JSON.stringify(result.diagnostics));
+      if (result.ok) {
+        const points = result.receipt.edges[0].points;
+        assert.ok(Math.abs(points[2][1] - points[1][1] - gap) < 1e-9);
+      } else {
+        const { evidence } = result.diagnostics.find(({ code }) => code === 'workflow/route-preset-conflict');
+        assert.equal(evidence.invariant, gap === 16 ? 'node clearance' : 'readable segment rhythm');
+        if (gap < 16) {
+          assert.equal(evidence.segmentIndex, 1);
+          assert.equal(evidence.requiredSegmentPx, 16);
+          assert.ok(Math.abs(evidence.actualSegmentPx - gap) < 1e-9);
+        } else {
+          assert.equal(evidence.obstacleNode, 'a');
+          assert.equal(evidence.obstacleRole, 'source-endpoint');
+        }
+      }
+    }
   }
 });
 
@@ -1621,9 +1759,9 @@ test('readable-v2 classifies a side-only authored route sharing an automatic cor
   assertExplicitPinConflict(result, 'side-only route sharing an automatic corridor');
   const diagnostic = result.diagnostics[0];
   assert.equal(diagnostic.evidence.invariant, 'explicit route-route corridor clearance');
-  assert.deepEqual(diagnostic.evidence.overlapStart, [214, 161]);
-  assert.deepEqual(diagnostic.evidence.overlapEnd, [334, 161]);
-  assert.equal(diagnostic.evidence.overlapLengthPx, 120);
+  assert.deepEqual(diagnostic.evidence.overlapStart, [218, 161]);
+  assert.deepEqual(diagnostic.evidence.overlapEnd, [342, 161]);
+  assert.equal(diagnostic.evidence.overlapLengthPx, 124);
   assert.ok(diagnostic.evidence.conflictingPins.length > 0);
   assert.ok(diagnostic.evidence.conflictingPins.every(({ edge, field, path, value }) => (
     edge === 'z-side'
@@ -1643,7 +1781,9 @@ test('readable-v2 classifies a side-only authored route sharing an automatic cor
   }
 });
 
-test('readable-v2 classifies a preset-only route sharing an automatic corridor', () => {
+test('readable-v2 routes an automatic edge clear of a preset channel', () => {
+  // The column gap leaves the automatic edge a corridor of its own, so it no
+  // longer shares the bottom channel the preset route claims.
   const document = workflow({
     lanes: [{ id: 'l0', label: 'l0' }, { id: 'l1', label: 'l1' }],
     nodes: [
@@ -1660,33 +1800,11 @@ test('readable-v2 classifies a preset-only route sharing an automatic corridor',
   document.meta.quality_profile = 'showcase';
 
   const result = compileWorkflow({ workflow: document });
-  assertExplicitPinConflict(result, 'preset-only route sharing an automatic corridor');
-  const diagnostic = result.diagnostics[0];
-  assert.equal(diagnostic.evidence.invariant, 'explicit route-route corridor clearance');
-  assert.deepEqual(diagnostic.subject, {
-    diagramType: 'workflow',
-    edge: 'z-route',
-    from: 'n01',
-    to: 'n02',
-    path: '/edges/1/route',
-  });
-  assert.deepEqual(diagnostic.evidence.conflictingPins, [{
-    edge: 'z-route',
-    field: 'route',
-    path: '/edges/1/route',
-    value: 'bottom-channel',
-  }]);
-  assert.deepEqual(diagnostic.evidence.overlapStart, [214, 166]);
-  assert.deepEqual(diagnostic.evidence.overlapEnd, [214, 177]);
-  assert.equal(diagnostic.evidence.overlapLengthPx, 11);
-  assert.deepEqual(diagnostic.supportedFixes, [
-    'remove route from edge "z-route" so readable-v2 can replan the remaining authored route assertions',
-  ]);
-
-  const repaired = clone(document);
-  delete repaired.edges[1].route;
-  const verified = compileWorkflow({ workflow: repaired });
-  assert.equal(verified.ok, true, JSON.stringify(verified.diagnostics, null, 2));
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics, null, 2));
+  const auto = result.receipt.edges.find(({ id }) => id === 'a-auto');
+  const preset = result.receipt.edges.find(({ id }) => id === 'z-route');
+  const presetLeft = Math.min(...preset.points.map(([x]) => x));
+  assert.ok(auto.points.every(([x]) => x < presetLeft), JSON.stringify({ auto: auto.points, preset: preset.points }));
 });
 
 test('readable-v2 reports unknown edge endpoints with a precise semantic diagnostic', () => {
@@ -1701,6 +1819,7 @@ test('readable-v2 reports unknown edge endpoints with a precise semantic diagnos
     endpoint: 'target',
     unknownNodeId: 'ghost',
     availableNodeIds: ['a', 'b'],
+    fixVerification: 'each candidate was verified by applying every listed repoint together and recompiling',
   });
 });
 
@@ -1722,6 +1841,51 @@ test('unknown endpoint diagnostics retain the authored edge pointer after canoni
   assert.equal(diagnostic.evidence.endpoint, 'target');
   assert.equal(diagnostic.evidence.unknownNodeId, 'ghost');
   assert.ok(diagnostic.supportedFixes.length > 0);
+});
+
+test('unknown-endpoint supportedFixes list the complete verified edit set and recompile verbatim', () => {
+  // "ghost" is referenced from an edge AND mainPath; the verified repair
+  // repoints every reference to the same candidate.
+  const document = workflow({
+    lanes: [{ id: 'main', label: 'M' }],
+    nodes: [
+      { id: 'a', lane: 'main', col: 0, type: 'backend', label: 'A' },
+      { id: 'b', lane: 'main', col: 1, type: 'backend', label: 'B' },
+      { id: 'c', lane: 'main', col: 2, type: 'backend', label: 'C' },
+    ],
+    edges: [
+      { id: 'ab', from: 'a', to: 'ghost' },
+      { id: 'bc', from: 'b', to: 'c' },
+      { id: 'ac', from: 'a', to: 'c' },
+    ],
+  });
+  document.mainPath = ['a', 'ghost', 'c'];
+  const result = compileWorkflow({ workflow: document, qualityProfile: 'standard' });
+  assert.equal(result.ok, false);
+  const diagnostic = result.diagnostics.find((entry) => entry.code === 'workflow/unknown-edge-endpoint');
+  assert.ok(diagnostic);
+  const fixesByCandidate = new Map();
+  for (const fix of diagnostic.supportedFixes) {
+    const match = fix.match(/^set (\S+) to verified node id "([^"]+)"$/);
+    assert.ok(match, `fix must be executable verbatim: ${fix}`);
+    if (!fixesByCandidate.has(match[2])) fixesByCandidate.set(match[2], []);
+    fixesByCandidate.get(match[2]).push(match[1]);
+  }
+  assert.ok(fixesByCandidate.size > 0, 'expected at least one verified candidate');
+  for (const [nodeId, pointers] of fixesByCandidate) {
+    assert.ok(pointers.includes('/edges/0/to'), `candidate "${nodeId}" must cover the edge reference`);
+    assert.ok(pointers.includes('/mainPath/1'), `candidate "${nodeId}" must cover the mainPath reference`);
+    assert.equal(pointers.length, 2);
+    const repaired = clone(document);
+    for (const pointer of pointers) {
+      const segments = pointer.split('/').filter(Boolean);
+      let target = repaired;
+      for (const segment of segments.slice(0, -1)) target = target[segment];
+      target[segments.at(-1)] = nodeId;
+    }
+    const verified = compileWorkflow({ workflow: repaired });
+    assert.equal(verified.ok, true, `applying every suggested edit for "${nodeId}" must recompile: ${JSON.stringify(verified.diagnostics, null, 2)}`);
+  }
 });
 
 test('unknown node lane diagnostics retain the authored node pointer after canonical sorting', () => {
