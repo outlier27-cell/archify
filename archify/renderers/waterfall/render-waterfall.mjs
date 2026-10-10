@@ -66,6 +66,9 @@ for (const [index, span] of raw.entries()) {
   const hasDuration = Number.isFinite(span.duration);
   const timing = (message, fixes) => fail('waterfall/invalid-timing', `Span "${span.id}" ${message}`, { path: `/spans/${index}`, nodeId: span.id },
     { start: span.start, end: span.end ?? null, duration: span.duration ?? null, status: span.status ?? 'ok' }, fixes);
+  if (hasDuration && !Number.isFinite(span.start + span.duration)) {
+    timing('has a derived end outside the finite numeric range.', ['Rescale the recorded timing and unit to a representable range.']);
+  }
   if (hasEnd && span.end < span.start) timing(`ends (${span.end}) before it starts (${span.start}).`, ['Correct start or end from the recorded timing.']);
   if (hasEnd && hasDuration && Math.abs(span.end - span.start - span.duration) > 1e-9) {
     timing(`states end ${span.end} and duration ${span.duration}, which disagree with start ${span.start}.`, ['Keep only one of end or duration.']);
@@ -126,7 +129,11 @@ const rows = [];
 }(spans.filter((span) => span.parent === undefined), 0));
 
 function number(value) {
-  const rounded = Math.round(value * 100) / 100;
+  if (value !== 0 && Math.abs(value) < 0.01) {
+    return Math.abs(value) < 1e-6 ? Number(value.toPrecision(3)).toString()
+      : value.toLocaleString('en-US', { maximumSignificantDigits: 3 });
+  }
+  const rounded = Math.abs(value) > Number.MAX_VALUE / 100 ? value : Math.round(value * 100) / 100;
   return rounded.toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 const formatDuration = (value) => `${number(value)} ${unitLabel}`;
@@ -157,6 +164,11 @@ const labelW = Math.ceil(Math.max(140, ...rows.map(nameWidth)));
 const axisX0 = layout.margin + labelW + layout.columnGap;
 const axisX1 = axisX0 + layout.axisWidth;
 const scale = wall > 0 ? layout.axisWidth / wall : 0;
+if (!Number.isFinite(scale)) {
+  fail('waterfall/invalid-timing', 'The recorded range cannot form a finite axis scale.',
+    { path: '/spans' }, { start: t0, end: t1, wall }, ['Rescale the recorded timing and unit to a representable range.']);
+  throwDiagnosticProblems('Waterfall validation failed', problems, { diagnostics: details });
+}
 const xOf = (t) => Math.round((axisX0 + (t - t0) * scale) * 100) / 100;
 const rowsTop = layout.top + layout.axisH;
 
@@ -171,7 +183,14 @@ const tickStep = (() => {
   }
 })();
 const ticks = [];
-for (let t = Math.ceil(t0 / tickStep) * tickStep; t <= t1 + 1e-9; t += tickStep) ticks.push({ t, x: xOf(t) });
+const firstTick = Math.ceil(t0 / tickStep) * tickStep;
+const tickCount = Math.max(0, Math.floor((t1 - firstTick) / tickStep + 1e-9) + 1);
+for (let index = 0; index < tickCount; index += 1) {
+  const t = firstTick + index * tickStep;
+  // Large timestamps can round adjacent ticks to the same double. Index-based
+  // iteration remains bounded even when adding tickStep cannot advance t.
+  if (ticks.at(-1)?.t !== t) ticks.push({ t, x: xOf(t) });
+}
 
 const LABEL_GAP = 7;
 const parentIds = new Set(rows.map((row) => row.parent).filter((id) => id !== undefined));

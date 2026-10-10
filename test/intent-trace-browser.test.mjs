@@ -288,6 +288,7 @@ test('Intent Trace preserves input handoffs, transient geometry and cleanup', {
 
   await t.test('real CSS completion, Motion ownership, reduced motion and themes preserve previews', async () => {
     await load('trace');
+    await run(`Archify.motionGovernor.resume()`);
     assert.equal(await run(`document.documentElement.getAttribute('data-ambient-motion')`), 'running');
     await move('api'); await run(`intentWait(()=>Archify.motionGovernor.owner()==='intent')`);
     assert.equal(await run(`Array.from(document.querySelectorAll('.ambient-edge-flow')).every(e=>e.getAnimations().length===0)`), true);

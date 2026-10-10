@@ -38,6 +38,16 @@ test('timeline: both examples render and pass the showcase artifact checks', () 
   }
 });
 
+test('timeline: duplicate lane IDs fail before visual and accessible ownership diverge', () => {
+  const diagram = clone(small);
+  diagram.lanes.push({ ...diagram.lanes[0], label: 'Conflicting lane' });
+  const result = run(diagram);
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /timeline\/duplicate-lane-id/);
+  assert.match(result.stderr, /Give every lane a unique id/);
+  assert.equal(fs.existsSync(result.output), false);
+});
+
 test('timeline: position is linear in time on one shared axis across lanes', () => {
   const report = layoutOf(small);
   assert.equal(report.breaks.length, 0);
@@ -58,6 +68,19 @@ test('timeline: events are drawn in chronological order whatever the authored or
   const times = report.events.map((event) => event.t);
   assert.deepEqual(times, [...times].sort((x, y) => x - y));
   assert.ok(report.events.every((event, index, all) => !index || event.x >= all[index - 1].x));
+});
+
+test('timeline: historical years retain the actual display-zone UTC offset', () => {
+  for (const year of ['0000', '0001', '0099', '0100', '2026']) {
+    const diagram = clone(small);
+    diagram.meta.timezone = 'UTC';
+    diagram.events = [{ id: 'event', at: `${year}-01-01T00:00:00Z`, title: 'Historical event', lane: diagram.lanes[0].id }];
+    const result = run(diagram);
+    assert.equal(result.status, 0, result.stderr);
+    const html = fs.readFileSync(result.output, 'utf8');
+    assert.match(html, /UTC\+00:00/);
+    assert.doesNotMatch(html, /UTC\+\d{3,}:/);
+  }
 });
 
 test('timeline: offsets are honoured, so the same instant in two offsets aligns', () => {

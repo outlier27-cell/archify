@@ -6,6 +6,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ChromeVisualBrowser, findChrome } from '../archify/bin/visual-check.mjs';
+import { createViewerClick } from './helpers/viewer-click.mjs';
 
 const skillRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', 'archify');
 const chromeConfigured = Object.prototype.hasOwnProperty.call(process.env, 'ARCHIFY_CHROME');
@@ -143,6 +144,26 @@ test('Reader Layout preserves final-artifact behavior across its ownership bound
       assert.equal(state.wide, wide ? 'true' : null);
       assert.equal(state.shape, wide ? 'wide' : null);
     }
+
+    await t.test('Guide stays closed for a new reader and its icon toggles reliably', async () => {
+      const click = await createViewerClick({ send, run: expression => evaluate(expression, true), timeout: 5000 });
+      const manualGuide = variant('manual-guide', { beforeViewer: `
+        Object.defineProperty(navigator, 'webdriver', { get: () => false });
+        localStorage.removeItem('archify-guide-welcomed');
+        localStorage.removeItem('archify-motion');
+      ` });
+      await load(manualGuide);
+      assert.equal(await evaluate('navigator.webdriver'), false, 'Exercise the ordinary reader path.');
+      assert.equal(await evaluate('Archify.guide.isOpen()'), false, 'The guide must wait for reader input.');
+      assert.equal(await evaluate('Archify.motionGovernor.mode()'), 'still', 'A fresh reader starts Still.');
+      assert.equal(await evaluate("localStorage.getItem('archify-guide-welcomed')"), null, 'No onboarding preference is created.');
+      for (const expected of [true, false, true, false]) {
+        await click('#btn-diagram-guide .diagram-nav-icon');
+        assert.equal(await evaluate('Archify.guide.isOpen()'), expected);
+        assert.equal(await evaluate("document.getElementById('btn-diagram-guide').getAttribute('aria-expanded')"), String(expected));
+      }
+      assert.deepEqual((await snapshot('manual-guide-closed')).errors, []);
+    });
 
     await t.test('five modes initialize and export clean SVG; a representative reader honors both themes and reduced motion', async () => {
       for (const [mode, file] of Object.entries(artifacts)) {
