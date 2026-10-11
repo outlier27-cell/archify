@@ -31,18 +31,18 @@ function killTree(child) {
   }
 }
 
-async function check(t, body, { publicCli = false, rootAttrs = '', profile = 'showcase' } = {}) {
+async function check(t, body, { publicCli = false, rootAttrs = '', profile = 'showcase', env = {} } = {}) {
   const file = path.join(scratch, `${sequence++}.html`);
   fs.writeFileSync(file, `<!doctype html><html><body><svg viewBox="0 0 400 250" data-quality-profile="${profile}" ${rootAttrs}>${body}</svg></body></html>`);
   const args = publicCli ? [cli, 'check', file, '--json'] : [checker, file];
-  return execute(t, args, body);
+  return execute(t, args, body, deadlineMs, env);
 }
 
-async function execute(t, args, description, timeoutMs = deadlineMs) {
+async function execute(t, args, description, timeoutMs = deadlineMs, env = {}) {
   const child = spawn(process.execPath, args, {
     detached: process.platform !== 'win32',
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, ARCHIFY_UPDATE_CHECK_DISABLED: '1' },
+    env: { ...process.env, ARCHIFY_UPDATE_CHECK_DISABLED: '1', ...env },
   });
   let stdout = '', stderr = '', timedOut = false, exited = false, spawnError, cleanupError;
   child.stdout.on('data', chunk => { stdout += chunk; });
@@ -195,6 +195,25 @@ for (const rootAttrs of ['', 'data-layout-contract="readable-v2"']) {
     assert.deepEqual(result.receipt.composition.issues.find(item => item.code === 'composition/proper-crossing').point, [100, 60]);
   });
 }
+
+test('交叉分析预算耗尽时以失败回执结束，不把未完成检查当作通过', async t => {
+  const body = [
+    arrow('M20 20H80', { id: 'one', from: 'a', to: 'b' }),
+    arrow('M20 60H80', { id: 'two', from: 'c', to: 'd' }),
+    arrow('M20 100H80', { id: 'three', from: 'e', to: 'f' }),
+  ].join('');
+  const result = await check(t, body, {
+    env: { ARCHIFY_CHECK_MAX_CROSSING_PAIR_CHECKS: '1' },
+  });
+  assert.equal(result.code, 1);
+  const crossingCheck = result.receipt.checks.find(item => item.name === 'relationship_crossings');
+  assert.equal(crossingCheck.ok, false);
+  assert.match(crossingCheck.details.join('\n'), /crossing-analysis-budget.*limit 1/);
+  assert.equal(
+    result.receipt.composition.issues.find(item => item.code === 'composition/crossing-analysis-budget')?.attemptedPairs,
+    1,
+  );
+});
 
 test('Z 回到当前子路径起点，后续相对 m 不沿旧终点移动', async t => {
   const d = 'M20 20H100V100H20Z m0 120h60';
