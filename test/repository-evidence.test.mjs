@@ -190,6 +190,25 @@ test('Gitee evidence generates provider-specific revision and line links', (t) =
   }
 });
 
+test('Codeberg Forgejo evidence generates revision-pinned source links and preserves SSH origin identity', (t) => {
+  const data = fixture();
+  t.after(() => fs.rmSync(data.root, { recursive: true, force: true }));
+  const url = 'https://codeberg.org/example/evidence-repo';
+  data.diagram.meta.repository = { url, revision: data.revision, provider: 'forgejo' };
+  const output = path.join(data.root, 'codeberg.html');
+  for (const [index, remote] of [
+    `${url}.git`,
+    'git@codeberg.org:example/evidence-repo.git',
+    'ssh://git@codeberg.org/example/evidence-repo.git',
+  ].entries()) {
+    git(data.root, 'remote', 'set-url', 'origin', remote);
+    const evidence = verifyRemoteEvidence(data, output, { cli: index === 0 });
+    assert.equal(evidence.repository.href, `${url}/src/commit/${data.revision}`);
+    assert.equal(evidence.nodes.users[0].href, `${url}/src/commit/${data.revision}/src/router.js#L1-3`);
+    assert.equal(evidence.nodes.users[1].href, `${url}/src/commit/${data.revision}/src/store.js#L1`);
+  }
+});
+
 test('GitLab evidence links nested groups and accepts SSH, HTTPS, suffix and case variants', (t) => {
   const data = fixture();
   t.after(() => fs.rmSync(data.root, { recursive: true, force: true }));

@@ -29,6 +29,7 @@ test('verified sources remain in Focus and Finder with accessible counts and no 
   t.after(() => browser.close());
   const cases = [
     ['architecture', 'components', 'web-app.architecture.json', false, 'light'],
+    ['architecture', 'components', 'web-app.architecture.json', 'forgejo', 'dark'],
     ['architecture', 'components', 'web-app.architecture.json', 'gitlab', 'dark'],
     ['timeline', 'events', 'payment-incident.timeline.json', false, 'light'],
     ['waterfall', 'spans', 'checkout-request.waterfall.json', false, 'dark'],
@@ -57,6 +58,7 @@ test('verified sources remain in Focus and Finder with accessible counts and no 
   ];
   for (const [type, collection, example, local, theme, extra = {}, nodeId] of cases) {
     const url = local === 'gitlab' ? 'https://gitlab.com/example/platform/evidence-repo'
+      : local === 'forgejo' ? 'https://codeberg.org/example/evidence-repo'
       : local ? 'http://git.internal/Team/repo' : 'https://github.com/example/evidence-repo';
     const localOnly = local === true;
     git('remote', 'set-url', 'origin', url);
@@ -132,7 +134,10 @@ test('verified sources remain in Focus and Finder with accessible counts and no 
     }
     assert.equal(result.hasBrand, Boolean(extra.brand), `${type} ${example}: brand fixture`);
     assert.deepEqual(result.paths, ['source.js'], type);
-    assert.deepEqual(result.links, localOnly ? [] : [`${url}/${local === 'gitlab' ? '-/' : ''}blob/${revision}/source.js#L1${local === 'gitlab' ? '-3' : '-L3'}`], type);
+    const sourceHref = local === 'forgejo'
+      ? `${url}/src/commit/${revision}/source.js#L1-3`
+      : `${url}/${local === 'gitlab' ? '-/' : ''}blob/${revision}/source.js#L1${local === 'gitlab' ? '-3' : '-L3'}`;
+    assert.deepEqual(result.links, localOnly ? [] : [sourceHref], type);
     assert.ok(result.search.includes(node.label || node.title || node.name), `${type}: Finder must match the source-backed node`);
   }
 });

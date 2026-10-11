@@ -554,9 +554,9 @@ blob, and valid line range are required in every link mode. Verification is
 local and makes no remote requests; it establishes neither public availability
 nor the current reader's access rights.
 
-`link_mode` defaults to `web`. GitHub, Gitee, and GitLab HTTPS repository URLs
-generate revision-pinned links; the public hosts github.com, gitee.com, and
-gitlab.com select the provider automatically. Optional `provider: "github"`,
+`link_mode` defaults to `web`. Codeberg, GitHub, Gitee, and GitLab HTTPS repository URLs
+generate revision-pinned links; the public hosts codeberg.org, github.com, gitee.com, and
+gitlab.com select the provider automatically. Optional `provider: "forgejo"`, `"github"`,
 `"gitee"`, or `"gitlab"` must agree with a public host. A self-managed GitLab
 host declares `provider: "gitlab"`; Archify never contacts the host to detect
 its forge. Existing GitHub declarations and default delivery receipt fields
@@ -605,7 +605,7 @@ addresses, including nested namespaces. Declare a credential-free address;
 HTTP(S) credentials on the checkout's origin are ignored for identity and
 redacted from diagnostics. Hostnames compare case-insensitively; repository
 paths retain case except for GitHub and GitLab. A trailing slash
-normalizes away. Only GitHub, Gitee, and GitLab (gitlab.com, or a host declared
+normalizes away. Only Codeberg, GitHub, Gitee, and GitLab (gitlab.com, or a host declared
 with `provider: "gitlab"`) normalize a terminal `.git` and match standard
 HTTPS/443 with Git SSH/22 on the same host; a GitLab SSH endpoint on another host
 or port is not inferred. For other hosts, use the actual clone address:
@@ -614,8 +614,11 @@ match. For example, `git@host:Team/repo` differs from
 `ssh://git@host/Team/repo`; `git@host:/Team/repo` matches the latter. SCP-style
 paths preserve literal percent escapes, while URI paths decode them. SSH host
 aliases and forge-specific browse/clone prefixes are not guessed.
-Gitea/Forgejo/Bitbucket web links are not implemented in this version;
-use local-only until a tested link provider is available. Unknown web providers
+Gitea and Bitbucket web links are not implemented in this version; use local-only
+until a tested link provider is available. Public `codeberg.org` Forgejo links use
+`<url>/src/commit/<revision>` for the repository and
+`<url>/src/commit/<revision>/<path>#L<line>-<end_line>` for source lines.
+Self-hosted Forgejo remains local-only. Unknown web providers
 fail with a diagnostic rather than emitting a guessed link.
 
 ## Hand-placed fallback
