@@ -424,7 +424,7 @@
         };
       }
 
-      function download(blob, filename) {
+      function anchorDownload(blob, filename) {
         var url = URL.createObjectURL(blob);
         var a = document.createElement('a');
         a.href = url;
@@ -435,6 +435,26 @@
         a.click();
         a.remove();
         setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+        return { saved: true, transport: 'anchor' };
+      }
+
+      // Claude Artifacts expose an optional, user-confirmed save capability.
+      // Resolve capability discovery once, while preserving standalone download
+      // behavior whenever the host bridge is absent or unavailable.
+      var hostDownloads = window.claude && typeof window.claude.use === 'function'
+        ? Promise.resolve(window.claude.use('downloads')).catch(function () { return null; })
+        : Promise.resolve(null);
+
+      function download(blob, filename) {
+        return hostDownloads.then(function (downloads) {
+          if (!downloads || typeof downloads.save !== 'function') return anchorDownload(blob, filename);
+          return Promise.resolve(downloads.save({ filename: filename, data: blob })).then(function () {
+            return { saved: true, transport: 'host' };
+          }).catch(function (error) {
+            if (error && error.code === 'declined') return { saved: false, cancelled: true, transport: 'host' };
+            throw error;
+          });
+        });
       }
 
       // Conservative upper bound on total canvas pixels. Older Safari on iOS
@@ -1210,19 +1230,23 @@
         return (svgTheme
           ? Promise.resolve(serializeSvg(1, { theme: svgTheme })).then(function (d) {
               var blob = new Blob([d.svgString], { type: 'image/svg+xml;charset=utf-8' });
-              recordExportReceipt('svg', blob, d.canonicalStateClean);
-              download(blob, base + (svgTheme === 'auto' ? '' : '-' + svgTheme) + '.svg');
+              return download(blob, base + (svgTheme === 'auto' ? '' : '-' + svgTheme) + '.svg').then(function (result) {
+                if (result.saved) recordExportReceipt('svg', blob, d.canonicalStateClean);
+              });
             })
           : format === 'webm'
             ? recordWebm().then(function (blob) {
                 document.documentElement.setAttribute('data-last-motion-bytes', String(blob.size));
-                recordExportReceipt('webm', blob, true);
-                download(blob, base + '.webm');
-                toast(viewerText('viewer.export.downloadedWebm'));
+                return download(blob, base + '.webm').then(function (result) {
+                  if (!result.saved) return;
+                  recordExportReceipt('webm', blob, true);
+                  toast(viewerText('viewer.export.downloadedWebm'));
+                });
               })
           : rasterize(format).then(function (blob) {
-              recordExportReceipt(format, blob, true);
-              download(blob, base + '.' + format);
+              return download(blob, base + '.' + format).then(function (result) {
+                if (result.saved) recordExportReceipt(format, blob, true);
+              });
             })
         ).catch(function (err) {
           console.error(err);
@@ -1252,10 +1276,13 @@
           ? renderShareCard({ routeSnapshot: snapshot })
           : Promise.reject(exportError('viewer.export.routeRequired'));
         return blobPromise.then(function (blob) {
-          recordExportReceipt('share-card', blob, false, { width: SHARE_CARD_WIDTH, height: SHARE_CARD_HEIGHT }, 'route', true);
-          download(blob, diagramFilename() + '-route-share-card.png');
-          toast(viewerText('viewer.export.downloadedRoute'));
-          return blob;
+          return download(blob, diagramFilename() + '-route-share-card.png').then(function (result) {
+            if (result.saved) {
+              recordExportReceipt('share-card', blob, false, { width: SHARE_CARD_WIDTH, height: SHARE_CARD_HEIGHT }, 'route', true);
+              toast(viewerText('viewer.export.downloadedRoute'));
+            }
+            return blob;
+          });
         }).catch(function (err) {
           console.error(err);
           var technicalMessage = err && err.message ? err.message : 'share-card';
@@ -1276,10 +1303,13 @@
           ? renderShareCard({ reachSnapshot: snapshot })
           : Promise.reject(exportError('viewer.export.reachRequired'));
         return blobPromise.then(function (blob) {
-          recordExportReceipt('share-card', blob, false, { width: SHARE_CARD_WIDTH, height: SHARE_CARD_HEIGHT }, 'reach', false, true);
-          download(blob, diagramFilename() + '-' + snapshot.direction + '-reach-share-card.png');
-          toast(viewerText('viewer.export.downloadedReach'));
-          return blob;
+          return download(blob, diagramFilename() + '-' + snapshot.direction + '-reach-share-card.png').then(function (result) {
+            if (result.saved) {
+              recordExportReceipt('share-card', blob, false, { width: SHARE_CARD_WIDTH, height: SHARE_CARD_HEIGHT }, 'reach', false, true);
+              toast(viewerText('viewer.export.downloadedReach'));
+            }
+            return blob;
+          });
         }).catch(function (err) {
           console.error(err);
           var technicalMessage = err && err.message ? err.message : 'share-card';
