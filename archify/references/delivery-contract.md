@@ -2,7 +2,7 @@
 
 ## Failed finalize and candidate repair
 
-`finalize` stops at the first non-passing gate. Use compact stdout or `evidence.summaryReceipt`; read its full sidecar only when the summary lacks evidence needed for a coherent repair. A receipt with four artifact checks is basic validation, not showcase acceptance: require all nine checks, zero composition errors, and zero warnings. Fix `meta.quality_profile` and schema errors before geometry. A dense full-schema ERD may keep `standard` for its first complete-field pass: require zero structural errors, no edge-through-node failures, complete field rows, and a readable grouped grid, and record composition warnings instead of spending unbounded time on them.
+`finalize` stops at the first non-passing gate. Use compact stdout or `evidence.summaryReceipt`; read its full sidecar only when the summary lacks evidence needed for a coherent repair. A receipt with four artifact checks is basic validation, not showcase acceptance: require all ten checks, zero composition errors, and zero warnings. Fix `meta.quality_profile` and schema errors before geometry. A dense full-schema ERD may keep `standard` for its first complete-field pass: require zero structural errors, no edge-through-node failures, complete field rows, and a readable grouped grid, and record composition warnings instead of spending unbounded time on them.
 
 For a validation failure, edit the existing JSON in the connected neighborhood named by diagnostics before rerunning a command. Preserve requested semantics, meaningful labels, source evidence, and fixed or agreed topology. Several routes sharing nodes call for one placement repair; read [Architecture layout repair](architecture-layout-repair.md) for that case. Reflow a blocked main path rather than nudging unrelated labels. Keep unrelated geometry when its composition already reads clearly. Use `--layout-json` before editing only when compact evidence lacks needed measurements. Workflow v2 uses its stable compiler receipt, not solver internals, as authoring evidence.
 
@@ -357,7 +357,7 @@ This is not a promise of full SVG command support: `A/C/S/T` produce
 `artifact/svg-path-unsupported`; missing parameters, invalid numbers, and other
 syntax errors produce `artifact/svg-path-malformed`. The checker exits non-zero
 instead of skipping a bad path or waiting indefinitely. Path failures append a
-`svg_path_data` check; normal valid artifacts retain the existing nine checks.
+`svg_path_data` check; normal valid artifacts retain the existing ten checks.
 Diagnostics carry the inspected `pathIndex`, `role`, available relationship/frame
 `id`, parsing `tokenOffset`, available `command`, and `reason` so the generating
 source can be located and repaired. `pathIndex` is one-based; `tokenOffset` is a
@@ -624,7 +624,7 @@ diagram_type: architecture|workflow|sequence|dataflow|lifecycle
 output: /absolute/path/to/file.html
 specification_sha256: <receipt value>
 artifact_sha256: <receipt value>
-validation: 9/9 showcase, 0 errors, 0 warnings
+validation: 10/10 showcase, 0 errors, 0 warnings
 browser_evidence: passed|failed|skipped
 visual_review: not_requested|passed|skipped (image reader unavailable)|failed
 correction_rounds: 0|1|2

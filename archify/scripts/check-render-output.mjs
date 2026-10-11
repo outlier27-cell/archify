@@ -79,6 +79,8 @@ const SVG_TAG_TOKEN = /<!--[\s\S]*?(?:-->|$)|<!\[CDATA\[[\s\S]*?(?:\]\]>|$)|<(\/
 const AUTOMATIC_CROSSOVER_UNDERLAY_TAG = /<path\b[^>]*\bdata-graph-role="automatic-crossover-underlay"[^>]*\/>/i;
 const HTML_VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 const SVG_HTML_INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title']);
+const HTML_RAW_TEXT_ELEMENTS = new Set(['script', 'style', 'textarea', 'title']);
+const HTML_BREAKOUT_ELEMENTS = new Set(['a', 'article', 'body', 'div', 'head', 'html', 'img', 'p', 'script', 'span', 'style', 'table', 'textarea']);
 const HTML_ATTRIBUTE = /([A-Za-z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
 const readerContract = readerContractFromHtml(html);
 const NUMERIC_ATTRS = new Set([
@@ -105,7 +107,8 @@ function addCheck(name, ok, details = []) {
   checks.push({ name, ok, details });
 }
 
-const svgMatches = extractSvgBlocks(html);
+const markupScan = scanMarkup(html);
+const svgMatches = markupScan.error ? [] : extractSvgBlocks(html);
 addCheck('single_svg', svgMatches.length === 1, [`found ${svgMatches.length} <svg> block(s)`]);
 
 if (svgMatches.length === 1) {
@@ -435,6 +438,8 @@ if (svgMatches.length === 1) {
     addCheck('legend_clearance', true, ['no legend marker found']);
   }
   }
+} else if (markupScan.error) {
+  addCheck('svg_structure', false, [markupScan.error]);
 }
 
 if (pathDiagnostics.length) addCheck('svg_path_data', false, pathDiagnostics.map(item => item.message));
@@ -446,52 +451,108 @@ console.log(JSON.stringify({ ok, file: htmlPath, artifact, checks, composition,
 // Let pending stdout writes drain: large receipts are asynchronous when piped.
 process.exitCode = ok ? 0 : 1;
 
+// This scanner consumes every byte at most once. Regex matching a malformed
+// quoted tag from each later '<' is quadratic and can also skip a broken tag.
+function scanMarkup(markup) {
+  const tokens = [];
+  let index = 0;
+  let rawText = null;
+  while (index < markup.length) {
+    if (rawText) {
+      const close = new RegExp(`</${rawText}\\s*>`, 'ig');
+      close.lastIndex = index;
+      const match = close.exec(markup);
+      if (!match) return { tokens, error: `unclosed HTML raw-text element <${rawText}>` };
+      index = match.index;
+      rawText = null;
+    }
+    const start = markup.indexOf('<', index);
+    if (start < 0) break;
+    if (markup.startsWith('<!--', start)) {
+      const end = markup.indexOf('-->', start + 4);
+      if (end < 0) return { tokens, error: 'unterminated SVG comment' };
+      tokens.push({ raw: markup.slice(start, end + 3), index: start, special: true });
+      index = end + 3;
+      continue;
+    }
+    if (markup.startsWith('<![CDATA[', start)) {
+      const end = markup.indexOf(']]>', start + 9);
+      if (end < 0) return { tokens, error: 'unterminated SVG CDATA section' };
+      tokens.push({ raw: markup.slice(start, end + 3), index: start, special: true });
+      index = end + 3;
+      continue;
+    }
+    const opening = /^<([A-Za-z][\w:-]*)\b/.exec(markup.slice(start));
+    const closing = /^<\/([A-Za-z][\w:-]*)\s*>/.exec(markup.slice(start));
+    if (!opening && !closing) { index = start + 1; continue; }
+    const name = (opening?.[1] || closing[1]).toLowerCase();
+    if (closing) {
+      tokens.push({ raw: closing[0], index: start, name, closing: true, selfClosing: false });
+      index = start + closing[0].length;
+      continue;
+    }
+    let cursor = start + opening[0].length;
+    let quote = null;
+    for (; cursor < markup.length; cursor += 1) {
+      const character = markup[cursor];
+      if (quote) { if (character === quote) quote = null; continue; }
+      if (character === '"' || character === "'") { quote = character; continue; }
+      if (character === '<') return { tokens, error: `malformed start tag <${name}>` };
+      if (character === '>') break;
+    }
+    if (cursor >= markup.length || quote) return { tokens, error: `unterminated start tag <${name}>` };
+    const raw = markup.slice(start, cursor + 1);
+    const tail = raw.slice(opening[0].length, -1);
+    // In HTML, an unquoted value ending in '/' absorbs that slash. SVG output
+    // normally has quoted values, or whitespace before an explicit '/'.
+    const selfClosing = tail.trim() === '/' || /\s\/\s*$/.test(tail)
+      || (tail.endsWith('/') && !/=[^\s"'=<>`]+$/.test(tail.slice(0, -1)));
+    tokens.push({ raw, index: start, name, closing: false, selfClosing });
+    index = cursor + 1;
+    if (HTML_RAW_TEXT_ELEMENTS.has(name)) rawText = name;
+  }
+  return { tokens, error: null };
+}
+
 function svgStructureError(svg) {
+  const scan = scanMarkup(svg);
+  if (scan.error) return scan.error;
   const stack = [];
-  for (const token of svg.matchAll(SVG_TAG_TOKEN)) {
-    const raw = token[0];
-    if (raw.startsWith('<!--') && !raw.endsWith('-->')) return 'unterminated SVG comment';
-    if (raw.startsWith('<![CDATA[') && !raw.endsWith(']]>')) return 'unterminated SVG CDATA section';
-    const name = token[2]?.toLowerCase();
-    if (!name) continue;
-    if (token[1]) {
+  for (const token of scan.tokens) {
+    if (token.special) continue;
+    const { name } = token;
+    if (token.closing) {
       const expected = stack.at(-1);
-      if (!expected || expected.name !== name) {
-        return `unexpected closing tag </${name}>${expected ? `; expected </${expected.name}>` : ''}`;
-      }
+      if (!expected || expected.name !== name) return `unexpected closing tag </${name}>${expected ? `; expected </${expected.name}>` : ''}`;
       stack.pop();
       continue;
     }
     const parent = stack.at(-1);
     const inHtml = name !== 'svg' && (parent?.html || SVG_HTML_INTEGRATION_POINTS.has(parent?.name));
-    const selfClosing = /\/\s*>$/.test(raw) || (inHtml && HTML_VOID_ELEMENTS.has(name));
+    if (!inHtml && HTML_BREAKOUT_ELEMENTS.has(name)) return `HTML breakout tag <${name}> outside foreignObject`;
+    if (inHtml && name === 'p' && parent?.name === 'p') stack.pop();
+    const selfClosing = inHtml ? HTML_VOID_ELEMENTS.has(name) : token.selfClosing;
     if (!selfClosing) stack.push({ name, html: inHtml });
   }
   return stack.length ? `unclosed tag <${stack.at(-1).name}>` : null;
 }
 
 function extractSvgBlocks(markup) {
+  const scan = scanMarkup(markup);
+  if (scan.error) return [];
   const blocks = [];
   let rootStart = null;
   let svgDepth = 0;
-  for (const token of markup.matchAll(SVG_TAG_TOKEN)) {
-    const name = token[2]?.toLowerCase();
-    if (name !== 'svg') continue;
-    if (token[1]) {
-      if (!svgDepth) continue;
-      svgDepth -= 1;
-      if (!svgDepth && rootStart != null) {
-        blocks.push(markup.slice(rootStart, token.index + token[0].length));
-        rootStart = null;
-      }
+  for (const token of scan.tokens) {
+    if (token.special || token.name !== 'svg') continue;
+    if (token.closing) {
+      if (svgDepth) svgDepth -= 1;
+      if (!svgDepth && rootStart != null) { blocks.push(markup.slice(rootStart, token.index + token.raw.length)); rootStart = null; }
       continue;
     }
     if (!svgDepth) rootStart = token.index;
-    if (!/\/\s*>$/.test(token[0])) svgDepth += 1;
-    else if (rootStart != null) {
-      blocks.push(markup.slice(rootStart, token.index + token[0].length));
-      rootStart = null;
-    }
+    if (!token.selfClosing) svgDepth += 1;
+    else if (rootStart != null && svgDepth === 0) { blocks.push(markup.slice(rootStart, token.index + token.raw.length)); rootStart = null; }
   }
   return blocks;
 }

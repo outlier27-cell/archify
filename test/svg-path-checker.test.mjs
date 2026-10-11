@@ -96,6 +96,33 @@ function assertPathError(result, code, { role = 'relationship', pathIndex = 1, i
   assert.ok(diagnostic.supportedFixes.length > 0);
 }
 
+test('SVG structure scanner rejects malformed and foreign-content breakout tags', async t => {
+  for (const body of ['<g</svg>', '<div></div>']) {
+    const result = await check(t, body);
+    assert.equal(result.code, 1, JSON.stringify(result.receipt));
+    assert.equal(result.receipt.checks.find(item => item.name === 'svg_structure').ok, false);
+  }
+});
+
+test('SVG structure scanner fails malformed quoted-tag floods within the checker deadline', async t => {
+  const result = await check(t, '<a "'.repeat(30_000));
+  assert.equal(result.code, 1, JSON.stringify(result.receipt));
+  assert.equal(result.receipt.checks.find(item => item.name === 'svg_structure').ok, false);
+});
+
+test('SVG structure scanner preserves nested SVG and valid foreignObject HTML', async t => {
+  assertPass(await check(t, '<svg><path d="M20 20H200"/></svg>'));
+  assertPass(await check(t, '<foreignObject><p>one<p>two</p></foreignObject>'));
+  assertPass(await check(t, '<foreignObject><script>const marker = "</svg>";</script></foreignObject>'));
+});
+
+test('SVG structure scanner does not self-close unquoted SVG or non-void HTML values', async t => {
+  assertPass(await check(t, '<g data-x=foo/><path d="M20 20H200"/></g>'));
+  const result = await check(t, '<foreignObject><div/></foreignObject><path d="M20 20H200"/>');
+  assert.equal(result.code, 1, JSON.stringify(result.receipt));
+  assert.equal(result.receipt.checks.find(item => item.name === 'svg_structure').ok, false);
+});
+
 for (const d of [
   'M 20', 'M 20 20 Q 30 30 40', 'M 20 20 L 100', 'M 20 20 L 100 M 200 20',
   'M 20 NaN', 'M 20 20 L 1e999 30', 'M 20 20 X 100 20', 'M 20 20 Z 7', 'M20 20L40,,20',
