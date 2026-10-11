@@ -688,14 +688,14 @@ test('public deliver and finalize CLI propagate a real workflow viewport warning
   const validated = run('validate');
   assert.equal(validated.status, 0, validated.stderr || validated.stdout);
   const validation = JSON.parse(validated.stdout);
-  assert.equal(validation.checks.length, 9);
+  assert.equal(validation.checks.length, 10);
   assert.equal(validation.checks.every((check) => check.ok), true);
   assert.deepEqual(validation.composition.summary, { errors: 0, warnings: 1 });
 
   const delivered = run('deliver');
   assert.equal(delivered.status, 0, delivered.stderr || delivered.stdout);
   const delivery = JSON.parse(delivered.stdout);
-  assert.equal(delivery.validation.checksPassed, 9);
+  assert.equal(delivery.validation.checksPassed, 10);
   assert.equal(delivery.validation.errors, 0);
   assert.equal(delivery.validation.warnings, 1);
   assert.equal(delivery.validation.compositionIssues.length, 1);
