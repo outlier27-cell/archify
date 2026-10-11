@@ -46,8 +46,7 @@ export function parseRepositoryRemote(value, { authored = false, provider: provi
     ? 'standard' : `${protocol}${port}`;
   const pathKind = provider ? 'repository' : scp && !scpAbsolute ? 'relative' : 'absolute';
   // path-contract-allow: url-path -- Public forge repository paths use case-insensitive URL identities.
-  const identityPath = provider === 'github' || provider === 'gitlab' || provider === 'gitea'
-    ? repositoryPath.toLowerCase() : repositoryPath;
+  const identityPath = ['github', 'gitlab', 'gitea'].includes(provider) ? repositoryPath.toLowerCase() : repositoryPath;
   const encodedPath = segments.map(encodeURIComponent).join('/');
   const canonicalUrl = scp ? `git@${hostname}:${scpAbsolute ? '/' : ''}${repositoryPath}`
     : `${protocol}//${protocol === 'ssh:' ? 'git@' : ''}${url.host}/${encodedPath}`;
