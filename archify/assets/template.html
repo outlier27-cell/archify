@@ -6423,7 +6423,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       // Resolve capability discovery once, while preserving standalone download
       // behavior whenever the host bridge is absent or unavailable.
       var hostDownloads = window.claude && typeof window.claude.use === 'function'
-        ? Promise.resolve(window.claude.use('downloads')).catch(function () { return null; })
+        ? Promise.resolve().then(function () { return window.claude.use('downloads'); }).catch(function () { return null; })
         : Promise.resolve(null);
 
       function download(blob, filename) {

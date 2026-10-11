@@ -49,6 +49,7 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
     window.hostSaves=[];
     const hostMode=new URL(location.href).searchParams.get('host');
     if(hostMode){window.claude={use(name){
+      if(hostMode==='throws')throw new Error('host bridge unavailable');
       if(name!=='downloads'||hostMode==='unavailable')return Promise.resolve(null);
       return Promise.resolve({save(payload){window.hostSaves.push({filename:payload.filename,size:payload.data.size});
         if(hostMode==='declined')return Promise.reject({code:'declined'});
@@ -244,6 +245,7 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
     for (const [host, expected] of [
       ['available', { saves: 1, downloads: 0, receipt: true, alerts: 0 }],
       ['unavailable', { saves: 0, downloads: 1, receipt: true, alerts: 0 }],
+      ['throws', { saves: 0, downloads: 1, receipt: true, alerts: 0 }],
       ['declined', { saves: 1, downloads: 0, receipt: false, alerts: 0 }],
       ['rejected', { saves: 1, downloads: 0, receipt: false, alerts: 1 }],
     ]) {
