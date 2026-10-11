@@ -656,8 +656,8 @@ test('cli: deliver atomically writes a checked artifact and structured receipt',
   assert.equal(receipt.artifact.sha256, sha256(out));
   assert.equal(receipt.artifact.bytes, fs.statSync(out).size);
   assert.deepEqual(receipt.validation, {
-    checksPassed: 9,
-    checkCount: 9,
+    checksPassed: 10,
+    checkCount: 10,
     compositionProfile: 'showcase',
     compositionStatus: 'pass',
     errors: 0,

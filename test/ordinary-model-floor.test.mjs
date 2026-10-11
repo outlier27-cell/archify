@@ -96,7 +96,7 @@ test('benchmark verifies one first-pass architecture candidate through semantic,
   assert.deepEqual(receipt.gates.semantic.missingNodeIds, []);
   assert.deepEqual(receipt.gates.semantic.missingRelationships, []);
   assert.equal(receipt.gates.validation.ok, true);
-  assert.equal(receipt.gates.validation.checksPassed, 9);
+  assert.equal(receipt.gates.validation.checksPassed, 10);
   assert.deepEqual(receipt.gates.validation.composition, { errors: 0, warnings: 0 });
   assert.deepEqual(receipt.gates.visualReview, {
     status: 'passed',
@@ -262,7 +262,7 @@ test('benchmark rejects one candidate node bound to distinct required identities
         const result = run(['verify', '--case', caseFile, '--candidate', candidate, '--run', runFile]);
         const receipt = JSON.parse(result.stdout);
         assert.equal(receipt.gates.validation.ok, true);
-        assert.equal(receipt.gates.validation.checksPassed, 9);
+        assert.equal(receipt.gates.validation.checksPassed, 10);
         assert.deepEqual(receipt.gates.semantic.missingNodeIds, []);
         assert.deepEqual(receipt.gates.semantic.missingRelationships, []);
         assert.equal(receipt.gates.semantic.ok, false);
