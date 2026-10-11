@@ -80,7 +80,7 @@ const AUTOMATIC_CROSSOVER_UNDERLAY_TAG = /<path\b[^>]*\bdata-graph-role="automat
 const HTML_VOID_ELEMENTS = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 const SVG_HTML_INTEGRATION_POINTS = new Set(['foreignobject', 'desc', 'title']);
 const HTML_RAW_TEXT_ELEMENTS = new Set(['script', 'style', 'textarea', 'title']);
-const HTML_BREAKOUT_ELEMENTS = new Set(['a', 'article', 'body', 'div', 'head', 'html', 'img', 'p', 'script', 'span', 'style', 'table', 'textarea']);
+const HTML_BREAKOUT_ELEMENTS = new Set(['a', 'article', 'body', 'div', 'head', 'html', 'img', 'p', 'span', 'table', 'textarea']);
 const HTML_ATTRIBUTE = /([A-Za-z_:][\w:.-]*)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/g;
 const readerContract = readerContractFromHtml(html);
 const NUMERIC_ATTRS = new Set([
