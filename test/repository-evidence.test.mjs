@@ -200,7 +200,7 @@ test('Gitea evidence generates revision-pinned source links and preserves SSH or
   data.diagram.components[0].sources = [{ path: 'src/中文 # router.js', line: 1, end_line: 2 }];
   for (const [index, remote] of [
     'https://gitea.com/example/evidence-repo.git/',
-    'git@gitea.com:example/evidence-repo.git',
+    'git@gitea.com:Example/Evidence-Repo.git',
     'ssh://git@gitea.com/example/evidence-repo.git',
   ].entries()) {
     data.diagram.meta.repository = {
@@ -211,7 +211,7 @@ test('Gitea evidence generates revision-pinned source links and preserves SSH or
     const output = path.join(data.root, `gitea-${index}.html`);
     const evidence = verifyRemoteEvidence(data, output, { cli: index === 0 });
     assert.equal(evidence.repository.href, `https://gitea.com/example/evidence-repo/src/commit/${revision}`);
-    assert.equal(evidence.nodes.users[0].href, `https://gitea.com/example/evidence-repo/src/commit/${revision}/src/${encodeURIComponent('中文 # router.js')}#L1-2`);
+    assert.equal(evidence.nodes.users[0].href, `https://gitea.com/example/evidence-repo/src/commit/${revision}/src/${encodeURIComponent('中文 # router.js')}#L1-L2`);
   }
 });
 

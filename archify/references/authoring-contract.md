@@ -567,7 +567,8 @@ GitLab URLs may name nested groups (`group/subgroup/project`). Source links use
 uses `<url>/-/tree/<revision>`. A Markdown source (`.md`, `.markdown`) with a
 line range links to the plain view (`?plain=1`) so the cited lines are
 highlighted instead of the rendered document. GitLab repository paths compare
-case-insensitively, like GitHub.
+case-insensitively, like GitHub. Public Gitea repository paths do as well; this
+normalization applies only to `gitea.com`, not to self-hosted Gitea origins.
 
 ```json
 {
@@ -617,7 +618,7 @@ aliases and forge-specific browse/clone prefixes are not guessed.
 Forgejo and Bitbucket web links are not implemented in this version; use
 local-only until a tested link provider is available. Public `gitea.com` links
 use `<url>/src/commit/<revision>` for the repository and
-`<url>/src/commit/<revision>/<path>#L<line>-<end_line>` for source lines.
+`<url>/src/commit/<revision>/<path>#L<line>-L<end_line>` for source lines.
 Self-hosted Gitea remains local-only. Unknown web providers fail with a
 diagnostic rather than emitting a guessed link.
 
