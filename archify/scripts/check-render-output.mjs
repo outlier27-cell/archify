@@ -105,11 +105,14 @@ function addCheck(name, ok, details = []) {
   checks.push({ name, ok, details });
 }
 
-const svgMatches = [...html.matchAll(/<svg\b[\s\S]*?<\/svg>/gi)];
+const svgMatches = extractSvgBlocks(html);
 addCheck('single_svg', svgMatches.length === 1, [`found ${svgMatches.length} <svg> block(s)`]);
 
 if (svgMatches.length === 1) {
-  const svg = svgMatches[0][0];
+  const svg = svgMatches[0];
+  const structuralError = svgStructureError(svg);
+  addCheck('svg_structure', structuralError == null, structuralError ? [structuralError] : []);
+  if (!structuralError) {
   const svgRoot = svg.match(/<svg\b[^>]*>/i)?.[0] || '';
   const svgAttrs = parseAttrs(svgRoot);
   const qualityProfile = svgAttrs['data-quality-profile'] || 'standard';
@@ -431,6 +434,7 @@ if (svgMatches.length === 1) {
   } else {
     addCheck('legend_clearance', true, ['no legend marker found']);
   }
+  }
 }
 
 if (pathDiagnostics.length) addCheck('svg_path_data', false, pathDiagnostics.map(item => item.message));
@@ -441,6 +445,56 @@ console.log(JSON.stringify({ ok, file: htmlPath, artifact, checks, composition,
 }, null, 2));
 // Let pending stdout writes drain: large receipts are asynchronous when piped.
 process.exitCode = ok ? 0 : 1;
+
+function svgStructureError(svg) {
+  const stack = [];
+  for (const token of svg.matchAll(SVG_TAG_TOKEN)) {
+    const raw = token[0];
+    if (raw.startsWith('<!--') && !raw.endsWith('-->')) return 'unterminated SVG comment';
+    if (raw.startsWith('<![CDATA[') && !raw.endsWith(']]>')) return 'unterminated SVG CDATA section';
+    const name = token[2]?.toLowerCase();
+    if (!name) continue;
+    if (token[1]) {
+      const expected = stack.at(-1);
+      if (!expected || expected.name !== name) {
+        return `unexpected closing tag </${name}>${expected ? `; expected </${expected.name}>` : ''}`;
+      }
+      stack.pop();
+      continue;
+    }
+    const parent = stack.at(-1);
+    const inHtml = name !== 'svg' && (parent?.html || SVG_HTML_INTEGRATION_POINTS.has(parent?.name));
+    const selfClosing = /\/\s*>$/.test(raw) || (inHtml && HTML_VOID_ELEMENTS.has(name));
+    if (!selfClosing) stack.push({ name, html: inHtml });
+  }
+  return stack.length ? `unclosed tag <${stack.at(-1).name}>` : null;
+}
+
+function extractSvgBlocks(markup) {
+  const blocks = [];
+  let rootStart = null;
+  let svgDepth = 0;
+  for (const token of markup.matchAll(SVG_TAG_TOKEN)) {
+    const name = token[2]?.toLowerCase();
+    if (name !== 'svg') continue;
+    if (token[1]) {
+      if (!svgDepth) continue;
+      svgDepth -= 1;
+      if (!svgDepth && rootStart != null) {
+        blocks.push(markup.slice(rootStart, token.index + token[0].length));
+        rootStart = null;
+      }
+      continue;
+    }
+    if (!svgDepth) rootStart = token.index;
+    if (!/\/\s*>$/.test(token[0])) svgDepth += 1;
+    else if (rootStart != null) {
+      blocks.push(markup.slice(rootStart, token.index + token[0].length));
+      rootStart = null;
+    }
+  }
+  return blocks;
+}
 
 function collectArrows(fragment, useActualPoints = false) {
   const arrows = [];

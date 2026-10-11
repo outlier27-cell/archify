@@ -19,7 +19,6 @@ test('render output check: finite_svg preserves slashes in unquoted HTML attribu
     ['<line x1=NaN />', 'NaN'],
     ['<line x1="NaN"/>', 'NaN'],
     ['<line x1=NaN/ x2=10 />', 'NaN/'],
-    ['<line x1=NaN/></line>', 'NaN/'],
   ]) {
     const svg = parseFragment(`<svg>${markup}</svg>`).childNodes[0];
     const value = svg.childNodes[0].attrs.find((attr) => attr.name === 'x1').value;
@@ -29,6 +28,14 @@ test('render output check: finite_svg preserves slashes in unquoted HTML attribu
     assert.equal(check.ok, false, markup);
     assert.deepEqual(check.details, [`line x1="${value}"`], markup);
   }
+});
+
+test('render output check: rejects a closing tag after a self-closed SVG element', () => {
+  const { code, result } = checkHtml('redundant-self-close', '<line x1=NaN/></line>');
+  assert.notEqual(code, 0);
+  const structure = result.checks.find((entry) => entry.name === 'svg_structure');
+  assert.equal(structure?.ok, false);
+  assert.match(structure.details[0], /unexpected closing tag/i);
 });
 
 // 240x154 keeps the default fixture at the 1.55 wide ratio, so the fixed-width
@@ -289,6 +296,27 @@ test('render output check: accepts orthogonal arrows away from legend', () => {
   assert.equal(result.ok, true);
 });
 
+test('render output check: rejects malformed SVG structure before geometry inspection', () => {
+  const { code, result } = checkHtml('malformed-svg-structure', `
+    <g data-node-id="outer"><path d="M 20 20 L 120 20" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
+  `);
+  assert.notEqual(code, 0);
+  const structure = result.checks.find((item) => item.name === 'svg_structure');
+  assert.equal(structure?.ok, false);
+  assert.match(structure.details[0], /unclosed tag|unexpected closing tag/i);
+  assert.equal(result.checks.some((item) => item.name === 'orthogonal_arrows'), false);
+});
+
+test('render output check: accepts nested SVG, comments, and self-closing elements', () => {
+  const { code, result } = checkHtml('well-formed-svg-structure', `
+    <!-- decorative markup remains outside geometry ownership -->
+    <g data-node-id="outer"><rect x="20" y="20" width="40" height="20"/></g>
+    <foreignObject><div xmlns="http://www.w3.org/1999/xhtml"><svg><rect x="1" y="1" width="2" height="2"/></svg></div></foreignObject>
+  `);
+  assert.equal(code, 0, JSON.stringify(result));
+  assert.equal(result.checks.find((item) => item.name === 'svg_structure')?.ok, true);
+});
+
 test('render output check: rejects two-point diagonal arrows', () => {
   const { code, result } = checkHtml('diagonal', `
     <path d="M 20 20 L 120 80" class="a-default" stroke-width="1.4" marker-end="url(#arrowhead)"/>
@@ -504,7 +532,7 @@ test('render output check: a relationship label cannot leave the canvas', () => 
     assert.match(issue.detail, /extends past the right edge by 20px/);
     // The rule owns no named check: it fails the receipt through composition,
     // exactly like composition/desktop-readability.
-    assert.equal(result.checks.length, 9);
+    assert.equal(result.checks.length, 10);
     assert.ok(result.checks.every((check) => check.ok));
     if (profile === 'standard') {
       assert.equal(code, 0);
