@@ -190,6 +190,31 @@ test('Gitee evidence generates provider-specific revision and line links', (t) =
   }
 });
 
+test('Gitea evidence generates revision-pinned source links and preserves SSH origin identity', (t) => {
+  const data = fixture();
+  t.after(() => fs.rmSync(data.root, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(data.root, 'src', '中文 # router.js'), 'one\ntwo\n');
+  git(data.root, 'add', 'src');
+  git(data.root, 'commit', '-m', 'encoded Gitea source path');
+  const revision = git(data.root, 'rev-parse', 'HEAD');
+  data.diagram.components[0].sources = [{ path: 'src/中文 # router.js', line: 1, end_line: 2 }];
+  for (const [index, remote] of [
+    'https://gitea.com/example/evidence-repo.git/',
+    'git@gitea.com:example/evidence-repo.git',
+    'ssh://git@gitea.com/example/evidence-repo.git',
+  ].entries()) {
+    data.diagram.meta.repository = {
+      url: 'https://gitea.com/example/evidence-repo', revision,
+      ...(index === 1 ? { provider: 'gitea' } : {}),
+    };
+    git(data.root, 'remote', 'set-url', 'origin', remote);
+    const output = path.join(data.root, `gitea-${index}.html`);
+    const evidence = verifyRemoteEvidence(data, output, { cli: index === 0 });
+    assert.equal(evidence.repository.href, `https://gitea.com/example/evidence-repo/src/commit/${revision}`);
+    assert.equal(evidence.nodes.users[0].href, `https://gitea.com/example/evidence-repo/src/commit/${revision}/src/${encodeURIComponent('中文 # router.js')}#L1-2`);
+  }
+});
+
 test('GitLab evidence links nested groups and accepts SSH, HTTPS, suffix and case variants', (t) => {
   const data = fixture();
   t.after(() => fs.rmSync(data.root, { recursive: true, force: true }));
