@@ -195,6 +195,14 @@ test('Codeberg Forgejo evidence generates revision-pinned source links and prese
   t.after(() => fs.rmSync(data.root, { recursive: true, force: true }));
   const url = 'https://codeberg.org/example/evidence-repo';
   data.diagram.meta.repository = { url, revision: data.revision, provider: 'forgejo' };
+  fs.mkdirSync(path.join(data.root, 'docs'));
+  fs.writeFileSync(path.join(data.root, 'docs', 'guide.md'), '# Guide\n\nRoute requests.\n');
+  git(data.root, 'add', '.');
+  git(data.root, 'commit', '-m', 'Codeberg Markdown source');
+  const revision = git(data.root, 'rev-parse', 'HEAD');
+  data.diagram.meta.repository.revision = revision;
+  data.diagram.components[1].sources = [{ path: 'docs/guide.md', line: 1, end_line: 3 }];
+  const docsNode = data.diagram.components[1].id;
   const output = path.join(data.root, 'codeberg.html');
   for (const [index, remote] of [
     `${url}.git`,
@@ -203,9 +211,12 @@ test('Codeberg Forgejo evidence generates revision-pinned source links and prese
   ].entries()) {
     git(data.root, 'remote', 'set-url', 'origin', remote);
     const evidence = verifyRemoteEvidence(data, output, { cli: index === 0 });
-    assert.equal(evidence.repository.href, `${url}/src/commit/${data.revision}`);
-    assert.equal(evidence.nodes.users[0].href, `${url}/src/commit/${data.revision}/src/router.js#L1-3`);
-    assert.equal(evidence.nodes.users[1].href, `${url}/src/commit/${data.revision}/src/store.js#L1`);
+    assert.equal(evidence.repository.href, `${url}/src/commit/${revision}`);
+    assert.equal(evidence.nodes.users[0].href, `${url}/src/commit/${revision}/src/router.js#L1-3`);
+    assert.equal(evidence.nodes.users[1].href, `${url}/src/commit/${revision}/src/store.js#L1`);
+    assert.deepEqual(evidence.nodes[docsNode].map((source) => source.href), [
+      `${url}/src/commit/${revision}/docs/guide.md?display=source#L1-3`,
+    ]);
   }
 });
 

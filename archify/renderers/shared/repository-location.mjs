@@ -59,7 +59,12 @@ export function repositorySourceHref(provider, url, revision, source) {
   const end = source.endLine && source.endLine !== source.line
     ? `-${provider === 'github' ? 'L' : ''}${source.endLine}` : '';
   const fragment = source.line ? `#L${source.line}${end}` : '';
-  if (provider === 'forgejo') return `${url}/src/commit/${revision}/${encodedPath}${fragment}`;
+  // Forgejo renders Markdown by default, so source anchors require its source
+  // view just as GitLab's rendered Markdown does.
+  if (provider === 'forgejo') {
+    const sourceView = source.line && /\.(?:md|markdown)$/i.test(source.path) ? '?display=source' : '';
+    return `${url}/src/commit/${revision}/${encodedPath}${sourceView}${fragment}`;
+  }
   if (provider !== 'gitlab') return `${url}/blob/${revision}/${encodedPath}${fragment}`;
   // GitLab renders Markdown blobs, where line anchors select nothing; the
   // plain view keeps the cited lines highlighted.

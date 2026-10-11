@@ -617,7 +617,9 @@ aliases and forge-specific browse/clone prefixes are not guessed.
 Gitea and Bitbucket web links are not implemented in this version; use local-only
 until a tested link provider is available. Public `codeberg.org` Forgejo links use
 `<url>/src/commit/<revision>` for the repository and
-`<url>/src/commit/<revision>/<path>#L<line>-<end_line>` for source lines.
+`<url>/src/commit/<revision>/<path>#L<line>-<end_line>` for source lines. Markdown
+sources with a line reference add `?display=source` before the fragment so
+Codeberg opens the source view where those anchors exist.
 Self-hosted Forgejo remains local-only. Unknown web providers
 fail with a diagnostic rather than emitting a guessed link.
 
