@@ -260,6 +260,17 @@ test('Export preserves menu, clipboard, semantic cards and recording lifecycles'
     }
   });
 
+  await t.test('a rejected Artifact WebM save leaves recording available for retry', async () => {
+    await load({ extra: '&host=rejected' });
+    await run(`Archify.motion.recordWebm=()=>Promise.resolve(new Blob(['motion'],{type:'video/webm'}));Archify.exportMenu.run('webm')`);
+    const state = await record('artifact-webm-save-rejected');
+    assert.equal((await run('hostSaves')).length, 1);
+    assert.equal(await run(`document.querySelector('[data-format="webm"]').disabled`), false);
+    assert.equal(state.receipt['data-last-export-error-format'], 'webm');
+    assert.equal(state.receipt['data-last-export-format'], undefined);
+    assert.equal(state.alerts.length, 1);
+  });
+
   await t.test('clipboard keeps promise construction in the click and distinct fallback/error receipts', async () => {
     for (const mode of ['promise','fallback','reject']) {
       const action = 'copy';

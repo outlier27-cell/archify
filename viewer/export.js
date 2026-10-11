@@ -452,6 +452,7 @@
             return { saved: true, transport: 'host' };
           }).catch(function (error) {
             if (error && error.code === 'declined') return { saved: false, cancelled: true, transport: 'host' };
+            if (error && typeof error === 'object') error.archifyDownloadFailure = true;
             throw error;
           });
         });
@@ -1255,6 +1256,10 @@
           document.documentElement.setAttribute('data-last-export-error-format', format);
           document.documentElement.setAttribute('data-last-export-error', technicalMessage);
           if (format === 'webm') {
+            if (err && err.archifyDownloadFailure) {
+              alert(viewerText('viewer.export.failed', { message: message }));
+              return;
+            }
             var motionItem = menu.querySelector('button[data-format="webm"]');
             if (motionItem) {
               motionItem.disabled = true;
