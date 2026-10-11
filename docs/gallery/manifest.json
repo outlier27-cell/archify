@@ -3,7 +3,7 @@
   "generator": "scripts/build-gallery.mjs",
   "archifyVersion": "3.0.2-dev.1",
   "entryCount": 12,
-  "checkCount": 108,
+  "checkCount": 120,
   "entries": [
     {
       "id": "agent-tool-call",
@@ -26,6 +26,10 @@
       "checks": [
         {
           "name": "single_svg",
+          "ok": true
+        },
+        {
+          "name": "svg_structure",
           "ok": true
         },
         {
@@ -164,6 +168,10 @@
           "ok": true
         },
         {
+          "name": "svg_structure",
+          "ok": true
+        },
+        {
           "name": "finite_svg",
           "ok": true
         },
@@ -294,6 +302,10 @@
       "checks": [
         {
           "name": "single_svg",
+          "ok": true
+        },
+        {
+          "name": "svg_structure",
           "ok": true
         },
         {
@@ -428,6 +440,10 @@
       "checks": [
         {
           "name": "single_svg",
+          "ok": true
+        },
+        {
+          "name": "svg_structure",
           "ok": true
         },
         {
@@ -568,6 +584,10 @@
       "checks": [
         {
           "name": "single_svg",
+          "ok": true
+        },
+        {
+          "name": "svg_structure",
           "ok": true
         },
         {
@@ -757,6 +777,10 @@
           "ok": true
         },
         {
+          "name": "svg_structure",
+          "ok": true
+        },
+        {
           "name": "finite_svg",
           "ok": true
         },
@@ -889,6 +913,10 @@
       "checks": [
         {
           "name": "single_svg",
+          "ok": true
+        },
+        {
+          "name": "svg_structure",
           "ok": true
         },
         {
@@ -1044,6 +1072,10 @@
           "ok": true
         },
         {
+          "name": "svg_structure",
+          "ok": true
+        },
+        {
           "name": "finite_svg",
           "ok": true
         },
@@ -1196,6 +1228,10 @@
           "ok": true
         },
         {
+          "name": "svg_structure",
+          "ok": true
+        },
+        {
           "name": "finite_svg",
           "ok": true
         },
@@ -1318,6 +1354,10 @@
           "ok": true
         },
         {
+          "name": "svg_structure",
+          "ok": true
+        },
+        {
           "name": "finite_svg",
           "ok": true
         },
@@ -1437,6 +1477,10 @@
       "checks": [
         {
           "name": "single_svg",
+          "ok": true
+        },
+        {
+          "name": "svg_structure",
           "ok": true
         },
         {
@@ -1583,6 +1627,10 @@
       "checks": [
         {
           "name": "single_svg",
+          "ok": true
+        },
+        {
+          "name": "svg_structure",
           "ok": true
         },
         {

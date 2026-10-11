@@ -27,14 +27,14 @@ test('generated proof gallery matches its sources, receipts, and checked-in arti
     path.join(repoRoot, 'scripts', 'build-gallery.mjs'),
     generatedRoot,
   ], { encoding: 'utf8' });
-  assert.match(output, /gallery 12 artifacts \/ 108 checks/);
+  assert.match(output, /gallery 12 artifacts \/ 120 checks/);
 
   const manifestPath = path.join(generatedRoot, 'gallery', 'manifest.json');
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   assert.equal(manifest.schemaVersion, 1);
   assert.equal(manifest.archifyVersion, JSON.parse(fs.readFileSync(path.join(skillRoot, 'package.json'))).version);
   assert.equal(manifest.entryCount, 12);
-  assert.equal(manifest.checkCount, 108);
+  assert.equal(manifest.checkCount, 120);
   assert.deepEqual(new Set(manifest.entries.map((entry) => entry.type)), new Set([
     'architecture', 'workflow', 'sequence', 'dataflow', 'lifecycle', 'erd',
   ]));
@@ -66,7 +66,7 @@ test('generated proof gallery matches its sources, receipts, and checked-in arti
     assert.ok(fs.existsSync(source), `${entry.id}: source missing`);
     assert.equal(sha256(artifact), entry.artifactSha256, `${entry.id}: artifact digest drift`);
     assert.equal(sha256(source), entry.sourceSha256, `${entry.id}: source digest drift`);
-    assert.equal(entry.checks.length, 9);
+    assert.equal(entry.checks.length, 10);
     assert.ok(entry.checks.every((check) => check.ok), `${entry.id}: validation receipt not green`);
     assert.equal(entry.composition.profile, 'showcase', `${entry.id}: expected showcase composition profile`);
     assert.equal(entry.composition.status, 'pass', `${entry.id}: showcase composition is not green`);

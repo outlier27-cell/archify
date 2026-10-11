@@ -99,7 +99,7 @@ test('the example renders with every artifact check passing', () => {
   assert.equal(crossingsOfUnrelatedEntities(fs.readFileSync(output, 'utf8')).length, 0);
   const { status: checkStatus, receipt } = artifactReceipt(output);
   assert.equal(checkStatus, 0, JSON.stringify(receipt.checks.filter((check) => !check.ok), null, 2));
-  assert.equal(receipt.checks.length, 9);
+  assert.equal(receipt.checks.length, 10);
   assert.equal(receipt.composition.status, 'pass');
   assert.equal(receipt.composition.summary.errors, 0);
   assert.equal(receipt.composition.summary.warnings, 0);

@@ -496,7 +496,7 @@ test('cli: finalize emits one compact receipt and keeps complete stage evidence 
   assert.equal(summary.evidence.summaryReceipt, path.join(outDir, 'finalize-skipped.finalize-summary.json'));
   assert.equal(summary.evidence.browserCheckReceipt, path.join(outDir, 'finalize-skipped.browser-check.json'));
   const full = JSON.parse(fs.readFileSync(summary.evidence.receipt, 'utf8'));
-  assert.equal(full.stages.validate.receipt.validation.checkCount, 9);
+  assert.equal(full.stages.validate.receipt.validation.checkCount, 10);
   assert.equal(full.stages['browser-check'].receipt.status, 'skipped');
   const persistedSummary = JSON.parse(fs.readFileSync(summary.evidence.summaryReceipt, 'utf8'));
   assert.deepEqual(persistedSummary, summary);
@@ -789,7 +789,7 @@ test('cli: deliver works from an installed skill without node_modules', () => {
     });
 
     assert.equal(result.status, 0, `${label}: ${result.stderr}`);
-    assert.equal(JSON.parse(result.stdout).validation.checkCount, 9, label);
+    assert.equal(JSON.parse(result.stdout).validation.checkCount, 10, label);
     assert.equal(fs.existsSync(out), true, label);
     const extracted = extractSvgs(fs.readFileSync(out, 'utf8'));
     assert.equal(extracted.direct.length, 1, `${label}: expected one delivered SVG`);
@@ -4398,7 +4398,7 @@ test('cli: validate emits structured json without keeping html output', () => {
   const parsed = JSON.parse(result.stdout);
   assert.equal(parsed.ok, true);
   assert.equal(parsed.type, 'workflow');
-  assert.equal(parsed.checks.length, 9);
+  assert.equal(parsed.checks.length, 10);
   assert.equal(parsed.composition.profile, 'showcase');
   assert.deepEqual(parsed.composition.summary, { errors: 0, warnings: 0 });
   assert.equal(parsed.composition.metrics.containerBorderRuns, 0);
