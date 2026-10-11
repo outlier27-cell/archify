@@ -75,12 +75,12 @@ function arrow(d, { id = 'route', from = 'a', to = 'b', extra = '' } = {}) {
   return `<path id="${id}" data-edge-id="${id}" data-edge-from="${from}" data-edge-to="${to}" d="${d}" class="a-default" marker-end="url(#arrowhead)" ${extra}/>`;
 }
 
-const normalChecks = ['single_svg', 'finite_svg', 'orthogonal_arrows', 'label_route_clearance',
+const normalChecks = ['single_svg', 'svg_structure', 'finite_svg', 'orthogonal_arrows', 'label_route_clearance',
   'relationship_crossings', 'relationship_corridors', 'container_border_runs', 'route_rhythm', 'legend_clearance'];
 function assertPass(result) {
   assert.equal(result.code, 0, JSON.stringify(result.receipt));
   assert.equal(result.receipt.ok, true);
-  assert.deepEqual(result.receipt.checks.map(item => item.name), normalChecks, '正常产物仍保留原有九项检查');
+  assert.deepEqual(result.receipt.checks.map(item => item.name), normalChecks, '正常产物仍保留完整检查集');
 }
 function assertPathError(result, code, { role = 'relationship', pathIndex = 1, id = 'route' } = {}) {
   assert.equal(result.code, 1, JSON.stringify(result.receipt));
