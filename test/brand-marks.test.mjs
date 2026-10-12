@@ -201,7 +201,7 @@ test('architecture supports an opt-in icon-first vetted brand layout', () => {
   const id = JSON.parse(fs.readFileSync(input, 'utf8')).components[0].id;
   const block = nodeBlock(html, id);
   assert.match(block, /class="brand-mark brand-mark-icon-first"/);
-  assert.match(html, /\.c-icon-first \{ fill: transparent; stroke: var\(--text-muted\); \}/);
+  assert.match(html, /\.c-icon-first \{ fill: transparent; stroke: var\(--muted\); \}/);
   assert.match(block, /data-brand-mark="openai"/);
   assert.doesNotMatch(block, /class="brand-mark-badge"/);
   assert.match(block, /<text data-node-label=""[^>]+>[^<]+<\/text>/);

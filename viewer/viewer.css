@@ -3889,6 +3889,7 @@ html[data-preset="signal-flow"] #btn-motion .motion-control-dot { --flow-cycle-c
    ========================================================== */
 .c-grid       { stroke: var(--grid); fill: none; }
 .c-mask       { fill: var(--mask); stroke: none; }
+.c-icon-first { fill: transparent; stroke: var(--muted); }
 .c-lane-rule  { stroke: var(--lane-stroke); fill: none; opacity: 0.7; }
 .c-lane-wash  { fill: var(--lane-fill); stroke: none; }
 
