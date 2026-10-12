@@ -1023,7 +1023,7 @@ test('packaged skill keeps first-draft rules inline and repair contracts behind 
   assert.match(repair, /candidateFrozen: true/);
   assert.match(repair, /--candidate-sha256/);
   assert.match(repair, /fresh `--out-dir/);
-  assert.match(repair, /all nine checks, zero composition errors, and zero warnings/);
+  assert.match(repair, /all ten checks, zero composition errors, and zero warnings/);
   assert.match(repair, /two focused repairs[\s\S]*one evidence-based retry/);
   assert.match(defaults, /default to a system overview/);
   assert.match(defaults, /There is no node, edge, source, card, or boundary quota/);

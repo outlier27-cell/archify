@@ -503,10 +503,10 @@ function scanMarkup(markup) {
     if (cursor >= markup.length || quote) return { tokens, error: `unterminated start tag <${name}>` };
     const raw = markup.slice(start, cursor + 1);
     const tail = raw.slice(opening[0].length, -1);
-    // In HTML, an unquoted value ending in '/' absorbs that slash. SVG output
-    // normally has quoted values, or whitespace before an explicit '/'.
-    const selfClosing = tail.trim() === '/' || /\s\/\s*$/.test(tail)
-      || (tail.endsWith('/') && !/=[^\s"'=<>`]+$/.test(tail.slice(0, -1)));
+    // The checked artifact is SVG. Its `/>` terminator closes an element even
+    // when an invalid unquoted value also contains the slash; attribute
+    // validation still sees that value and reports it separately.
+    const selfClosing = tail.trim().endsWith('/');
     tokens.push({ raw, index: start, name, closing: false, selfClosing });
     index = cursor + 1;
     if (HTML_RAW_TEXT_ELEMENTS.has(name)) rawText = name;
