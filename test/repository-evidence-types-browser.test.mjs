@@ -135,7 +135,7 @@ test('verified sources remain in Focus and Finder with accessible counts and no 
     assert.equal(result.hasBrand, Boolean(extra.brand), `${type} ${example}: brand fixture`);
     assert.deepEqual(result.paths, ['source.js'], type);
     const sourceHref = local === 'gitea'
-      ? `${url}/src/commit/${revision}/source.js#L1-3`
+      ? `${url}/src/commit/${revision}/source.js#L1-L3`
       : `${url}/${local === 'gitlab' ? '-/' : ''}blob/${revision}/source.js#L1${local === 'gitlab' ? '-3' : '-L3'}`;
     assert.deepEqual(result.links, localOnly ? [] : [sourceHref], type);
     assert.ok(result.search.includes(node.label || node.title || node.name), `${type}: Finder must match the source-backed node`);
