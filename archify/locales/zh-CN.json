@@ -202,6 +202,8 @@
   "viewer.guide.shortcut.zoomIn": "放大",
   "viewer.guide.shortcut.zoomOut": "缩小",
   "viewer.guide.shortcut.close": "关闭",
+  "viewer.guide.credit": "觉得好用？在 GitHub 给 Archify 点个 Star",
+  "viewer.guide.star": "Star",
   "viewer.guide.facts": "{nodes} · {relationships}",
   "viewer.guide.fact.node.one": "{count} 个语义节点",
   "viewer.guide.fact.node.other": "{count} 个语义节点",

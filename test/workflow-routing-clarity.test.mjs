@@ -23,6 +23,150 @@ function edgeTag(svg, from, to) {
   return tag;
 }
 
+test('readable-v2 separates unrelated automatic branches that meet at a bend', () => {
+  const workflow = {
+    schema_version: 2, diagram_type: 'workflow',
+    meta: { title: 'Independent failure branches', locale: 'zh-CN', output: 'branches.html' },
+    lanes: [{ id: 'sender', label: '请求处理' }, { id: 'stop', label: '失败处理', variant: 'exception' }],
+    nodes: [
+      { id: 'request', lane: 'sender', col: 0, type: 'external', label: '提交请求', sublabel: '待处理业务任务' },
+      { id: 'resolve', lane: 'sender', col: 1, type: 'security', label: '验证并选择目标', sublabel: '检查请求目标 · 排除自身' },
+      { id: 'dispatch', lane: 'sender', col: 3, type: 'messagebus', label: '发送任务卡', sublabel: '新 ID · 当前协议' },
+      { id: 'targetStop', lane: 'stop', col: 0, type: 'security', label: '目标不明确', sublabel: '无目标 / 多目标 / 当前未知' },
+      { id: 'deliveryFail', lane: 'stop', col: 1, type: 'security', label: '发送失败', sublabel: '未完成 · 保留记录' },
+      { id: 'invalid', lane: 'stop', col: 2, type: 'security', label: '拒绝错误请求', sublabel: '不执行 invalid 操作' },
+    ],
+    edges: [
+      { id: 'resolve-targetStop', from: 'resolve', to: 'targetStop', label: '不明确', role: 'error' },
+      { id: 'dispatch-deliveryFail', from: 'dispatch', to: 'deliveryFail', label: '拒绝', role: 'error' },
+    ],
+  };
+  const before = structuredClone(workflow);
+  const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const [left, right] = result.receipt.edges;
+  // For orthogonal segments, disjoint bounding boxes prove no crossing or
+  // touching. This independently checks the visible paths, not router scores.
+  const boxes = route => route.points.slice(1).map((end, i) => {
+    const start = route.points[i];
+    assert.ok(start[0] === end[0] || start[1] === end[1]);
+    return { minX: Math.min(start[0], end[0]), maxX: Math.max(start[0], end[0]),
+      minY: Math.min(start[1], end[1]), maxY: Math.max(start[1], end[1]) };
+  });
+  for (const a of boxes(left)) for (const b of boxes(right)) {
+    assert.ok(a.maxX < b.minX || b.maxX < a.minX || a.maxY < b.minY || b.maxY < a.minY,
+      'two unrelated conditions must not acquire a false visual junction');
+  }
+  assert.deepEqual(result.receipt.nodes.map(n => n.id), workflow.nodes.map(n => n.id));
+  assert.deepEqual(result.receipt.edges.map(e => [e.id, e.from, e.to]).sort(),
+    workflow.edges.map(e => [e.id, e.from, e.to]).sort());
+  assert.deepEqual(result.receipt.labels.map(l => l.label).sort(), ['不明确', '拒绝'].sort());
+  assert.deepEqual(workflow, before);
+});
+
+test('readable-v2 keeps a clear vertical main step straight when its source also branches', () => {
+  const workflow = {
+    schema_version: 2, diagram_type: 'workflow',
+    meta: { title: 'Payment and timeout', output: 'payment.html' },
+    lanes: [{ id: 'checkout', label: 'Checkout' }, { id: 'expiry', label: 'Expiry' }],
+    mainPath: ['pending', 'pay'],
+    nodes: [
+      { id: 'pending', lane: 'checkout', col: 2, yOffset: 0, type: 'backend', label: 'Pending order' },
+      { id: 'pay', lane: 'checkout', col: 2, yOffset: 80, type: 'cloud', label: 'Payment' },
+      { id: 'timeout', lane: 'expiry', col: 2, type: 'security', label: 'Timeout' },
+    ],
+    edges: [
+      { id: 'pending-pay', from: 'pending', to: 'pay', role: 'main' },
+      { id: 'pending-timeout', from: 'pending', to: 'timeout', role: 'branch', label: 'Still unpaid', variant: 'dashed' },
+    ],
+  };
+  const original = structuredClone(workflow);
+  const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const route = result.receipt.edges.find(edge => edge.id === 'pending-pay');
+  const from = result.receipt.nodes.find(node => node.id === 'pending');
+  const to = result.receipt.nodes.find(node => node.id === 'pay');
+  assert.deepEqual(route.points, [
+    [from.x + from.width / 2, from.y + from.height],
+    [to.x + to.width / 2, to.y],
+  ], 'a clear vertical gap must not acquire a side detour from provisional port spreading');
+  assert.equal(result.receipt.edges.length, 2, 'the timeout branch must remain present');
+  assert.equal(result.receipt.labels.find(label => label.edge === 'pending-timeout').label, 'Still unpaid');
+  assert.deepEqual(workflow, original);
+});
+
+test('readable-v2 uses a clear internal corridor for a long same-column branch', () => {
+  const workflow = {
+    schema_version: 2, diagram_type: 'workflow',
+    meta: { title: 'Payment and expiry', locale: 'zh-CN', output: 'expiry.html' },
+    lanes: [
+      { id: 'checkout', label: '下单与支付' },
+      { id: 'fulfillment', label: '支付成功后履约' },
+      { id: 'exceptions', label: '库存不足 / 支付失败', variant: 'exception' },
+      { id: 'expiry', label: '超时关闭与回收', variant: 'exception' },
+    ],
+    nodes: [
+      { id: 'pending', lane: 'checkout', col: 2, type: 'backend', label: '创建待支付订单', sublabel: '订单服务' },
+      { id: 'pay', lane: 'checkout', col: 2, yOffset: 80, type: 'cloud', label: '发起支付', sublabel: '支付服务', icon: 'decision' },
+      { id: 'failed', lane: 'exceptions', col: 2, type: 'external', label: '支付失败，可重试', sublabel: '买家重试支付', icon: 'failure' },
+      { id: 'event', lane: 'fulfillment', col: 3, type: 'messagebus', label: '投递 OrderPaid', sublabel: '订单服务' },
+      { id: 'timeout', lane: 'expiry', col: 2, type: 'security', label: '超过 15 分钟？', sublabel: '订单服务检查未支付订单', icon: 'decision' },
+      { id: 'close', lane: 'expiry', col: 1, type: 'backend', label: '超时关闭订单', sublabel: '订单服务', icon: 'stop' },
+    ],
+    edges: [
+      { id: 'pending-pay', from: 'pending', to: 'pay', role: 'main' },
+      { id: 'pay-failed', from: 'pay', to: 'failed', role: 'error', label: '支付失败', variant: 'security' },
+      { id: 'retry-pay', from: 'failed', to: 'pay', role: 'return', label: '未超时，重试', variant: 'dashed' },
+      { id: 'pending-timeout', from: 'pending', to: 'timeout', role: 'branch', label: '持续未支付', variant: 'dashed' },
+      { id: 'timeout-close', from: 'timeout', to: 'close', role: 'error', label: '是，仍未支付', variant: 'security' },
+    ],
+  };
+  const original = structuredClone(workflow);
+  const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  const route = result.receipt.edges.find(edge => edge.id === 'pending-timeout');
+  const from = result.receipt.nodes.find(node => node.id === 'pending');
+  const to = result.receipt.nodes.find(node => node.id === 'timeout');
+  const length = route.points.slice(1).reduce((sum, point, index) => sum
+    + Math.abs(point[0] - route.points[index][0]) + Math.abs(point[1] - route.points[index][1]), 0);
+  assert.ok(length < 2 * Math.abs(to.y - from.y),
+    'this unobstructed internal corridor should avoid a trip around the whole diagram');
+  assert.deepEqual(result.receipt.edges.map(edge => edge.id).sort(), workflow.edges.map(edge => edge.id).sort());
+  assert.deepEqual(result.receipt.labels.map(label => label.label).sort(), workflow.edges.filter(edge => edge.label).map(edge => edge.label).sort());
+  assert.deepEqual(workflow, original);
+});
+
+test('readable-v2 keeps clear backward branches straight after provisional port spreading', () => {
+  for (const role of ['error', 'return', undefined]) {
+    const workflow = {
+      schema_version: 2, diagram_type: 'workflow',
+      meta: { title: 'Timeout branch', locale: 'zh-CN', output: 'timeout.html' },
+      lanes: ['checkout', 'fulfillment', 'expiry'].map(id => ({ id, label: id })),
+      nodes: [
+        { id: 'pending', lane: 'checkout', col: 3, type: 'backend', label: '创建待支付订单' },
+        { id: 'pick', lane: 'fulfillment', col: 4, type: 'backend', label: '拣货' },
+        { id: 'timeout', lane: 'expiry', col: 4, type: 'security', label: '超过 15 分钟？' },
+        { id: 'close', lane: 'expiry', col: 3, type: 'backend', label: '超时关闭订单' },
+      ],
+      edges: [
+        { id: 'pending-timeout', from: 'pending', to: 'timeout', role: 'branch', label: '持续未支付', variant: 'dashed' },
+        { id: 'timeout-close', from: 'timeout', to: 'close', role, label: '是，仍未支付', variant: 'security' },
+      ],
+    };
+    const before = structuredClone(workflow);
+    const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+    const edge = result.receipt.edges.find(entry => entry.id === 'timeout-close');
+    assert.equal(edge.points.length, 2, 'a clear backward branch must not loop below the lane');
+    assert.equal(edge.points[0][1], edge.points[1][1], 'keep the facing route horizontal');
+    assert.ok(edge.points[0][0] > edge.points[1][0], 'preserve the backward relationship');
+    assert.equal(result.receipt.labels.find(entry => entry.edge === edge.id).label, '是，仍未支付');
+    assert.equal(result.receipt.nodes.length, workflow.nodes.length);
+    assert.equal(result.receipt.edges.length, workflow.edges.length);
+    assert.deepEqual(workflow, before, 'routing must preserve the authored document');
+  }
+});
+
 test('readable-v2 keeps clear adjacent routes straight without moving nodes or enlarging the canvas', () => {
   const result = compileWorkflow({ workflow: workflowFixture(), qualityProfile: 'showcase' });
   assert.equal(result.ok, true, JSON.stringify(result.diagnostics, null, 2));

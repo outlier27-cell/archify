@@ -6,6 +6,8 @@ import {
   segmentIntersectsRect,
   anchor,
   automaticPortSpread,
+  alignAutomaticFacingPorts,
+  portHasCornerClearance,
   automaticPortRhythmBridge,
   defaultFromSide,
   defaultToSide,
@@ -66,6 +68,9 @@ import { shortestOrthogonalGridRoute } from '../shared/route-quality.mjs';
  *   from each branch and draws the bus as one path) turns this off: the floors
  *   describe a route drawn exactly as planned, and that type answers for the
  *   drawn result at its own gate instead.
+ * @param {number} [options.readabilityBottomMargin = 0] extra vertical room for
+ *   the bounded readability sweep on an intrinsic-height canvas. Width and
+ *   authored geometry stay fixed; fixed canvases leave this at zero.
  */
 export function createRouter(components, connections = [], {
   frames = [],
@@ -81,6 +86,7 @@ export function createRouter(components, connections = [], {
   crossingFreeGridFirst = false,
   componentGapPx = 0,
   minimumTerminalSegmentPx = 0,
+  readabilityBottomMargin = 0,
 } = {}) {
   const frameBorders = frames.flatMap((frame) => frameBorderSegments(frame));
   const LABEL_CLEARANCE = 4;
@@ -147,6 +153,8 @@ export function createRouter(components, connections = [], {
     crossoverRoutedCount: 0,
     readabilityCandidateCount: 0,
     readabilityImprovedCount: 0,
+    labelRelocationCandidateCount: 0,
+    labelRelocationImprovedCount: 0,
     reciprocalCandidateCount: 0,
     reciprocalImprovedCount: 0,
     gridAttempts: [],
@@ -370,79 +378,11 @@ export function createRouter(components, connections = [], {
   }
 
   const AUTOMATIC_PORT_CORNER_GUTTER = 16;
-  const AUTOMATIC_PORT_ALIGNMENT_DELTA = 16;
-
-  function portHasCornerClearance(rect, side, point) {
-    if (side === 'left' || side === 'right') {
-      const inset = Math.min(AUTOMATIC_PORT_CORNER_GUTTER, rect.height / 2);
-      return point[1] >= rect.y + inset && point[1] <= rect.y + rect.height - inset;
-    }
-    if (side === 'top' || side === 'bottom') {
-      const inset = Math.min(AUTOMATIC_PORT_CORNER_GUTTER, rect.width / 2);
-      return point[0] >= rect.x + inset && point[0] <= rect.x + rect.width - inset;
-    }
-    return false;
-  }
 
   function alignFacingPorts(conn, from, to, start, end, fromSide, toSide, ports) {
-    const hasExplicitGeometry = (
-      conn.via
-      || (conn.route && conn.route !== 'auto')
-      || conn.channelX !== undefined
-      || conn.channelY !== undefined
-      || conn.labelAt
-    );
-    const horizontallyFacing = (
-      (fromSide === 'right' && toSide === 'left')
-      || (fromSide === 'left' && toSide === 'right')
-    );
-    const verticallyFacing = (
-      (fromSide === 'bottom' && toSide === 'top')
-      || (fromSide === 'top' && toSide === 'bottom')
-    );
-    if (hasExplicitGeometry || (!horizontallyFacing && !verticallyFacing)) return { start, end };
-
-    const fromSpread = Boolean(ports?.from);
-    const toSpread = Boolean(ports?.to);
-    if (fromSpread && toSpread) return { start, end };
-    const hasExplicitSides = (
-      (conn.fromSide && conn.fromSide !== 'auto')
-      || (conn.toSide && conn.toSide !== 'auto')
-    );
-    if (!fromSpread && !toSpread && hasExplicitSides) return { start, end };
-
-    const alignmentDelta = horizontallyFacing
-      ? Math.abs(start[1] - end[1])
-      : Math.abs(start[0] - end[0]);
-    if (alignmentDelta >= AUTOMATIC_PORT_ALIGNMENT_DELTA) return { start, end };
-
-    // Keep the shared endpoint's distinct spread slot and move only the
-    // relationship's unshared endpoint onto that axis. With no spread endpoint,
-    // retain the existing least-movement choice between the two facing sides.
-    // If both endpoints are shared, preserve the outside bridge so no competing
-    // port is silently collapsed.
-    const alignEndToStart = horizontallyFacing
-      ? { start, end: [end[0], start[1]] }
-      : { start, end: [start[0], end[1]] };
-    const alignStartToEnd = horizontallyFacing
-      ? { start: [start[0], end[1]], end }
-      : { start: [end[0], start[1]], end };
-    const candidates = fromSpread
-      ? [alignEndToStart]
-      : toSpread
-        ? [alignStartToEnd]
-        : [alignEndToStart, alignStartToEnd];
-    for (const candidate of candidates) {
-      const points = [candidate.start, candidate.end];
-      if (portHasCornerClearance(from, fromSide, candidate.start)
-          && portHasCornerClearance(to, toSide, candidate.end)
-          && routeHonorsEndpointSides(points, fromSide, toSide)
-          && routeClearsEndpointComponents(points, from, to)
-          && routeClearsComponents(conn, points)) {
-        return candidate;
-      }
-    }
-    return { start, end };
+    return alignAutomaticFacingPorts(conn, from, to, start, end, fromSide, toSide, ports, {
+      accept: points => routeClearsEndpointComponents(points, from, to) && routeClearsComponents(conn, points),
+    });
   }
 
   // A reciprocal pair is repaired jointly after planning, so crossings that
@@ -881,8 +821,14 @@ export function createRouter(components, connections = [], {
       occupied.push({ value: point[axis], spacing: portSpacing(conn, other) });
     }
     if (!occupied.length) return { point: preferred, spread: Boolean(initial) };
+    // On an alternate side, equally close slots should approach the other
+    // node rather than pass its neighbours just because a coordinate is lower.
+    // Keep the established spread order on the inferred side unchanged.
+    const counterpart = components.get(endpoint === 'from' ? conn.to : conn.from);
+    const toward = side === inferredSide ? preferred[axis] : (axis === 1 ? counterpart.cy : counterpart.cx);
     const candidates = [preferred[axis], ...occupied.flatMap(({ value, spacing }) => [value - spacing, value + spacing])]
-      .sort((a, b) => Math.abs(a - preferred[axis]) - Math.abs(b - preferred[axis]) || a - b);
+      .sort((a, b) => Math.abs(a - preferred[axis]) - Math.abs(b - preferred[axis])
+        || Math.abs(a - toward) - Math.abs(b - toward) || a - b);
     for (const value of candidates) {
       const point = [...preferred];
       point[axis] = value;
@@ -1101,7 +1047,8 @@ export function createRouter(components, connections = [], {
       }
       const bounds = {
         left: Math.min(...scenePoints.map(([x]) => x)), right: Math.max(...scenePoints.map(([x]) => x)),
-        top: Math.min(...scenePoints.map(([, y]) => y)), bottom: Math.max(...scenePoints.map(([, y]) => y)),
+        top: Math.min(...scenePoints.map(([, y]) => y)),
+        bottom: Math.max(...scenePoints.map(([, y]) => y)),
       };
       const withinScene = ([x, y]) => x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
       const jointlyImproved = new Set();
@@ -1262,33 +1209,64 @@ export function createRouter(components, connections = [], {
         }) || []).some((candidate) => JSON.stringify(candidate) === interior);
       };
       const typeOwned = new Set(resolvedRoutes.filter(followsPreferredCorridor).map((entry) => entry.conn));
-      allowGridSearch = false;
-      try {
-        improveReciprocalPairs();
+      function relocatedLabelsFor(conn, routed, others) {
+        // A provisional label may occupy an otherwise clear corridor. Move at
+        // most one automatic label, on its existing route, and accept the pair
+        // only when both labels fit without borrowing other labels' space.
+        const displaced = reservedLabels.filter((label) => label.conn !== conn && routed.points.slice(1).some((end, index) =>
+          segmentIntersectsRect({ start: routed.points[index], end }, label.rect, LABEL_CLEARANCE)));
+        if (displaced.length !== 1) return null;
+        const owner = displaced[0].conn;
+        if (typeOwned.has(owner) || hasAuthoredRouteGeometry(owner) || hasAuthoredLabelPlacement(owner)) return null;
+        const labels = reservedLabels.filter((label) => label.conn !== conn && label.conn !== owner);
+        const routes = [...others, { conn, points: routed.points }];
+        const moved = routes.find((entry) => entry.conn === owner);
+        for (const entry of [moved, { conn, points: routed.points }]) {
+          const rect = labelRectFor?.(entry.conn, entry.points, {
+            routes: routes.map((route) => route.points),
+            labels: labels.map((label) => label.rect),
+          });
+          if (!labelClears(rect, entry.conn, routes, labels)
+              || (rect && [...components.values()].some((component) => rectsOverlap(rect, component, -2)))) return null;
+          if (rect) labels.push({ conn: entry.conn, rect });
+        }
+        return labels;
+      }
+      function improveComplexRoutes(onlyCrossings = false) {
         for (const entry of resolvedRoutes) {
           const { conn } = entry;
           if (jointlyImproved.has(conn) || typeOwned.has(conn) || hasAuthoredRouteGeometry(conn) || hasAuthoredLabelPlacement(conn)) continue;
           const others = resolvedRoutes.filter((other) => other !== entry);
           // Preserve uncomplicated routes and their established inferred sides.
           // Spend the comparison budget where the complete scene has a reading
-          // cost: a crossover or more than two bends.
-          if (entry.points.length <= 4 && crossingCount(conn, entry.points, others) === 0) continue;
+          // cost: a crossover, more than two bends, or no room for its label.
+          const crossingsBefore = crossingCount(conn, entry.points, others);
+          const currentLabel = labelRectFor?.(conn, entry.points, {
+            routes: others.map(other => other.points),
+            labels: reservedLabels.filter(label => label.conn !== conn).map(label => label.rect),
+          });
+          const labelBlocked = Boolean(conn.label && labelRectFor && !currentLabel);
+          if (!labelBlocked && crossingsBefore === 0 && (onlyCrossings || entry.points.length <= 4)) continue;
           let best = null;
-          let bestCost = readabilityCost(conn, { points: entry.points }, others);
+          let bestCost = labelBlocked ? Infinity : readabilityCost(conn, { points: entry.points }, others);
           for (const sides of candidateSidePairs(conn)) {
             const geometry = connectionGeometry(conn, sides);
             const routed = routedForGeometry(conn, others, geometry);
             planningMetrics.readabilityCandidateCount += 1;
             if (!routed.points.every(withinScene) || !routeIsClear(conn, routed, geometry, others)) continue;
+            if (onlyCrossings && crossingCount(conn, routed.points, others) >= crossingsBefore) continue;
             const cost = readabilityCost(conn, routed, others);
             if (cost < bestCost) {
               const rect = labelRectFor?.(conn, routed.points, {
                 routes: [...others.map((other) => other.points), routed.points],
                 labels: reservedLabels.filter((label) => label.conn !== conn).map((label) => label.rect),
               });
-              // A shorter route must not expand the canvas and shrink every
-              // label at the default viewport. Include its reserved label too.
-              if (rect && (!withinScene([rect.x, rect.y]) || !withinScene([rect.x + rect.width, rect.y + rect.height]))) continue;
+              // Include the reserved label in this pass's bounds. In
+              // particular, a shorter route must not widen and shrink the graph.
+              if (labelRectFor && !labelClears(rect, conn, others, reservedLabels.filter(label => label.conn !== conn))) continue;
+              if (onlyCrossings && (!endpointSlotsClear([{ conn, points: routed.points }], others,
+                candidate => candidate === conn ? sides : selectedSides.get(candidate))
+                  || (rect && [...components.values()].some(component => rectsOverlap(rect, component, -2))))) continue;
               best = { routed, sides, rect };
               bestCost = cost;
             }
@@ -1300,6 +1278,11 @@ export function createRouter(components, connections = [], {
           reservedLabels = reservedLabels.filter((label) => label.conn !== conn);
           if (best.rect) reservedLabels.push({ conn, rect: best.rect });
         }
+      }
+      allowGridSearch = false;
+      try {
+        improveReciprocalPairs();
+        improveComplexRoutes();
         // A bent route between nodes that overlap across the gap separating
         // them can run straight through facing sides inside that overlap.
         // Authored sides must already face; every other route, slot and label
@@ -1351,6 +1334,114 @@ export function createRouter(components, connections = [], {
             reservedLabels = [...otherLabels, ...(rect ? [{ conn, rect }] : [])];
             break;
           }
+        }
+        // Finish the established route/straightening plan first. Moving a
+        // label earlier could prevent a later edge from taking its straight
+        // corridor, even though the local candidate was cheaper.
+        for (const entry of resolvedRoutes) {
+          const { conn } = entry;
+          if (jointlyImproved.has(conn) || typeOwned.has(conn) || hasAuthoredRouteGeometry(conn) || hasAuthoredLabelPlacement(conn)) continue;
+          const others = resolvedRoutes.filter((other) => other !== entry);
+          if (entry.points.length <= 4 && crossingCount(conn, entry.points, others) === 0) continue;
+          let best = null;
+          let bestCost = readabilityCost(conn, entry, others);
+          if (labelRectFor && reservedLabels.some((label) => label.conn !== conn)) {
+            // One additional side sweep, with no grid search or cascading
+            // relayout. Temporary reservations can be ignored only after a
+            // replacement placement is verified against the complete scene.
+            for (const sides of candidateSidePairs(conn)) {
+              const geometry = connectionGeometry(conn, sides);
+              let routed;
+              let clear;
+              honourReservedLabels = false;
+              try {
+                routed = routedForGeometry(conn, others, geometry);
+                clear = routeIsClear(conn, routed, geometry, others);
+              } finally {
+                honourReservedLabels = true;
+              }
+              planningMetrics.labelRelocationCandidateCount += 1;
+              const cost = readabilityCost(conn, routed, others);
+              if (cost >= bestCost || !clear || !routed.points.every(withinScene)
+                  || crossingCount(conn, routed.points, others) > crossingCount(conn, entry.points, others)
+                  || !endpointSlotsClear([{ conn, points: routed.points }], others,
+                    (candidate) => candidate === conn ? sides : selectedSides.get(candidate))) continue;
+              const labels = relocatedLabelsFor(conn, routed, others);
+              if (!labels) continue;
+              best = { routed, sides, labels };
+              bestCost = cost;
+            }
+          }
+          if (!best) continue;
+          cachePath(conn, best.routed, best.sides);
+          entry.points = best.routed.points;
+          reservedLabels = best.labels;
+          planningMetrics.labelRelocationImprovedCount += 1;
+        }
+        // A side's midpoint may be blocked even when a corner port has a
+        // clear one-bend route. Probe bent automatic routes, keeping
+        // all other paths/labels fixed and the existing corner inset intact.
+        // Eight perpendicular side pairs, at most three slots per endpoint:
+        // 72 cheap candidates per route, without another grid search.
+        for (const entry of resolvedRoutes) {
+          const { conn } = entry;
+          if (entry.points.length < 4 || jointlyImproved.has(conn) || typeOwned.has(conn)
+              || hasAuthoredRouteGeometry(conn) || hasAuthoredLabelPlacement(conn)) continue;
+          const others = resolvedRoutes.filter((other) => other !== entry);
+          const labels = reservedLabels.filter((label) => label.conn !== conn);
+          const crossingsBefore = crossingCount(conn, entry.points, others);
+          let best = null;
+          let bestCost = readabilityCost(conn, entry, others);
+          const slots = (rect, side, preferred) => {
+            const horizontal = side === 'left' || side === 'right';
+            const axis = horizontal ? 1 : 0;
+            const origin = horizontal ? rect.y : rect.x;
+            const size = horizontal ? rect.height : rect.width;
+            const inset = Math.min(AUTOMATIC_PORT_CORNER_GUTTER, size / 2);
+            return [...new Set([preferred[axis], origin + inset, origin + size - inset])].map((value) => {
+              const point = [...preferred];
+              point[axis] = value;
+              return point;
+            }).filter((point) => portHasCornerClearance(rect, side, point));
+          };
+          for (const sides of candidateSidePairs(conn)) {
+            const horizontal = (side) => side === 'left' || side === 'right';
+            if (horizontal(sides.fromSide) === horizontal(sides.toSide)) continue;
+            const geometry = connectionGeometry(conn, sides);
+            for (const start of slots(geometry.from, sides.fromSide, geometry.start)) {
+              for (const end of slots(geometry.to, sides.toSide, geometry.end)) {
+                const corner = horizontal(sides.fromSide) ? [end[0], start[1]] : [start[0], end[1]];
+                const points = normalizeRoutePoints([start, corner, end]);
+                const routed = { points, d: roundedPath(points, 8) };
+                const cost = readabilityCost(conn, routed, others);
+                if (cost >= bestCost || points.length !== 3 || !points.every(withinScene)
+                    || !endpointSlotsClear([{ conn, points }], others,
+                      (candidate) => candidate === conn ? sides : selectedSides.get(candidate))
+                    || !routeIsClear(conn, routed, { ...geometry, start, end, crowded: false }, others)
+                    || crossingCount(conn, points, others) > crossingsBefore) continue;
+                const rect = labelRectFor?.(conn, points, {
+                  routes: [...others.map((other) => other.points), points],
+                  labels: labels.map((label) => label.rect),
+                });
+                if (!labelClears(rect, conn, others, labels)
+                    || (rect && [...components.values()].some((component) => rectsOverlap(rect, component, -2)))) continue;
+                best = { routed, sides, rect };
+                bestCost = cost;
+              }
+            }
+          }
+          if (!best) continue;
+          cachePath(conn, best.routed, best.sides);
+          entry.points = best.routed.points;
+          reservedLabels = [...labels, ...(best.rect ? [{ conn, rect: best.rect }] : [])];
+          planningMetrics.readabilityImprovedCount += 1;
+        }
+        // Complete the original bounded plan first. Only a remaining crossing
+        // can justify using an extra lower corridor; an already clear scene
+        // must not grow merely because its labels could move into that space.
+        if (readabilityBottomMargin > 0) {
+          bounds.bottom += readabilityBottomMargin;
+          improveComplexRoutes(true);
         }
       } finally {
         allowGridSearch = true;

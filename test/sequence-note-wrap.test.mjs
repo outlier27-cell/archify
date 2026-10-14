@@ -50,7 +50,7 @@ function lifelines(html) {
 }
 
 function notes(html) {
-  return [...html.matchAll(/<text data-detail="fine" x="([\d.]+)" y="([\d.]+)" class="[^"]*" font-size="7">([\s\S]*?)<\/text>/g)]
+  return [...html.matchAll(/<text data-detail="context" x="([\d.]+)" y="([\d.]+)" class="[^"]*" font-size="7">([\s\S]*?)<\/text>/g)]
     .map((match) => {
       const tspans = [...match[3].matchAll(/<tspan x="([\d.]+)" dy="([\d.]+)">([^<]*)<\/tspan>/g)];
       return {
@@ -121,6 +121,48 @@ test('a short note keeps its original single-line markup', (t) => {
   assert.equal(note.y, 218);
   assert.equal(note.raw, 'cached for 5 minutes');
   assert.doesNotMatch(html, /<tspan/);
+});
+
+test('mixed Chinese notes use partial lines before requiring a later reply', (t) => {
+  const text = 'inner.run 成功或抛错都会 close；外层 init 失败发生在 try 之前。';
+  const spec = sequence({
+    participants: ['client', 'api', 'db', 'cache', 'queue', 'worker', 'store'],
+    messages: [
+      { id: 'request', from: 'client', to: 'api', y: 200, label: 'request', note: text },
+      { id: 'reply', from: 'api', to: 'client', y: 266, label: 'reply', variant: 'return' },
+    ],
+    activations: [{ participant: 'api', from: 190, to: 280 }],
+  });
+  const html = render(t, spec);
+  const [, api] = lifelines(html);
+  const [note] = notes(html);
+  assert.equal(note.lines.length, 3, 'the existing gap fits the full note in three lines');
+  assert.equal(note.lines.join('').replaceAll(' ', ''), text.replaceAll(' ', ''));
+  assert.equal(note.y, 218, 'the authored message stays in place');
+  for (const line of note.lines) {
+    assert.ok(note.x + minimumNodeTextWidth(line, 7) <= api - 11, `"${line}" clears the activation bar`);
+  }
+  assert.equal(run(t, 'validate', spec).result.status, 0, 'no extra reply spacing is required');
+});
+
+test('Chinese wrapping preserves signed scores and graphemes without growing notes', (t) => {
+  const texts = [
+    '评分：会话 ID 匹配 +4、匹配 file-edit seq +4、非空事件 +1；取最高且大于 0 的结果。',
+    '快照按 commit hash 精确优先，再前缀匹配；未命中保留空摘录，不生成推测对话。',
+    '首先说明 aaaaaaaaaaae\u0301成功或抛错都会 close；外层 init 失败发生在 try 之前。',
+  ];
+  const html = render(t, sequence({
+    participants: ['client', 'api', 'db', 'cache', 'queue', 'worker', 'store'],
+    messages: texts.map((note, index) => ({ from: 'client', to: 'api', y: 200 + index * 200, label: 'lookup', note })),
+  }));
+  const wrapped = notes(html);
+  assert.equal(wrapped[0].lines.join(' ').match(/\+4/g)?.length, 2, 'a sign stays with its score');
+  assert.match(wrapped[0].lines.join(' '), /file-edit/);
+  assert.ok(wrapped[2].lines.some((line) => line.includes('e\u0301')), 'a combining accent stays with its base letter');
+  for (const [index, note] of wrapped.entries()) {
+    assert.ok(note.lines.length <= [5, 4, 5][index], 'word segmentation never increases note height');
+    assert.equal(note.lines.join('').replaceAll(' ', ''), texts[index].replaceAll(' ', ''));
+  }
 });
 
 test('a note on a message that skips participants stays in the left-most gap, in either direction', (t) => {
@@ -298,6 +340,18 @@ test('standard keeps accepting a crowded note', (t) => {
     ],
   });
   assert.equal(run(t, 'validate', spec).result.status, 0);
+  spec.segments = [{ from: 150, to: 232, label: 'Request' }];
+  // Render the crowded reply first: a later opaque note would cover it.
+  spec.messages.reverse();
+  const html = render(t, spec);
+  assert.equal(decode(notes(html)[0].lines.join(' ')), LONG_NOTE);
+  const [left, right] = lifelines(html);
+  const masks = [...html.matchAll(/<rect[^>]*x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)"[^>]*class="c-mask"/g)];
+  assert.ok(masks.length > 0);
+  for (const [, x, y, width, height] of masks) {
+    const crossesReply = +x < right && +x + +width > left && +y < 230 && +y + +height > 230;
+    assert.equal(crossesReply, false, 'opaque backgrounds must not hide the authored reply');
+  }
 });
 
 test('an automatic canvas grows to hold a wrapped note on the last message', (t) => {
@@ -341,4 +395,59 @@ test('a widened automatic canvas wraps a late note using its final lane geometry
   const authored = render(t, { ...spec, meta: { ...spec.meta, viewBox: [width, height] } });
   assert.deepEqual(lifelines(authored), lanes, 'authored and computed canvas widths give the same lanes');
   assert.deepEqual(notes(authored), notes(html), 'note wrapping uses the final width before automatic height');
+});
+
+// A phase can contain the arrow while its wrapped explanation spills into the
+// next phase. Advise without rewriting the author's timeline or rejecting v1.
+test('a wrapped note crossing its phase reports a usable boundary repair', t => {
+  const spec = sequence({ messages: [{ id: 'reply', from: 'api', to: 'client', y: 200, label: 'reply', note: LONG_NOTE }] });
+  spec.segments = [{ from: 150, to: 232, label: 'Response' }];
+  const { result } = run(t, 'validate', spec);
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const warning = (JSON.parse(result.stdout).composition?.sequenceNoteBorders || []).find(d => d.code === 'sequence/note-segment-border');
+  assert.equal(warning?.reviewSuggested, true);
+  assert.equal(JSON.parse(result.stdout).composition.summary.warnings, 0, 'review evidence must not become a showcase finalization failure');
+  assert.equal(warning.subject.path, '/messages/0/note');
+  assert.equal(warning.evidence.segment.path, '/segments/0/to');
+  assert.ok(warning.evidence.note.y + warning.evidence.note.height > spec.segments[0].to);
+  assert.equal(warning.supportedFixes.length, 1);
+  const fix = warning.supportedFixes[0].match(/^set \/segments\/0\/to to (\d+)$/);
+  assert.ok(fix, warning.supportedFixes[0]);
+  const original = render(t, spec);
+  assert.match(original, /data-composition-frame-kind="segment"[^>]* y="150"[^>]* height="82"/);
+  assert.equal(notes(original)[0].y, 218, 'the note keeps its authored message baseline');
+  spec.segments[0].to = Number(fix[1]);
+  const repaired = run(t, 'validate', spec).result;
+  assert.equal(repaired.status, 0, repaired.stdout + repaired.stderr);
+  assert.ok(!(JSON.parse(repaired.stdout).composition?.sequenceNoteBorders || []).some(d => d.code === 'sequence/note-segment-border'));
+  assert.equal(notes(render(t, spec))[0].lines.join(' '), LONG_NOTE, 'repair keeps the complete note');
+});
+
+test('phase repair advice does not absorb the next phase, outside arrow, or fixed canvas', t => {
+  for (const blocker of ['phase', 'message', 'canvas']) {
+    const spec = sequence({ quality: 'standard', messages: [{ id: 'reply', from: 'api', to: 'client', y: 200, label: 'reply', note: LONG_NOTE }] });
+    spec.segments = [{ from: 150, to: 232, label: 'Response' }];
+    if (blocker === 'phase') spec.segments.push({ from: 240, to: 320, label: 'Next' });
+    if (blocker === 'message') spec.messages.push({ id: 'next', from: 'api', to: 'db', y: 240, label: 'next' });
+    if (blocker === 'canvas') {
+      spec.meta.viewBox = [640, 480];
+      spec.messages[0].y = 395;
+      spec.segments[0] = { from: 350, to: 425, label: 'Response' };
+    }
+    const { result } = run(t, 'validate', spec);
+    assert.equal(result.status, 0, blocker + ': ' + result.stdout + result.stderr);
+    const warning = (JSON.parse(result.stdout).composition?.sequenceNoteBorders || []).find(d => d.code === 'sequence/note-segment-border');
+    assert.equal(warning?.reviewSuggested, true, blocker);
+    assert.deepEqual(warning.supportedFixes, [], blocker);
+  }
+});
+
+test('notes that fit their phase, or messages outside it, do not request a phase review', t => {
+  const spec = sequence({ messages: [{ id: 'reply', from: 'api', to: 'client', y: 200, label: 'reply', note: LONG_NOTE }] });
+  for (const segment of [{ from: 150, to: 360, label: 'Response' }, { from: 350, to: 410, label: 'Later' }]) {
+    spec.segments = [segment];
+    const { result } = run(t, 'validate', spec);
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.ok(!(JSON.parse(result.stdout).composition?.sequenceNoteBorders || []).some(d => d.code === 'sequence/note-segment-border'));
+  }
 });
