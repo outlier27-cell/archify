@@ -38,6 +38,39 @@ test('architecture keeps a feasible route with label room over a fewer-bend rout
   assert.equal(points.length, 5, JSON.stringify(points));
 });
 
+test('showcase shortens a route when a neighboring automatic label can move safely', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-label-detour-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const input = path.join(directory, 'diagram.json');
+  const output = path.join(directory, 'diagram.html');
+  fs.writeFileSync(input, JSON.stringify({
+    schema_version: 1,
+    diagram_type: 'architecture',
+    meta: { title: 'Content build', output: 'diagram.html', quality_profile: 'showcase' },
+    components: [
+      { id: 'source', type: 'backend', label: 'Source', sublabel: 'Load and validate', pos: [400, 40], size: [235, 76] },
+      { id: 'published', type: 'security', label: 'Published content', sublabel: 'Exclude drafts', pos: [760, 40], size: [235, 76] },
+      { id: 'build', type: 'backend', label: 'Build', sublabel: 'Render pages', pos: [400, 210], size: [235, 76] },
+      { id: 'feed', type: 'backend', label: 'Feed', sublabel: 'Requires SITE_URL', pos: [760, 210], size: [235, 76] },
+    ],
+    connections: [
+      { id: 'publish', from: 'source', to: 'published', label: '筛选' },
+      { id: 'build-input', from: 'published', to: 'build', label: '公开内容' },
+      { id: 'feed-output', from: 'build', to: 'feed', label: 'SITE_URL 有值' },
+    ],
+  }));
+  const original = fs.readFileSync(input, 'utf8');
+  const result = spawnSync(process.execPath, [cli, 'render', 'architecture', input, output, '--quality', 'showcase'], {
+    cwd: directory, encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const html = fs.readFileSync(output, 'utf8');
+  const points = html.match(/data-edge-id="build-input"[^>]*data-composition-points="([^"]+)"/)[1].split(';');
+  assert.ok(points.length <= 4, `a movable label must not force three bends: ${points}`);
+  for (const label of ['筛选', '公开内容', 'SITE_URL 有值']) assert.ok(html.includes(`>${label}</text>`), label);
+  assert.equal(fs.readFileSync(input, 'utf8'), original);
+});
+
 function validate(t, profile, replySides) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-pinned-reply-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
@@ -138,4 +171,67 @@ test('showcase moves a boundary title around an authored connection label', t =>
   // rather than asking the author to repair an overlap introduced by layout.
   assert.ok(x > 180 || x + width < 150, JSON.stringify({ x, width }));
   assert.match(html, /x="165" y="208"/);
+});
+
+test('showcase uses a clear off-centre corner when central ports force a detour', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-corner-port-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const input = path.join(directory, 'diagram.json');
+  const output = path.join(directory, 'diagram.html');
+  const diagram = {
+    schema_version: 1, diagram_type: 'architecture',
+    meta: { title: 'Shared client', output: 'diagram.html', quality_profile: 'showcase' },
+    components: [
+      { id: 'entry', type: 'backend', label: 'Entry', pos: [350, 200], size: [240, 80] },
+      { id: 'service', type: 'backend', label: 'Service', pos: [760, 200], size: [290, 90] },
+      { id: 'catalog', type: 'backend', label: 'Catalog', pos: [350, 390], size: [290, 90] },
+      { id: 'client', type: 'backend', label: 'Client', pos: [760, 390], size: [290, 90] },
+    ],
+    connections: [
+      { id: 'dispatch', from: 'entry', to: 'service', label: '解析空间后调用' },
+      { id: 'reply', from: 'service', to: 'entry', label: '受理 / 状态 / 失败' },
+      { id: 'register', from: 'service', to: 'catalog', label: '检查通过后选空间' },
+      { id: 'metadata', from: 'catalog', to: 'client', label: '目录 / 元数据 API' },
+      { id: 'write', from: 'service', to: 'client', label: '消息写入 / 状态查询' },
+    ],
+  };
+  const original = JSON.stringify(diagram);
+  fs.writeFileSync(input, original);
+  const result = spawnSync(process.execPath, [cli, 'render', 'architecture', input, output, '--quality', 'showcase'], {
+    cwd: directory, encoding: 'utf8',
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const html = fs.readFileSync(output, 'utf8');
+  const route = id => html.match(new RegExp(`data-edge-id="${id}"[^>]*data-composition-points="([^"]+)"`))[1].split(';').map(point => point.split(',').map(Number));
+  const points = route('register');
+  assert.equal(points.length, 3, `a legal corner needs one bend: ${JSON.stringify(points)}`);
+  for (const id of ['dispatch', 'reply', 'metadata', 'write']) {
+    assert.equal(route(id).length, 2, `${id} retains its straight route`);
+  }
+  assert.ok(points[0][1] <= 274, 'source port retains the 16px corner inset');
+  assert.ok(points.at(-1)[0] <= 624, 'target port retains the 16px corner inset');
+  for (const { label } of diagram.connections) assert.ok(html.includes(`>${label}</text>`), label);
+  assert.equal(fs.readFileSync(input, 'utf8'), original);
+});
+
+test('a two-bend automatic branch can use a clear corner without disturbing the main route', () => {
+  const boxes = new Map([
+    box('build', 400, 305, 235, 76), box('data', 40, 305, 235, 76),
+    box('output', 40, 445, 235, 76), box('main', 400, 520, 235, 76),
+  ]);
+  for (const pinned of [false, true]) {
+    const connections = [
+      { id: 'input', from: 'data', to: 'build' },
+      { id: 'branch', from: 'build', to: 'output', ...(pinned ? { fromSide: 'left', toSide: 'right' } : {}) },
+      { id: 'main', from: 'build', to: 'main' },
+    ];
+    const original = structuredClone(connections);
+    const router = createRouter(boxes, connections, { distinctAutomaticPorts: true, preferReadableRoutes: true });
+    const points = router.pathFor(connections[1]).points;
+    assert.equal(points.length, pinned ? 4 : 3, `authored sides remain authoritative: ${JSON.stringify({ pinned, points })}`);
+    for (const edge of [connections[0], connections[2]]) {
+      assert.equal(router.pathFor(edge).points.length, 2, `${edge.id} stays straight`);
+    }
+    assert.deepEqual(connections, original);
+  }
 });

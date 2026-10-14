@@ -74,7 +74,7 @@ muted text color.
 | Message `y` range | `[160, height − 83]` |
 | Message spacing | ≥28px vertical between messages that share horizontal space |
 | Arrow span | ≥60px horizontal between the two participants |
-| Message notes | 7px fine-detail text under the arrow, wrapped at 11px line spacing inside one gap between neighbouring lifelines (the widest gap the message spans; gaps within 0.5px count as equal and resolve to the left-most, where notes have always started), clear of activation bars; long unbroken text breaks after `/ . - ? & = # _`, otherwise at any character, so the full note is kept in every export. In `showcase`, a note that reaches a later message fails as `sequence/note-overlap` with the `y` that message needs, a note past the canvas content limit fails as `sequence/note-canvas-limit` with the `meta.viewBox[1]` it needs, and a segment label still covering a message label, route or note after its four upward steps fails as `sequence/segment-label-overlap`; each diagnostic names the source path and offers a verified `supportedFixes` edit when one exists |
+| Message notes | 7px context text under the arrow, visible at normal Read zoom (Map hides it without changing timeline geometry), wrapped at 11px line spacing inside one gap between neighbouring lifelines (the widest gap the message spans; gaps within 0.5px count as equal and resolve to the left-most, where notes have always started), clear of activation bars; long unbroken text breaks after `/ . - ? & = # _`, otherwise at any character, so the full note is kept in every export. In `showcase`, a note that reaches a later message fails as `sequence/note-overlap` with the `y` that message needs, a note past the canvas content limit fails as `sequence/note-canvas-limit` with the `meta.viewBox[1]` it needs, and a segment label still covering a message label, route or note after its four upward steps fails as `sequence/segment-label-overlap`; each diagnostic names the source path and offers a verified `supportedFixes` edit when one exists |
 | Segments | y pixel ranges with `to > from`, inside `[72, lifeline bottom + 20]` |
 | Legend | last row baseline at height − 54; extra rows wrap upward and stay 12px below the timeline content |
 
@@ -120,7 +120,7 @@ for the bounded authoring repair and explicit-fixed preservation rules.
 - Use `security` for auth, consent, permission, and policy calls.
 - Use `return` for quiet response messages.
 - Use `dashed` for async trace, event, logging, and non-blocking work.
-- Use segments as light background guides; keep segment labels short and keep each frame edge at least 4px off every message arrow.
+- Use segments as light background guides; keep segment labels short and keep each frame edge at least 4px off every message arrow. Check the complete wrapped note as well as its arrow before closing a phase. `validate` and `check` report crossings in `composition.sequenceNoteBorders` as review evidence, without blocking finalization. An offered `supportedFixes` edit extends only the named bottom edge; when no isolated edit fits, adjust the phase boundaries and message spacing together, preserving the full note and message order.
 - Keep labels concise, but try `meta.column_fit: "spread"` before shortening a
   meaningful participant label just to fit the fixed boxes.
 

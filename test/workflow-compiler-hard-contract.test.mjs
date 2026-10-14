@@ -812,6 +812,38 @@ test('readable-v2 verifies preset repairs with the public straight-route reserva
   }
 });
 
+test('a preset that crosses a node reports the blocked segment before a label-only repair', () => {
+  const document = workflow({
+    lanes: [{ id: 'top', label: 'Top' }, { id: 'bottom', label: 'Bottom' }],
+    nodes: [
+      { id: 'target', lane: 'top', col: 4, type: 'backend', label: 'Target' },
+      { id: 'obstacle', lane: 'top', col: 5, type: 'backend', label: 'Obstacle' },
+      { id: 'source', lane: 'bottom', col: 4, width: 104, type: 'backend', label: 'Source' },
+    ],
+    edges: [{ id: 'retry', from: 'source', to: 'target', route: 'outside-right',
+      fromSide: 'right', toSide: 'right', role: 'return', label: 'Try payment again', variant: 'dashed' }],
+  });
+  const original = clone(document);
+  for (const qualityProfile of ['standard', 'showcase']) {
+    const result = compileWorkflow({ workflow: document, qualityProfile });
+    assert.equal(result.ok, false);
+    const diagnostic = result.diagnostics.find(({ code }) => code === 'workflow/route-preset-conflict');
+    assert.equal(diagnostic.evidence.invariant, 'node clearance');
+    assert.equal(diagnostic.evidence.obstacleNode, 'obstacle');
+    const { points, segmentIndex, from, to } = diagnostic.evidence;
+    assert.deepEqual([from, to], points.slice(segmentIndex, segmentIndex + 2));
+    assert.ok(diagnostic.supportedFixes.every(fix => !fix.startsWith('set labelSegment')));
+    const movedLabel = clone(document);
+    movedLabel.edges[0].labelSegment = 1;
+    const stillBlocked = compileWorkflow({ workflow: movedLabel, qualityProfile });
+    assert.equal(stillBlocked.ok, false);
+    const later = stillBlocked.diagnostics.find(({ code }) => code === 'workflow/route-preset-conflict');
+    assert.equal(later.evidence.obstacleNode, diagnostic.evidence.obstacleNode);
+    assert.deepEqual([later.evidence.from, later.evidence.to], [from, to]);
+  }
+  assert.deepEqual(document, original);
+});
+
 function outsideRightLabelWorkflow() {
   return workflow({
     lanes: [{ id: 'undo', label: 'Undo' }, { id: 'return', label: 'Follow-up' }],
@@ -2195,6 +2227,28 @@ test('an explicit standard profile overrides an ambient showcase profile', () =>
   }
 });
 
+test('failed automatic routes retain diagnostics when an earlier route has a label pin', () => {
+  const document = oneLaneWorkflow([
+    { id: 'a-pinned', from: 'a', to: 'b', label: 'Pinned', labelAt: [94, 30] },
+    { id: 'z-self', from: 'b', to: 'b', label: 'Retry' },
+  ]);
+  const authored = clone(document);
+  for (const qualityProfile of ['standard', 'showcase']) {
+    // The earlier label pin is valid. The unsolved route must identify itself,
+    // not crash while inspecting rejected candidates or blame the other edge.
+    const result = compileWorkflow({ workflow: document, qualityProfile });
+    assert.equal(result.ok, false);
+    assert.equal(result.svg, undefined);
+    assert.deepEqual(document, authored);
+    assert.deepEqual(result.diagnostics.map(({ code }) => code), ['workflow/solver-budget-exhausted']);
+    const [diagnostic] = result.diagnostics;
+    assert.equal(diagnostic.subject.edge, 'z-self');
+    assert.ok(diagnostic.evidence.candidateCount > 0);
+    assert.deepEqual(diagnostic.supportedFixes, [], 'do not advertise an unverified repair');
+    assert.deepEqual(result.receipt.diagnostics, result.diagnostics);
+  }
+});
+
 test('readable-v2 never advertises an unverified blocking-node repair', () => {
   const document = workflow({
     lanes: [{ id: 'main', label: 'Main' }],
@@ -2672,46 +2726,57 @@ test('early causal failures retain diagnostic-only receipts after a complete rej
 
 
 test('rejected layout receipt belongs to the selected best route-order attempt', (t) => {
-  // The first plan crosses; retrying the later edge trades it for one shared
-  // corridor. Equal error counts retain the first result, not the last routes.
+  // K3,3 cannot be drawn without a crossing or shared corridor. A better
+  // automatic route may change the failure, but cannot make this graph planar.
+  // This keeps receipt/diagnostic binding covered without freezing an avoidable
+  // routing failure that a later planner can legitimately solve.
   const document = workflow({
-    lanes: [0, 1, 2, 3, 4].map((index) => ({ id: `l${index}`, label: `L${index}` })),
-    nodes: [
-      ['n3', 'l2', 3, 140], ['n5', 'l0', 3, 140],
-      ['n6', 'l2', 4, 140], ['n7', 'l0', 4, 140],
-      ['n8', 'l1', 5, 150], ['n9', 'l0', 5, 140],
-      ['n11', 'l3', 4, 140], ['n12', 'l3', 5, 150],
-    ].map(([id, lane, col, width]) => ({ id, lane, col, width, type: 'backend', label: id })),
-    edges: [
-      ['e05', 'n5', 'n6'], ['e06', 'n6', 'n7'], ['e07', 'n7', 'n6'],
-      ['e08', 'n6', 'n8'], ['e10', 'n9', 'n3'], ['e13', 'n11', 'n6'],
-    ].map(([id, from, to]) => ({ id, from, to })),
+    lanes: [0, 1, 2].map(index => ({ id: `l${index}`, label: `Lane ${index}` })),
+    nodes: [0, 1, 2].flatMap(index => ['a', 'b'].map(side => ({
+      id: `${side}${index}`, lane: `l${index}`, col: side === 'a' ? 0 : 3,
+      width: 140, type: 'backend', label: `${side}${index}`,
+    }))),
+    edges: [0, 1, 2].flatMap(from => [0, 1, 2].map(to => ({
+      id: `e${from}${to}`, from: `a${from}`, to: `b${to}`,
+    }))),
   });
   document.meta.quality_profile = 'showcase';
   const original = clone(document);
   const result = compileWorkflow({ workflow: document });
   assert.equal(result.ok, false);
   assert.equal(result.receipt.ok, false);
-  assert.deepEqual(result.diagnostics.map(({ code }) => code), ['composition/proper-crossing']);
-  const [diagnostic] = result.diagnostics;
-  assert.equal(diagnostic.subject.id, 'e07');
-  assert.equal(diagnostic.evidence.otherRelationship.id, 'e10');
+  assert.ok(result.diagnostics.length > 0);
   assert.equal(result.receipt.nodes.length, document.nodes.length);
   assert.equal(result.receipt.edges.length, document.edges.length);
-  // Recompute the reported crossing from the returned segments. The final
-  // retry's routes do not contain this crossing, so a mixed receipt fails.
-  const first = result.receipt.edges.find(({ id }) => id === diagnostic.subject.id).points;
-  const other = result.receipt.edges.find(({ id }) => id === diagnostic.evidence.otherRelationship.id).points;
-  const i = diagnostic.evidence.segmentIndex;
-  const j = diagnostic.evidence.otherSegmentIndex;
-  assert.equal(first[i][1], first[i + 1][1]);
-  assert.equal(other[j][0], other[j + 1][0]);
-  const crossing = [other[j][0], first[i][1]];
-  assert.deepEqual(crossing, diagnostic.evidence.point);
-  assert.ok(crossing[0] > Math.min(first[i][0], first[i + 1][0])
-    && crossing[0] < Math.max(first[i][0], first[i + 1][0]));
-  assert.ok(crossing[1] > Math.min(other[j][1], other[j + 1][1])
-    && crossing[1] < Math.max(other[j][1], other[j + 1][1]));
+  for (const diagnostic of result.diagnostics) {
+    assert.ok(['composition/proper-crossing', 'composition/ambiguous-corridor'].includes(diagnostic.code));
+    const first = result.receipt.edges.find(({ id }) => id === diagnostic.subject.id).points;
+    const other = result.receipt.edges.find(({ id }) => id === diagnostic.evidence.otherRelationship.id).points;
+    const [a, b] = first.slice(diagnostic.evidence.segmentIndex, diagnostic.evidence.segmentIndex + 2);
+    const [c, d] = other.slice(diagnostic.evidence.otherSegmentIndex, diagnostic.evidence.otherSegmentIndex + 2);
+    if (diagnostic.code === 'composition/proper-crossing') {
+      const [horizontal, vertical] = a[1] === b[1] ? [[a, b], [c, d]] : [[c, d], [a, b]];
+      const crossing = [vertical[0][0], horizontal[0][1]];
+      assert.deepEqual(crossing, diagnostic.evidence.point);
+      assert.ok(crossing[0] > Math.min(horizontal[0][0], horizontal[1][0])
+        && crossing[0] < Math.max(horizontal[0][0], horizontal[1][0]));
+      assert.ok(crossing[1] > Math.min(vertical[0][1], vertical[1][1])
+        && crossing[1] < Math.max(vertical[0][1], vertical[1][1]));
+    } else {
+      const axis = a[1] === b[1] ? 0 : 1;
+      assert.equal(c[1 - axis], d[1 - axis]);
+      assert.equal(a[1 - axis], c[1 - axis]);
+      const low = Math.max(Math.min(a[axis], b[axis]), Math.min(c[axis], d[axis]));
+      const high = Math.min(Math.max(a[axis], b[axis]), Math.max(c[axis], d[axis]));
+      assert.ok(high > low);
+      assert.equal(high - low, diagnostic.evidence.overlapLengthPx);
+      const expectedFrom = [...a], expectedTo = [...a];
+      expectedFrom[axis] = low;
+      expectedTo[axis] = high;
+      assert.deepEqual(diagnostic.evidence.from, expectedFrom);
+      assert.deepEqual(diagnostic.evidence.to, expectedTo);
+    }
+  }
   assert.deepEqual(document, original);
 
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-selected-workflow-attempt-'));
