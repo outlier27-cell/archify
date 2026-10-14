@@ -54,6 +54,49 @@ export function placeAutomaticLabels({
   const rectAt = (label, lx, ly) => ({
     ...label, lx, ly, x: lx - label.width / 2, y: ly - 10,
   });
+  // Fixed fractions can miss a narrow free slot. Try the ends of the free
+  // intervals beside an orthogonal segment, using obstacle edges rather
+  // than a finer sampling grid. The ordinary clearance test still decides
+  // whether a candidate is usable; this search never changes geometry.
+  const slidingCandidates = (label, index, { start: a, end: b }) => {
+    const horizontal = Math.abs(a[1] - b[1]) < 0.0001;
+    if (!horizontal && Math.abs(a[0] - b[0]) >= 0.0001) return [];
+    const axis = horizontal ? 'x' : 'y';
+    const size = horizontal ? 'width' : 'height';
+    const across = horizontal ? 'y' : 'x';
+    const crossSize = horizontal ? 'height' : 'width';
+    const low = Math.min(a[horizontal ? 0 : 1], b[horizontal ? 0 : 1]) + 8;
+    const high = Math.max(a[horizontal ? 0 : 1], b[horizontal ? 0 : 1]) - label[size] - 8;
+    if (high < low) return [];
+    const offsets = horizontal
+      ? [a[1] - 20, a[1] + 10, a[1] - 28, a[1] + 18]
+      : [a[0] - label.width - 6, a[0] + 6, a[0] - label.width - 14, a[0] + 14];
+    return offsets.flatMap(offset => {
+      const band = { ...label, [axis]: low, [size]: high - low + label[size], [across]: offset };
+      const blockers = [
+        ...obstacles.map(rect => ({ rect, gap: 2 })),
+        ...placed.filter((_, otherIndex) => otherIndex !== index).map(rect => ({ rect, gap: 2 })),
+        ...segmentsNear(band, 4).filter(segment => segment.relationIndex !== label.relationIndex).map(segment => ({
+          rect: {
+            x: Math.min(segment.start[0], segment.end[0]), y: Math.min(segment.start[1], segment.end[1]),
+            width: Math.abs(segment.end[0] - segment.start[0]), height: Math.abs(segment.end[1] - segment.start[1]),
+          }, gap: 4,
+        })),
+      ];
+      const positions = [Math.max(low, Math.min(high, label[axis])), low, high];
+      for (const { rect, gap } of blockers) {
+        if (offset + label[crossSize] + gap <= rect[across]
+          || rect[across] + rect[crossSize] + gap <= offset) continue;
+        positions.push(rect[axis] - gap - label[size], rect[axis] + rect[size] + gap);
+      }
+      return [...new Set(positions)].filter(position => position >= low && position <= high)
+        .sort((left, right) => Math.abs(left - label[axis]) - Math.abs(right - label[axis]))
+        .map(position => {
+          const rect = { ...label, [axis]: position, [across]: offset };
+          return rectAt(label, rect.x + label.width / 2, rect.y + 10);
+        });
+    });
+  };
   // An opted-in grid layout runs parallel lines through shared gaps. Rank
   // every position along all of the label's own segments: beside the line
   // first, then centred on its own line (the plate interrupts only that
@@ -108,30 +151,37 @@ export function placeAutomaticLabels({
       .map(([, lx, ly]) => [lx, ly]);
   };
 
-  for (const [index, label] of placed.entries()) {
-    const relation = label.relation;
-    if (['labelAt', 'labelDx', 'labelDy', 'labelSegment'].some(key => relation[key] !== undefined)) continue;
+  const pinned = label => ['labelAt', 'labelDx', 'labelDy', 'labelSegment']
+    .some(key => label.relation[key] !== undefined);
+  const needsPlacement = (label, index) => !inside(label)
+    || components.some(component => rectsOverlap(label, component, -2))
+    || titles.some(title => rectsOverlap(label, title))
+    || overlapsLabel(label, index) || masksRoute(label);
+  const placeLabel = (index, rerank) => {
+    const label = placed[index];
     // Match actual defect thresholds before searching; a valid placement is
     // not a reason to restyle the diagram. New placements leave extra space.
     // The grid ranking already starts from the preferred position, so it
     // also re-ranks labels whose default spot is merely valid.
-    if (!gridSweep && inside(label) && !components.some(component => rectsOverlap(label, component, -2))
-        && !titles.some(title => rectsOverlap(label, title))
-        && !overlapsLabel(label, index) && !masksRoute(label)) continue;
-    if (gridSweep) {
+    if (!rerank && !needsPlacement(label, index)) return;
+    if (rerank) {
       // Callers measure the plate one pixel higher than rectAt; test with a
       // pixel of slack so the chosen position also passes their clearance.
       const replacement = gridCandidates(label).map(([lx, ly]) => rectAt(label, lx, ly))
         .find(rect => clear({ ...rect, x: rect.x - 1, y: rect.y - 1, width: rect.width + 2, height: rect.height + 2 }, index));
       if (replacement) {
         placed[index] = replacement;
-        continue;
+        return;
       }
     }
     for (const segment of segments.filter(segment => segment.relationIndex === label.relationIndex)) {
       const [a, b] = [segment.start, segment.end];
       let candidates = [];
-      if (Math.abs(a[1] - b[1]) < 0.0001 && Math.abs(a[0] - b[0]) >= label.width + 16) {
+      // These candidates sit beside the line. They need the same 2px node
+      // clearance checked by clear(), not 8px reserved at each endpoint.
+      // Extra endpoint padding can hide a valid outer slot for a reciprocal
+      // pair and make the planner send its other arrow around both nodes.
+      if (Math.abs(a[1] - b[1]) < 0.0001 && Math.abs(a[0] - b[0]) >= label.width + 4) {
         candidates = [0.5, 0.25, 0.75, 0.125, 0.875].flatMap(fraction => {
           const x = a[0] + (b[0] - a[0]) * fraction;
           if (Math.min(Math.abs(x - a[0]), Math.abs(x - b[0])) < 8) return [];
@@ -161,7 +211,14 @@ export function placeAutomaticLabels({
         break;
       }
     }
-    if (placed[index] !== label || !fallbackRing) continue;
+    if (placed[index] !== label) return;
+    const sliding = segments.filter(segment => segment.relationIndex === label.relationIndex)
+      .flatMap(segment => slidingCandidates(label, index, segment)).find(rect => clear(rect, index));
+    if (sliding) {
+      placed[index] = sliding;
+      return;
+    }
+    if (!fallbackRing) return;
 
     // Dense but valid topologies can leave every point directly beside the
     // relationship occupied by another route. Search a small deterministic
@@ -194,6 +251,21 @@ export function placeAutomaticLabels({
       segmentRectClearanceWithin(segment, rect, label.height * 2) <= label.height * 2
     ))));
     if (fallback) placed[index] = fallback;
+  };
+  let pending = placed.map((_, index) => index).filter(index => !pinned(placed[index]));
+  // A later label can vacate the only slot available to an earlier one.
+  // Retry only unresolved labels after a move; accepted placements clear all
+  // current labels and fixed geometry, so each success retires one label.
+  // A stalled pass ends the search, with at most one pass per input label.
+  for (let pass = 0; pass < labels.length && pending.length; pass++) {
+    let moved = false;
+    for (const index of pending) {
+      const before = placed[index];
+      placeLabel(index, gridSweep && pass === 0);
+      moved ||= placed[index] !== before;
+    }
+    if (!moved) break;
+    pending = pending.filter(index => needsPlacement(placed[index], index));
   }
   return placed;
 }

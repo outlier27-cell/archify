@@ -601,6 +601,26 @@ function pointLiesOnSegment(point, start, end) {
     && point[1] <= Math.max(start[1], end[1]) + epsilon;
 }
 
+// A bend meeting another route's interior can look like a branch even when
+// no pair of segment interiors forms a proper X. Keep actual route endpoints
+// out of this geometric query; callers decide which relationships are allowed
+// to share junctions. Collinear corridors remain a separate quality measure.
+export function polylineBendContacts(left, right) {
+  const contacts = [];
+  const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) <= 0.0001;
+  for (const [points, other] of [[left, right], [right, left]]) {
+    if (other.length < 2) continue;
+    for (let index = 1; index < points.length - 1; index += 1) {
+      const point = points[index];
+      if (Math.abs(crossProduct(points[index - 1], point, points[index + 1])) <= 0.0001
+        || near(point, other[0]) || near(point, other.at(-1))) continue;
+      if (other.slice(1).some((end, segment) => pointLiesOnSegment(point, other[segment], end))
+        && !contacts.some(otherPoint => near(point, otherPoint))) contacts.push(point);
+    }
+  }
+  return contacts;
+}
+
 // Authored shared endpoints retain their junction interpretation by default.
 // Renderers can opt their automatic routes into proper interior X checks;
 // endpoint touches and collinear trunks still are not proper crossings.
@@ -1504,6 +1524,82 @@ export function anchor(rect, side) {
       return [rect.x + rect.width, rect.cy];
   }
 }
+
+export function portHasCornerClearance(rect, side, point) {
+  if (side === 'left' || side === 'right') {
+    const inset = Math.min(16, rect.height / 2);
+    return point[1] >= rect.y + inset && point[1] <= rect.y + rect.height - inset;
+  }
+  if (side === 'top' || side === 'bottom') {
+    const inset = Math.min(16, rect.width / 2);
+    return point[0] >= rect.x + inset && point[0] <= rect.x + rect.width - inset;
+  }
+  return false;
+}
+
+
+// Reuse the same bounded alignment for facing automatic ports; callers own
+// obstacle and occupied-port checks for their renderer. Spread slots stay fixed.
+export function alignAutomaticFacingPorts(conn, from, to, start, end, fromSide, toSide, ports, { accept } = {}) {
+  const hasExplicitGeometry = (
+    conn.via
+    || (conn.route && conn.route !== 'auto')
+    || conn.channelX !== undefined
+    || conn.channelY !== undefined
+    || conn.labelAt
+  );
+  const horizontallyFacing = (
+    (fromSide === 'right' && toSide === 'left')
+    || (fromSide === 'left' && toSide === 'right')
+  );
+  const verticallyFacing = (
+    (fromSide === 'bottom' && toSide === 'top')
+    || (fromSide === 'top' && toSide === 'bottom')
+  );
+  if (hasExplicitGeometry || (!horizontallyFacing && !verticallyFacing)) return { start, end };
+
+  const fromSpread = Boolean(ports?.from);
+  const toSpread = Boolean(ports?.to);
+  if (fromSpread && toSpread) return { start, end };
+  const hasExplicitSides = (
+    (conn.fromSide && conn.fromSide !== 'auto')
+    || (conn.toSide && conn.toSide !== 'auto')
+  );
+  if (!fromSpread && !toSpread && hasExplicitSides) return { start, end };
+
+  const alignmentDelta = horizontallyFacing
+    ? Math.abs(start[1] - end[1])
+    : Math.abs(start[0] - end[0]);
+  if (alignmentDelta >= 16) return { start, end };
+
+  // Keep the shared endpoint's distinct spread slot and move only the
+  // relationship's unshared endpoint onto that axis. With no spread endpoint,
+  // retain the existing least-movement choice between the two facing sides.
+  // If both endpoints are shared, preserve the outside bridge so no competing
+  // port is silently collapsed.
+  const alignEndToStart = horizontallyFacing
+    ? { start, end: [end[0], start[1]] }
+    : { start, end: [start[0], end[1]] };
+  const alignStartToEnd = horizontallyFacing
+    ? { start: [start[0], end[1]], end }
+    : { start: [end[0], start[1]], end };
+  const candidates = fromSpread
+    ? [alignEndToStart]
+    : toSpread
+      ? [alignStartToEnd]
+      : [alignEndToStart, alignStartToEnd];
+  for (const candidate of candidates) {
+    const points = [candidate.start, candidate.end];
+    if (portHasCornerClearance(from, fromSide, candidate.start)
+        && portHasCornerClearance(to, toSide, candidate.end)
+        && routeHonorsEndpointSides(points, fromSide, toSide)
+        && (typeof accept !== 'function' || accept(points))) {
+      return candidate;
+    }
+  }
+  return { start, end };
+}
+
 
 const PORT_OUTWARD_VECTOR = {
   left: [-1, 0],

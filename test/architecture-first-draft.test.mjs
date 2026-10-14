@@ -20,6 +20,110 @@ function layout(input) {
   return JSON.parse(result.stdout);
 }
 
+test('architecture: automatic routes avoid the final minimum title rail while keeping authored sides', t => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-title-rail-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const input = path.join(directory, 'diagram.json');
+  const spec = {
+    schema_version: 1, diagram_type: 'architecture',
+    meta: { title: 'Storage reader', output: 'diagram.html', quality_profile: 'showcase' },
+    components: [
+      { id: 'writer', type: 'backend', label: 'Writer', pos: [330, 40], size: [210, 70] },
+      { id: 'reader', type: 'frontend', label: 'Reader', pos: [50, 240], size: [210, 70] },
+      { id: 'backend', type: 'database', label: 'Storage', pos: [330, 240], size: [210, 70] },
+      { id: 'other', type: 'backend', label: 'Other', pos: [270, 130], size: [100, 60] },
+    ],
+    connections: [{ from: 'writer', to: 'reader', label: 'read', fromSide: 'bottom', toSide: 'top' }],
+    boundaries: [{ kind: 'region', label: 'Storage backend', wraps: ['backend'], pad: 16 }],
+  };
+  fs.writeFileSync(input, JSON.stringify(spec));
+  const result = layout(input);
+  // The old route followed the final top border even though it cleared the
+  // pre-title frame. Validation must see a clear route without changing intent.
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(result.components.map(c => c.pos), spec.components.map(c => c.pos));
+  assert.deepEqual(result.components.map(c => [c.width, c.height]), spec.components.map(c => c.size));
+  assert.deepEqual(result.boundaries[0].wraps, ['backend']);
+  const route = result.connections[0];
+  assert.deepEqual([route.from, route.to, route.label], ['writer', 'reader', 'read']);
+  const points = route.points;
+  assert.equal(points[0][1], 110);
+  assert.equal(points.at(-1)[1], 240);
+  assert.ok(points[1][1] > points[0][1] && points[1][0] === points[0][0]);
+  assert.ok(points.at(-2)[1] < points.at(-1)[1] && points.at(-2)[0] === points.at(-1)[0]);
+  assert.ok(points.length <= 4, 'the clear corridor needs at most two bends');
+});
+
+test('architecture: adjacent request and callback stay straight when their complete labels fit outside the pair', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-reciprocal-label-'));
+  try {
+    const input = path.join(tmp, 'pair.json');
+    const spec = { schema_version: 1, diagram_type: 'architecture',
+      meta: { title: 'Payment interaction', output: 'pair.html', quality_profile: 'showcase' },
+      components: [
+        { id: 'service', type: 'backend', label: 'Payment service', pos: [40, 40], size: [200, 74] },
+        { id: 'provider', type: 'external', label: 'Provider', pos: [320, 40], size: [190, 74] },
+      ],
+      connections: [
+        { from: 'service', to: 'provider', label: '同步支付请求' },
+        { from: 'provider', to: 'service', label: '支付回调', variant: 'dashed' },
+      ],
+      boundaries: [{ kind: 'region', label: 'Internal', wraps: ['service'], pad: 22 }],
+    };
+    for (const connections of [spec.connections, [...spec.connections].reverse()]) {
+      fs.writeFileSync(input, JSON.stringify({ ...spec, connections }));
+      const result = layout(input);
+      assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+      assert.deepEqual(result.components.map(c => c.pos), spec.components.map(c => c.pos));
+      assert.deepEqual(result.components.map(c => [c.width, c.height]), spec.components.map(c => c.size));
+      assert.deepEqual(result.boundaries[0].wraps, ['service']);
+      assert.deepEqual(result.connections.map(c => [c.from, c.to, c.label, c.variant]),
+        connections.map(c => [c.from, c.to, c.label, c.variant || 'default']));
+      for (const connection of result.connections) assert.equal(connection.points.length, 2,
+        'automatic routes need no turns when node and label clearance permits two distinct straight lanes');
+    }
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('architecture: pinned sides clear a boundary without changing authored geometry', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-border-corridor-'));
+  try {
+    const input = path.join(tmp, 'border.json');
+    const spec = { schema_version: 1, diagram_type: 'architecture',
+      meta: { title: 'Storage boundary', output: 'border.html', quality_profile: 'showcase' },
+      components: [
+        { id: 'producer', type: 'backend', label: 'Producer', pos: [100, 80], size: [180, 72] },
+        { id: 'store', type: 'database', label: 'Storage', pos: [100, 280], size: [180, 72] },
+      ],
+      connections: [{ from: 'producer', to: 'store', label: 'Persist', fromSide: 'right', toSide: 'right' }],
+      boundaries: [{ kind: 'region', label: 'Stored data', wraps: ['store'], pad: 24 }],
+    };
+    fs.writeFileSync(input, JSON.stringify(spec));
+    const result = layout(input);
+    assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+    assert.deepEqual(result.components.map(c => c.pos), spec.components.map(c => c.pos));
+    assert.deepEqual(result.boundaries[0].wraps, ['store']);
+    const points = result.connections[0].points;
+    assert.equal(points[0][0], 280);
+    assert.ok(points[0][1] > 80 && points[0][1] < 152);
+    assert.equal(points.at(-1)[0], 280);
+    assert.ok(points.at(-1)[1] > 280 && points.at(-1)[1] < 352);
+    assert.ok(points[1][0] > points[0][0] && points[1][1] === points[0][1]);
+    assert.ok(points.at(-2)[0] > points.at(-1)[0] && points.at(-2)[1] === points.at(-1)[1]);
+    // An explicit path remains authoritative even when it follows the border.
+    spec.connections[0].via = [[304, 116], [304, 316]];
+    fs.writeFileSync(input, JSON.stringify(spec));
+    const pinned = layout(input);
+    assert.equal(pinned.ok, false);
+    assert.match(JSON.stringify(pinned.diagnostics), /container-border-run/);
+    assert.deepEqual(pinned.connections[0].points.slice(1, -1), spec.connections[0].via);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 test('architecture: automatic side changes keep incoming arrowheads distinct', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-final-ports-'));
   try {
@@ -101,7 +205,8 @@ for (const name of ['audit-luna', 'audit-terra', 'queue-sol']) {
     const { status, receipt } = validate('architecture', path.join(fixtures, `${name}.architecture.json`));
     assert.equal(status, 1);
     assertOnlyLabelDefects(receipt);
-    assert.ok(receipt.diagnostics.some(issue => issue.code === 'composition/label-gap'));
+    // Automatic routes may resolve the old gap defect. Remaining label
+    // collisions must still fail with actionable diagnostics.
   });
 }
 

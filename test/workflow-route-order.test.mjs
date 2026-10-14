@@ -16,6 +16,25 @@ const cli = path.resolve(__dirname, '..', 'archify', 'bin', 'archify.mjs');
 const fixture = path.join(__dirname, 'fixtures', 'workflow-first-draft', 'agent-tool-call.workflow.json');
 const load = () => JSON.parse(fs.readFileSync(fixture, 'utf8'));
 
+test('automatic exception routes find free space without moving nodes out of their authored lanes and columns', () => {
+  // Reduced synthetic failure: a lower exception and a normal arrival occupy
+  // the fixed offset tracks. Neither dropping the branch nor changing its
+  // lane is an acceptable repair. Mixed-script text retains width pressure.
+  const workflow = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'workflow-free-space.json'), 'utf8'));
+  const authored = structuredClone(workflow);
+  const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(workflow, authored);
+  const sorted = entries => entries.sort((a, b) => a[0].localeCompare(b[0]));
+  assert.deepEqual(sorted(result.receipt.nodes.map(node => [node.id, node.lane, node.col])),
+    sorted(workflow.nodes.map(node => [node.id, node.lane, node.col])));
+  assert.deepEqual(sorted(result.receipt.edges.map(edge => [edge.id, edge.from, edge.to])),
+    sorted(workflow.edges.map(edge => [edge.id, edge.from, edge.to])));
+  assert.deepEqual(result.receipt.labels.map(entry => entry.label).sort(),
+    workflow.edges.map(edge => edge.label).sort());
+  assert.deepEqual(compileWorkflow({ workflow: authored }).receipt, result.receipt);
+});
+
 test('an automatic edge squeezed into a shared corridor is planned first instead of failing the draft', () => {
   const validation = spawnSync(process.execPath, [cli, 'validate', 'workflow', fixture, '--quality', 'showcase', '--json'], { encoding: 'utf8' });
   assert.equal(validation.status, 0, validation.stdout + validation.stderr);
@@ -35,9 +54,12 @@ test('pinned geometry keeps its own diagnostic: only automatic edges are re-orde
   const workflow = load();
   workflow.edges.find((edge) => edge.id === 'e_auto').via = [[480.8, 243], [480.8, 449], [539.2, 449]];
   workflow.edges.find((edge) => edge.id === 'e_denied').via = [[480.8, 367], [480.8, 325], [539.2, 325]];
+  const authored = structuredClone(workflow);
   const pinned = compileWorkflow({ workflow });
   assert.equal(pinned.ok, false);
-  assert.deepEqual(pinned.diagnostics.map((diagnostic) => diagnostic.code), ['workflow/explicit-pin-conflict']);
+  assert.deepEqual(pinned.diagnostics.filter(({ severity }) => severity !== 'warning')
+    .map(({ code }) => code), ['workflow/explicit-pin-conflict']);
+  assert.deepEqual(workflow, authored);
 });
 
 // The "customer impact" edge runs from the on-call lane down to the comms lane,
@@ -69,4 +91,39 @@ test('two automatic arrivals on one side of a node keep at least 16px between th
   for (let index = 1; index < values.length; index += 1) {
     assert.ok(values[index] - values[index - 1] >= 16, `ports ${values[index - 1]} and ${values[index]} are only ${values[index] - values[index - 1]}px apart`);
   }
+});
+
+test('a crossing-free route retry can finish automatic sublabel sizing before error counts are compared', () => {
+  // Synthetic mixed-script text holds the width pressure of the reproduction.
+  // Retrying a return edge removes one crossing but exposes several readable
+  // font-width errors. Counting errors alone discarded that recoverable plan.
+  const workflow = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'workflow-route-text-recovery.json'), 'utf8'));
+  const original = structuredClone(workflow);
+  const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(workflow, original);
+  assert.deepEqual(result.receipt.nodes.map(node => node.id).sort(), workflow.nodes.map(node => node.id).sort());
+  assert.deepEqual(result.receipt.edges.map(edge => [edge.from, edge.to]).sort(), workflow.edges.map(edge => [edge.from, edge.to]).sort());
+});
+
+test('automatic cancellation arrivals clear a sibling label without authoring ports or deleting branches', () => {
+  const workflow = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'workflow-fanin-label-recovery.json'), 'utf8'));
+  const original = structuredClone(workflow);
+  const result = compileWorkflow({ workflow, qualityProfile: 'showcase' });
+  assert.equal(result.ok, true, JSON.stringify(result.diagnostics));
+  assert.deepEqual(workflow, original);
+  assert.deepEqual(result.receipt.nodes.map(node => node.id).sort(), workflow.nodes.map(node => node.id).sort());
+  assert.deepEqual(result.receipt.edges.map(edge => [edge.id, edge.from, edge.to]).sort(),
+    workflow.edges.map(edge => [edge.id, edge.from, edge.to]).sort());
+  assert.deepEqual(result.receipt.labels.map(entry => entry.label).sort(),
+    workflow.edges.filter(edge => edge.label).map(edge => edge.label).sort());
+
+  // Receipt indexes refer to the input array, while routing uses canonical
+  // order. Reordering that array must not change the recovered scene.
+  const reordered = structuredClone(workflow);
+  reordered.edges.reverse();
+  const reversed = compileWorkflow({ workflow: reordered, qualityProfile: 'showcase' });
+  assert.equal(reversed.ok, true, JSON.stringify(reversed.diagnostics));
+  assert.deepEqual(reversed.receipt.edges, result.receipt.edges);
+  assert.deepEqual(reversed.receipt.labels, result.receipt.labels);
 });

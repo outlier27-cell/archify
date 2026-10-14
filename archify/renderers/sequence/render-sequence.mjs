@@ -177,6 +177,7 @@ const NOTE_LIFELINE_CLEARANCE = 11;
 const NOTE_GAP_TOLERANCE = 0.5;
 const NOTE_BREAK_AFTER = new Set(['/', '.', '-', '?', '&', '=', '#', '_']);
 const noteSegmenter = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
+let noteWordSegmenter;
 const noteLayouts = new Map();
 
 function noteTextWidth(text) {
@@ -192,6 +193,28 @@ function noteBreakIndex(piece) {
 }
 
 function wrapNoteText(text, width) {
+  const original = wrapNoteWords(String(text).match(/\s+|\S+/gu) || [], width);
+  if (!/\p{Script=Han}/u.test(text)) return original;
+
+  // Space-only tokens can waste half a line before a Chinese phrase. Split Han
+  // words, preserving other runs (identifiers, URLs, +4) and closing punctuation.
+  noteWordSegmenter ??= new Intl.Segmenter(undefined, { granularity: 'word' });
+  const words = [];
+  for (const token of String(text).match(/\s+|\p{Script=Han}[\p{Script=Han}\p{Mark}]*|[^\s\p{Script=Han}]+/gu) || []) {
+    if (/\p{Script=Han}/u.test(token)) {
+      for (const { segment } of noteWordSegmenter.segment(token)) words.push(segment);
+    } else if (/^[、。，；：！？）】》」』]+$/u.test(token) && words.length) {
+      words[words.length - 1] += token;
+    } else {
+      words.push(token);
+    }
+  }
+  const compact = wrapNoteWords(words, width);
+  // Never grow a note or change a same-height wrap merely to rebalance lines.
+  return compact.length < original.length ? compact : original;
+}
+
+function wrapNoteWords(words, width) {
   const lines = [];
   let line = '';
   const flush = () => {
@@ -199,7 +222,7 @@ function wrapNoteText(text, width) {
     if (trimmed) lines.push(trimmed);
     line = '';
   };
-  for (const word of String(text).match(/\s+|\S+/gu) || []) {
+  for (const word of words) {
     if (/^\s+$/u.test(word)) {
       if (line) line += ' ';
       continue;
@@ -975,6 +998,22 @@ function messageLabel(message, x1, x2) {
         </g>`;
 }
 
+function noteBackdrop(message) {
+  const note = noteRect(message);
+  if (!note) return '';
+  const box = { x: note.x - 2, y: note.y - 2, width: note.width + 4, height: note.height + 4 };
+  const crossed = asArray(sequence.segments).some((segment) => [segment.from, segment.to]
+    .some((border) => border >= box.y && border <= box.y + box.height));
+  if (!crossed) return '';
+  // The backdrop clears decorative frames, never another message. Standard
+  // quality can retain overlapping annotations that showcase rejects.
+  const coversMessage = asArray(sequence.messages).some((other) => other !== message
+    && [messageLabelBox(other), messageRouteBox(other), noteRect(other)]
+      .some((rect) => rect && rectsOverlap(box, rect, 0)));
+  if (coversMessage) return '';
+  return `\n        <rect data-detail="context" data-graph-role="message-note-background" x="${box.x}" y="${box.y}" width="${box.width}" height="${box.height}" rx="2" class="c-mask" pointer-events="none"/>`;
+}
+
 function renderMessage(message, index) {
   const { start, end } = messageGeometry(message);
   const [cls, marker] = arrowClass[message.variant || 'default'] || arrowClass.default;
@@ -984,12 +1023,14 @@ function renderMessage(message, index) {
   const noteContent = noteBox?.lines.length > 1
     ? noteBox.lines.map((line, lineIndex) => `<tspan x="${noteBox.x}" dy="${lineIndex ? NOTE_LINE_HEIGHT : 0}">${esc(line)}</tspan>`).join('')
     : esc(message.note);
+  // Notes carry message conditions and already reserve timeline space. Keep
+  // them readable at the default depth; Map still hides context without reflow.
   const note = noteBox
-    ? `\n        <text data-detail="fine" x="${noteBox.x}" y="${noteBox.baseline}" class="t-muted" font-size="${NOTE_FONT_SIZE}">${noteContent}</text>`
+    ? `\n        <text data-detail="context" x="${noteBox.x}" y="${noteBox.baseline}" class="t-muted" font-size="${NOTE_FONT_SIZE}">${noteContent}</text>`
     : '';
   return `        <g ${focusEdgeAttrs(message.from, message.to, message.label, index, message.id)}>
           <path data-composition-edge-from="${esc(message.from)}" data-composition-edge-to="${esc(message.to)}"${message.id ? ` data-composition-edge-id="${esc(message.id)}"` : ''} data-composition-points="${routePointsValue([[start, message.y], [end, message.y]])}" d="M ${start} ${message.y} L ${end} ${message.y}" class="${cls}"${animateAttr(sequence.meta, 'edge', index)} stroke-width="${strokeWidth}"${dash} marker-end="url(#${marker})"/>
-${messageLabel(message, start, end)}${note}
+${messageLabel(message, start, end)}${noteBackdrop(message)}${note}
         </g>`;
 }
 
@@ -1022,7 +1063,7 @@ function renderSvg() {
   // ratio, so without intrinsic-height the desktop Reader can neither narrow
   // nor scroll it and every default sequence fails the browser gate.
   const readerFit = sequence.meta?.viewBox ? '' : ' data-reader-fit="width-first"';
-  return `      <svg viewBox="0 0 ${viewBox[0]} ${viewBox[1]}" data-sequence-column-fit="${columnFit}"${readerFit} ${svgRootAttrs(sequence.meta)}>
+  return `      <svg viewBox="0 0 ${viewBox[0]} ${viewBox[1]}" data-sequence-column-fit="${columnFit}"${readerFit} ${svgRootAttrs(sequence.meta)} data-motion-choreography="sequence">
 ${svgAccessibleText(sequence.meta, 'sequence')}
 ${renderDefinitions()}
 

@@ -77,6 +77,11 @@ test('workflow default labels and lane headings remain readable without recolori
           // A peak CSS dot covers the panel before the translucent SVG lane.
           // This bounds the declared gradient colors, not sampled glyph pixels.
           const dotBackground = dot ? over(dot, panelBackground) : null;
+          const semanticProbe = document.createElement('span');
+          semanticProbe.style.color = 'var(--security-stroke)';
+          panel.append(semanticProbe);
+          const securityInk = getComputedStyle(semanticProbe).color;
+          semanticProbe.remove();
           const lanes = [...panel.querySelectorAll('[data-composition-frame-kind="lane"]')].map(frame => {
             let text = frame.nextElementSibling;
             const exceptionFrame = text.matches('[data-composition-frame-kind="exception-lane"]') ? text : null;
@@ -112,12 +117,13 @@ test('workflow default labels and lane headings remain readable without recolori
               fill: ink.fill, fontSize: ink.fontSize, visibility: ink.visibility, display: ink.display, opacity,
               maskAlpha: background[3] * Number(plate.fillOpacity) * Number(plate.opacity),
               pathClass: route.getAttribute('class'), stroke: getComputedStyle(route).stroke,
+              pathRatio: contrast(rgba(getComputedStyle(route).stroke), background),
               markerFill: getComputedStyle(document.getElementById(marker).querySelector('polygon')).fill,
               foreground: rendered, background: background.slice(0, 3),
               ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) };
           });
           return { theme: document.documentElement.dataset.theme, preset: document.documentElement.dataset.preset,
-            motion: document.documentElement.dataset.motion,
+            motion: document.documentElement.dataset.motion, securityInk,
             detail: panel.dataset.detailLevel, scale: Archify.view.state().scale, edges, lanes, beneathPanel,
             surface: { image: surface.backgroundImage,
               bodyImage: body.backgroundImage, bodyAlpha: rgba(body.backgroundColor)[3], dotColors,
@@ -155,7 +161,9 @@ test('workflow default labels and lane headings remain readable without recolori
         assert.notEqual(lane.display, 'none');
       }
       assert.equal(observed.lanes[2].exceptionClass, 't-security');
-      assert.equal(observed.lanes[2].fill, observed.lanes[2].exceptionStroke, 'EX heading retains its semantic frame ink');
+      // Titles retain semantic ink while restrained frame borders may blend it.
+      assert.equal(observed.lanes[2].fill, observed.securityInk, 'EX heading retains security ink');
+      assert.notEqual(observed.lanes[2].exceptionStroke, 'none', 'EX frame retains a visible border');
       assert.equal(observed.lanes[0].fill, observed.lanes[1].fill, 'default and explicit normal headings share their ink');
       for (const lane of observed.lanes.slice(0, 2)) {
         t.diagnostic(`${theme} ${lane.label}: flat ${lane.flatRatio.toFixed(6)}:1, CSS dot peak ${lane.dotPeakRatio.toFixed(6)}:1; fill ${lane.fill}; flat background ${lane.flatBackground}; dot peak background ${lane.dotPeakBackground}`);
@@ -172,7 +180,7 @@ test('workflow default labels and lane headings remain readable without recolori
         assert.equal(edge.markerFill, edge.stroke, 'arrowheads retain the connector color');
         if (edge.index < 2) {
           assert.ok(Number.isFinite(edge.ratio), 'the measured contrast is finite');
-          assert.equal(edge.stroke, theme === 'light' ? 'rgb(148, 163, 184)' : 'rgb(100, 116, 139)', 'default connectors retain their existing ink');
+          assert.ok(edge.pathRatio >= 4.5, 'neutral connector ink also serves relationship text in other renderers');
           t.diagnostic(`${theme} ${edge.index === 0 ? 'fallback' : 'default'} label: ${edge.ratio.toFixed(3)}:1; foreground ${edge.foreground}; background ${edge.background}`);
         } else {
           assert.equal(edge.labelClass, `t-edge-${variant}`);

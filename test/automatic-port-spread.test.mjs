@@ -149,16 +149,24 @@ test('architecture: reciprocal repair preserves explicit relationship label plac
   }
 });
 
-test('architecture: automatic fan-out uses distinct symmetric ports with corner clearance', () => {
+test('architecture: automatic fan-out uses distinct ports with corner clearance and outward normals', () => {
   const html = render('architecture', fanOutArchitecture([
     { id: 'to-upper', from: 'hub', to: 'upper' },
     { id: 'to-middle', from: 'hub', to: 'middle' },
     { id: 'to-lower', from: 'hub', to: 'lower' },
   ]));
 
-  assert.deepEqual(connectionPoints(html, 'to-upper')[0], [220, 296]);
-  assert.deepEqual(connectionPoints(html, 'to-middle')[0], [220, 310]);
-  assert.deepEqual(connectionPoints(html, 'to-lower')[0], [220, 324]);
+  const routes = ['to-upper', 'to-middle', 'to-lower'].map(id => connectionPoints(html, id));
+  assert.equal(new Set(routes.map(points => JSON.stringify(points[0]))).size, 3);
+  for (const [[x, y], [nx, ny]] of routes) {
+    assert.ok(
+      (x === 220 && y >= 294 && y <= 326 && nx > x && ny === y)
+      || (x === 100 && y >= 294 && y <= 326 && nx < x && ny === y)
+      || (y === 280 && x >= 114 && x <= 206 && ny < y && nx === x)
+      || (y === 340 && x >= 114 && x <= 206 && ny > y && nx === x),
+      `port ${x},${y} must leave the hub normally with at least 14px corner clearance`,
+    );
+  }
 });
 
 test('architecture: automatic port assignment is stable when relationship input order changes', () => {
@@ -406,6 +414,35 @@ test('dataflow: automatic fan-out spreads flows without changing their authored 
   assert.deepEqual(connectionPoints(html, 'to-lower')[0], [156, 398]);
 });
 
+test('dataflow: aligned automatic branches stay straight without collapsing their shared ports', () => {
+  const diagram = {
+    schema_version: 1, diagram_type: 'dataflow',
+    meta: { title: 'Aligned branch', quality_profile: 'showcase' },
+    stages: [{ label: 'Input' }, { label: 'Output' }],
+    nodes: [
+      { id: 'hub', type: 'backend', label: 'Hub', stage: 0, row: 0 },
+      { id: 'peer', type: 'backend', label: 'Peer', stage: 1, row: 0 },
+      { id: 'lower', type: 'database', label: 'Archive', stage: 1, row: 2 },
+    ],
+    flows: [
+      { id: 'direct', from: 'hub', to: 'peer', label: 'feed' },
+      { id: 'branch', from: 'hub', to: 'lower', label: 'archive' },
+    ],
+  };
+  for (const reverse of [false, true]) {
+    const input = structuredClone(diagram);
+    if (reverse) for (const flow of input.flows) [flow.from, flow.to] = [flow.to, flow.from];
+    const html = render('dataflow', input);
+    const direct = connectionPoints(html, 'direct');
+    const branch = connectionPoints(html, 'branch');
+    assert.equal(direct.length, 2, 'a free facing endpoint should align instead of adding four turns');
+    assert.equal(direct[0][1], direct[1][1], 'the aligned route must remain orthogonal');
+    const index = reverse ? -1 : 0;
+    assert.ok(Math.abs(direct.at(index)[1] - branch.at(index)[1]) >= 14,
+      'the branch still needs a distinct port');
+  }
+});
+
 test('authoring defaults point to the bounded automatic port rules and READMEs describe the default', () => {
   const defaults = fs.readFileSync(path.join(skillRoot, 'references/authoring-defaults.md'), 'utf8');
   assert.match(defaults, /Start with automatic routes and endpoint sides/);
@@ -422,4 +459,58 @@ test('authoring defaults point to the bounded automatic port rules and READMEs d
   }
   assert.match(fs.readFileSync(path.join(repoRoot, 'README_ZH.md'), 'utf8'), /共享的自动端点会确定性展开/);
   assert.match(fs.readFileSync(path.join(repoRoot, 'README_JA.md'), 'utf8'), /共有される自動接続点は決定論的に分散/);
+});
+
+function settledDetourDataflow() {
+  // Anonymous reduction of a settled outer detour sharing three source slots.
+  return {
+    schema_version: 1, diagram_type: 'dataflow',
+    meta: { title: 'Shared ports around an outer detour', quality_profile: 'showcase' },
+    stages: [{ label: '文文文文文文文'}, { label: '文文文文文文文'}, { label: '文文文文'}, { label: '文文文文文文'}, { label: '文文文文文文文'}],
+    nodes: [
+      {id: 'input', type: 'frontend', label: '文文／文文文文', sublabel: 'xxxx · xxxx', stage: 0, row: 0},
+      {id: 'options', type: 'frontend', label: '文文文文文文', sublabel: '文文、文文、文文文文', stage: 0, row: 3},
+      {id: 'template', type: 'database', label: 'xxxx 文文', sublabel: 'xxxxxx_ / xxxxx_ / xxxxx_', stage: 0, row: 2},
+      {id: 'script', type: 'backend', label: '文文文文', sublabel: '文文文 xxx；文文文文文文', stage: 1, row: 0},
+      {id: 'title', type: 'backend', label: '文文文', sublabel: '文文文文文；文文文文文', stage: 1, row: 1},
+      {id: 'story', type: 'backend', label: '文文文文文文文', sublabel: '文文：文文、文文、文文文', stage: 1, row: 3},
+      {id: 'render', type: 'backend', label: '文文文文文文', sublabel: '文文＋文文＋文文＋文文文文', stage: 2, row: 2},
+      {id: 'segment', type: 'backend', label: '文文文文文文', sublabel: '文文／文文；文文文文文', stage: 2, row: 3},
+      {id: 'audio', type: 'database', label: '文文文文文文', sublabel: 'xxxxxx/xx_xxxxx.xx1', stage: 3, row: 0},
+      {id: 'result', type: 'backend', label: '文文文文文文文文文', sublabel: '文文文文文文；xxxx 文文文文', stage: 4, row: 2},
+    ],
+    flows: [
+      {id: 'e1', to: 'script', label: '文文文文文', from: 'input'},
+      {id: 'e2', to: 'title', label: '文文文文文', from: 'input'},
+      {id: 'e3', to: 'title', label: '文文文文', from: 'options'},
+      {id: 'e8', to: 'story', label: '文文', from: 'title'},
+      {id: 'e18', to: 'render', label: '文文文文', from: 'template'},
+      {id: 'e23', to: 'segment', label: '文文文文', from: 'audio'},
+      {id: 'e32', to: 'result', label: '文文文文', from: 'input'},
+    ],
+  };
+}
+
+test('dataflow: settled detours reorder shared slots so the aligned branch is straight', () => {
+  const doc = settledDetourDataflow();
+  const html = render('dataflow', doc);
+  const direct = connectionPoints(html, 'e1');
+  assert.equal(direct.length, 2, 'same-row flow needs no bridge after assigning the outward return its top slot');
+  assert.equal(direct[0][1], direct[1][1]);
+  assert.ok(direct[0][0] < direct[1][0], 'the arrow still points at its target');
+  const slots = ['e1', 'e2', 'e32'].map(id => connectionPoints(html, id)[0][1]).sort((a, b) => a - b);
+  assert.ok(slots[1] - slots[0] >= 12 && slots[2] - slots[1] >= 12, 'all three branches keep separate ports');
+  for (const flow of doc.flows) {
+    assert.ok(connectionPoints(html, flow.id).length >= 2, `preserve ${flow.id}`);
+  }
+});
+
+test('dataflow: invalid placement retains a useful diagnostic during shared port ordering', () => {
+  const doc = settledDetourDataflow();
+  doc.nodes.find(node => node.id === 'result').row = 6;
+  assert.throws(() => render('dataflow', doc), error => {
+    assert.match(error.stderr.toString(), /Node "result" uses invalid row 6/);
+    assert.doesNotMatch(error.stderr.toString(), /TypeError|Cannot read properties/);
+    return true;
+  });
 });
