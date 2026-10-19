@@ -181,8 +181,9 @@ test('all five renderers keep the semantic sigil and add one export-safe brand b
     const [frameX, frameY, frameWidth] = frame.slice(1, 4).map(Number);
     const [, semanticY] = semantic.slice(1, 3).map(Number);
     const [brandX, brandY, brandWidth, brandHeight, brandRadius] = brand.slice(1, 6).map(Number);
-    assert.equal(brandWidth, 16, `${type}: brand badge width`);
-    assert.equal(brandHeight, 16, `${type}: brand badge height`);
+    const expectedBadge = type === 'architecture' ? 22 : 16;
+    assert.equal(brandWidth, expectedBadge, `${type}: brand badge width`);
+    assert.equal(brandHeight, expectedBadge, `${type}: brand badge height`);
     assert.equal(brandRadius, 4, `${type}: brand badge radius`);
     assert.equal(brandY - frameY, 6, `${type}: brand badge top inset`);
     assert.equal(frameX + frameWidth - (brandX + brandWidth), 6, `${type}: brand badge right inset`);
@@ -190,56 +191,46 @@ test('all five renderers keep the semantic sigil and add one export-safe brand b
   }
 });
 
-test('architecture supports an opt-in icon-first vetted brand layout', () => {
-  const input = writeFixture('architecture', 'icon-first', 'openai', (diagram, node) => {
-    node.iconStyle = 'icon-first';
-    node.size = [120, 84];
-    node.sublabel = 'Primary service';
-  });
-  const { result, html } = renderSync('architecture', input, 'icon-first');
+test('architecture uses a 22px upper-right badge', () => {
+  const input = writeFixture('architecture', 'architecture-badge-size', 'openai');
+  const { result, html } = renderSync('architecture', input, 'architecture-badge-size');
   assert.equal(result.status, 0, result.stderr || result.stdout);
   const id = JSON.parse(fs.readFileSync(input, 'utf8')).components[0].id;
   const block = nodeBlock(html, id);
-  assert.match(block, /class="brand-mark brand-mark-icon-first"/);
-  assert.match(html, /\.c-icon-first \{ fill: transparent; stroke: var\(--muted\); \}/);
-  assert.match(block, /data-brand-mark="openai"/);
-  assert.doesNotMatch(block, /class="brand-mark-badge"/);
-  assert.match(block, /<text data-node-label=""[^>]+>[^<]+<\/text>/);
-  assert.match(block, /data-detail="context"[^>]+>Primary service<\/text>/);
-  const icon = block.match(/class="brand-mark brand-mark-icon-first" transform="translate\(([-\d.]+) ([-\d.]+)\)"/);
-  assert.ok(icon, block);
-  assert.equal(Number(icon[1]), 84, block);
-  assert.equal(Number(icon[2]), 305, block);
+  const frame = block.match(/<rect x="([-\d.]+)" y="([-\d.]+)" width="([-\d.]+)" height="([-\d.]+)" rx="[^"]+" class="c-mask"\/>/);
+  const brand = block.match(/data-brand-mark="openai"[^>]+translate\(([-\d.]+) ([-\d.]+)\)">\s*<rect width="([-\d.]+)" height="([-\d.]+)" rx="([-\d.]+)" class="brand-mark-badge"\/>/);
+  assert.ok(frame && brand, block);
+  const [frameX, frameY, frameWidth] = frame.slice(1, 4).map(Number);
+  const [brandX, brandY, brandWidth, brandHeight, brandRadius] = brand.slice(1, 6).map(Number);
+  assert.equal(brandWidth, 22);
+  assert.equal(brandHeight, 22);
+  assert.equal(brandRadius, 4);
+  assert.equal(brandY - frameY, 6);
+  assert.equal(frameX + frameWidth - (brandX + brandWidth), 6);
+  assert.match(block, /class="semantic-sigil /);
+  assert.doesNotMatch(block, /c-icon-first|brand-mark-icon-first/);
 });
 
-test('architecture rejects icon-first for non-vetted or undersized brands', () => {
-  const remoteInput = writeFixture('architecture', 'icon-first-remote', { url: 'https://brand.example.invalid/icon.png', sha256: 'a'.repeat(64) }, (_diagram, node) => {
-    node.iconStyle = 'icon-first';
+test('a larger upper-right badge keeps the type fill, semantic icon, and text', () => {
+  const input = writeFixture('architecture', 'larger-badge', 'postgresql', (diagram, node) => {
+    node.label = 'PostgreSQL';
+    node.sublabel = 'Durable checkout state';
+    node.tag = 'primary';
+    node.size = [168, 72];
   });
-  const remote = renderSync('architecture', remoteInput, 'icon-first-remote');
-  assert.equal(remote.result.status, 1);
-  assert.match(remote.result.stderr, /brand.*(capture|unknown)/i);
-
-  const shortInput = writeFixture('architecture', 'icon-first-short', 'openai', (_diagram, node) => {
-    node.iconStyle = 'icon-first';
-    node.size = [120, 60];
-  });
-  const short = renderSync('architecture', shortInput, 'icon-first-short');
-  assert.equal(short.result.status, 1);
-  assert.match(short.result.stderr, /icon-first.*height/i);
-});
-
-test('icon-first adapts neutral marks to the theme but preserves colored brand marks', () => {
-  for (const [brand, fill] of [['github', 'var(--text)'], ['postgresql', '#4169E1']]) {
-    const input = writeFixture('architecture', `icon-first-${brand}`, brand, (_diagram, node) => {
-      node.iconStyle = 'icon-first';
-      node.size = [120, 84];
-    });
-    const { result, html } = renderSync('architecture', input, `icon-first-${brand}`);
-    assert.equal(result.status, 0, result.stderr || result.stdout);
-    const block = nodeBlock(html, JSON.parse(fs.readFileSync(input, 'utf8')).components[0].id);
-    assert.ok(block.includes(`fill="${fill}"`), `${brand}: ${block}`);
-  }
+  const { result, html } = renderSync('architecture', input, 'larger-badge');
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const id = JSON.parse(fs.readFileSync(input, 'utf8')).components[0].id;
+  const block = nodeBlock(html, id);
+  assert.match(block, /class="c-external"/);
+  assert.match(block, /class="semantic-sigil /);
+  assert.match(block, /class="brand-mark-badge"/);
+  assert.match(block, /data-node-label=""[^>]*>PostgreSQL<\/text>/);
+  assert.match(block, /data-detail="context"[^>]*>Durable checkout state<\/text>/);
+  assert.match(block, /data-detail="fine"[^>]*>primary<\/text>/);
+  assert.doesNotMatch(block, /brand-mark-icon-first|c-icon-first/);
+  const brand = block.match(/class="brand-mark" transform="translate\(([-\d.]+) ([-\d.]+)\)">\s*<rect width="22" height="22"/);
+  assert.ok(brand, block);
 });
 
 test('a branded node fails before its semantic sigil, label, and brand badge can overlap', () => {
