@@ -64,7 +64,12 @@ export function repositorySourceHref(provider, url, revision, source) {
   const end = source.endLine && source.endLine !== source.line
     ? `-${provider === 'github' || provider === 'gitea' ? 'L' : ''}${source.endLine}` : '';
   const fragment = source.line ? `#L${source.line}${end}` : '';
-  if (provider === 'gitea') return `${url}/src/commit/${revision}/${encodedPath}${fragment}`;
+  if (provider === 'gitea') {
+    // Gitea renders Markdown by default. Line anchors only select rows in the
+    // source table, so a cited line must request that view.
+    const sourceView = source.line && /\.(?:md|markdown)$/i.test(source.path) ? '?display=source' : '';
+    return `${url}/src/commit/${revision}/${encodedPath}${sourceView}${fragment}`;
+  }
   if (provider !== 'gitlab') return `${url}/blob/${revision}/${encodedPath}${fragment}`;
   // GitLab renders Markdown blobs, where line anchors select nothing; the
   // plain view keeps the cited lines highlighted.
