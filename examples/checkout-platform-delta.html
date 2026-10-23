@@ -15767,7 +15767,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       || !exactKeys(value.artifact, [&#39;sha256&#39;]) || !/^[a-f0-9]{64}$/.test(value.artifact.sha256)
       || typeof value.summary !== &#39;string&#39; || !value.summary || value.summary.length &gt; 160 || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value.summary)
       || value.releaseNotes !== &#39;https://github.com/tt-a1i/archify/releases/tag/v&#39; + value.version || ![&#39;normal&#39;, &#39;security&#39;].includes(value.severity)
-      || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(value.publishedAt) || !Number.isFinite(Date.parse(value.publishedAt))) return null;
+      || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(value.publishedAt)) return null;
+    var publishedAt = Date.parse(value.publishedAt);
+    if (!Number.isFinite(publishedAt) || new Date(publishedAt).toISOString() !== value.publishedAt.replace(&#39;Z&#39;, &#39;.000Z&#39;)) return null;
     return value;
   };
   var compareStableVersion = function (left, right) { var a = left.split(&#39;.&#39;).map(Number), b = right.split(&#39;.&#39;).map(Number); for (var i = 0; i &lt; 3; i += 1) if (a[i] !== b[i]) return a[i] &lt; b[i] ? -1 : 1; return 0; };
@@ -15790,6 +15792,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
   dialog.addEventListener(&#39;close&#39;, function () { if (originalFocus) originalFocus.focus(); });
   document.getElementById(&#39;reader-update-check&#39;).addEventListener(&#39;click&#39;, function () {
     var button = this;
+    if (!stableVersion(artifact.generatorVersion)) {
+      status.textContent = &#39;Update status unavailable for this development artifact. No update result was recorded.&#39;;
+      return;
+    }
     button.disabled = true; status.textContent = &#39;Checking the fixed stable manifest…&#39;;
     var controller = new AbortController();
     var timeout = setTimeout(function () { controller.abort(); }, 5000);
@@ -15798,10 +15804,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       .then(function (text) {
         if (text.length &gt; 65536) throw new Error(&#39;manifest too large&#39;);
         var manifest = validManifest(JSON.parse(text));
-        if (!manifest || !stableVersion(artifact.generatorVersion)) {
-          status.textContent = &#39;Update status unavailable for this development artifact. No update result was recorded.&#39;;
-          return;
-        }
+        if (!manifest) throw new Error(&#39;invalid manifest&#39;);
         if (compareStableVersion(artifact.generatorVersion, manifest.version) &gt;= 0) {
           status.textContent = &#39;No newer stable version was found.&#39;;
           return;
@@ -31066,7 +31069,9 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       || !exactKeys(value.artifact, [&#39;sha256&#39;]) || !/^[a-f0-9]{64}$/.test(value.artifact.sha256)
       || typeof value.summary !== &#39;string&#39; || !value.summary || value.summary.length &gt; 160 || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value.summary)
       || value.releaseNotes !== &#39;https://github.com/tt-a1i/archify/releases/tag/v&#39; + value.version || ![&#39;normal&#39;, &#39;security&#39;].includes(value.severity)
-      || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(value.publishedAt) || !Number.isFinite(Date.parse(value.publishedAt))) return null;
+      || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(value.publishedAt)) return null;
+    var publishedAt = Date.parse(value.publishedAt);
+    if (!Number.isFinite(publishedAt) || new Date(publishedAt).toISOString() !== value.publishedAt.replace(&#39;Z&#39;, &#39;.000Z&#39;)) return null;
     return value;
   };
   var compareStableVersion = function (left, right) { var a = left.split(&#39;.&#39;).map(Number), b = right.split(&#39;.&#39;).map(Number); for (var i = 0; i &lt; 3; i += 1) if (a[i] !== b[i]) return a[i] &lt; b[i] ? -1 : 1; return 0; };
@@ -31089,6 +31094,10 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
   dialog.addEventListener(&#39;close&#39;, function () { if (originalFocus) originalFocus.focus(); });
   document.getElementById(&#39;reader-update-check&#39;).addEventListener(&#39;click&#39;, function () {
     var button = this;
+    if (!stableVersion(artifact.generatorVersion)) {
+      status.textContent = &#39;Update status unavailable for this development artifact. No update result was recorded.&#39;;
+      return;
+    }
     button.disabled = true; status.textContent = &#39;Checking the fixed stable manifest…&#39;;
     var controller = new AbortController();
     var timeout = setTimeout(function () { controller.abort(); }, 5000);
@@ -31097,10 +31106,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       .then(function (text) {
         if (text.length &gt; 65536) throw new Error(&#39;manifest too large&#39;);
         var manifest = validManifest(JSON.parse(text));
-        if (!manifest || !stableVersion(artifact.generatorVersion)) {
-          status.textContent = &#39;Update status unavailable for this development artifact. No update result was recorded.&#39;;
-          return;
-        }
+        if (!manifest) throw new Error(&#39;invalid manifest&#39;);
         if (compareStableVersion(artifact.generatorVersion, manifest.version) &gt;= 0) {
           status.textContent = &#39;No newer stable version was found.&#39;;
           return;

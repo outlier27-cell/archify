@@ -136,10 +136,11 @@ test('development artifacts never claim a stable result', {
   t.after(() => browser.close());
   const session = await browser.sessionPromise;
   const send = (method, params = {}) => browser.cdp.send(method, params, session);
+  await installNetworkProbe(send);
   const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
   await send('Page.navigate', { url: pathToFileURL(artifact).href });
   await loaded;
-  await send('Runtime.evaluate', { expression: `window.fetch = () => Promise.resolve(new Response(JSON.stringify(${JSON.stringify(stableManifest())}))); document.getElementById('btn-reader-update').click(); document.getElementById('reader-update-check').click();` });
+  await send('Runtime.evaluate', { expression: "document.getElementById('btn-reader-update').click(); document.getElementById('reader-update-check').click();" });
   for (let attempt = 0; attempt < 100; attempt += 1) {
     const status = await send('Runtime.evaluate', { returnByValue: true, expression: "document.getElementById('reader-update-status').textContent" });
     if (!/Checking the fixed stable manifest/.test(status.result.value)) break;
@@ -148,11 +149,13 @@ test('development artifacts never claim a stable result', {
   const result = await send('Runtime.evaluate', { returnByValue: true, expression: `({
     trigger: document.getElementById('btn-reader-update').textContent,
     status: document.getElementById('reader-update-status').textContent,
-    notesHidden: document.getElementById('reader-update-release-notes').hidden
+    notesHidden: document.getElementById('reader-update-release-notes').hidden,
+    requests: window.__archifyNetworkCalls,
   })` });
   assert.match(result.result.value.status, /development artifact/i);
   assert.doesNotMatch(result.result.value.trigger, /New version/i);
   assert.equal(result.result.value.notesHidden, true);
+  assert.deepEqual(result.result.value.requests, [], 'a development artifact does not request a manifest that cannot produce a result');
 });
 
 test('a malformed stable manifest cannot promote an artifact to a new version', {
@@ -170,7 +173,7 @@ test('a malformed stable manifest cannot promote an artifact to a new version', 
   const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
   await send('Page.navigate', { url: pathToFileURL(artifact).href });
   await loaded;
-  const invalid = { ...stableManifest(), summary: `Unexpected${String.fromCharCode(0)}control character` };
+  const invalid = { ...stableManifest(), publishedAt: '2025-02-30T00:00:00Z' };
   await send('Runtime.evaluate', { expression: `window.fetch = () => Promise.resolve(new Response(JSON.stringify(${JSON.stringify(invalid)}))); document.getElementById('btn-reader-update').click(); document.getElementById('reader-update-check').click();` });
   await new Promise(resolve => setTimeout(resolve, 50));
   const result = await send('Runtime.evaluate', { returnByValue: true, expression: `({
@@ -178,7 +181,7 @@ test('a malformed stable manifest cannot promote an artifact to a new version', 
     status: document.getElementById('reader-update-status').textContent,
     notesHidden: document.getElementById('reader-update-release-notes').hidden
   })` });
-  assert.match(result.result.value.status, /unavailable/i);
+  assert.equal(result.result.value.status, 'Update status unavailable. No update result was recorded.');
   assert.doesNotMatch(result.result.value.trigger, /New version/i);
   assert.equal(result.result.value.notesHidden, true);
 });
