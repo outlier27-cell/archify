@@ -15,7 +15,6 @@
       "properties": {
         "title": { "type": "string", "minLength": 1 },
         "locale": { "$ref": "common.schema.json#/$defs/locale" },
-        "feedback": { "$ref": "common.schema.json#/$defs/feedbackDestination" },
         "translations": { "$ref": "common.schema.json#/$defs/translations" },
         "subtitle": { "type": "string" },
         "output": { "$ref": "common.schema.json#/$defs/portableOutputPath" },

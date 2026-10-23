@@ -36,7 +36,6 @@
         "output": {
           "$ref": "common.schema.json#/$defs/portableOutputPath"
         },
-        "feedback": { "$ref": "common.schema.json#/$defs/feedbackDestination" },
         "locale": {
           "$ref": "common.schema.json#/$defs/locale"
         },

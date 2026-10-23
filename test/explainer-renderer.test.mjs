@@ -98,11 +98,12 @@ test('renderer: no-script content includes scope, system theme and inert operati
   const previewStyles = text(all(tree,node=>node.tagName === 'style' && node.parentNode?.attrs?.some(attribute=>attribute.value.includes('diagram-preview')))[0]);
   assert.match(previewStyles,/@media\(prefers-color-scheme:dark\)/);
   assert.match(previewStyles,/@media print/);
-  assert.equal(all(tree,node=>node.tagName === 'script' && attr(node,'type') === 'application/json').length,4,'prepared bundle, manifest, reader words, and redacted reader disclosure');
-  const disclosure = JSON.parse(text(find(tree,'archify-reader-disclosure-data')));
+  assert.equal(all(tree,node=>node.tagName === 'script' && attr(node,'type') === 'application/json').length,4,'prepared bundle, manifest, reader words, and local reader update identity');
+  const disclosure = JSON.parse(text(find(tree,'archify-reader-update-data')));
   assert.equal(disclosure.artifact.type,'explainer');
   assert.match(disclosure.artifact.contentSha256,/^[a-f0-9]{64}$/);
-  assert.equal(JSON.stringify(disclosure).includes('How <script> works?'),false,'reader disclosure must not include authored source');
+  assert.equal(Object.hasOwn(disclosure,'feedback'),false,'reader update data must not expose feedback capability');
+  assert.equal(JSON.stringify(disclosure).includes('How <script> works?'),false,'reader update data must not include authored source');
 });
 
 test('renderer: multiple native diagrams retain independent preview IDs and original payload hashes',()=>{

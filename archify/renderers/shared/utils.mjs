@@ -131,7 +131,7 @@ const SVG_SLOT_RE = /      <!-- ARCHIFY:SVG_SLOT_START -->[\s\S]*?      <!-- ARC
 const CARDS_SLOT_RE = /    <!-- ARCHIFY:CARDS_SLOT_START -->[\s\S]*?    <!-- ARCHIFY:CARDS_SLOT_END -->/;
 const SUBTITLE_SLOT_RE = /^([ \t]*)<p class="subtitle">\[Subtitle description\]<\/p>[ \t]*(\r?\n)?/m;
 const SOURCE_EVIDENCE_PLACEHOLDER = '    <!-- ARCHIFY:SOURCE_EVIDENCE_DATA -->';
-const READER_DISCLOSURE_PLACEHOLDER = '    <!-- ARCHIFY:READER_DISCLOSURE_DATA -->';
+const READER_UPDATE_PLACEHOLDER = '    <!-- ARCHIFY:READER_UPDATE_DATA -->';
 const I18N_PLACEHOLDER = '    <!-- ARCHIFY:I18N_DATA -->';
 
 function serializeScriptJson(value) {
@@ -156,7 +156,7 @@ export function applyTemplate(template, {
   locale,
   visualPreset = 'classic',
   sourceEvidence = null,
-  readerDisclosure = null,
+  readerUpdate = null,
 }) {
   if (!SVG_SLOT_RE.test(template)) {
     throw new Error('applyTemplate: template missing ARCHIFY:SVG_SLOT sentinel');
@@ -178,8 +178,8 @@ export function applyTemplate(template, {
   if (sourceEvidence && !template.includes(SOURCE_EVIDENCE_PLACEHOLDER)) {
     throw new Error(`applyTemplate: repository evidence requires placeholder ${JSON.stringify(SOURCE_EVIDENCE_PLACEHOLDER)}`);
   }
-  if (readerDisclosure && !template.includes(READER_DISCLOSURE_PLACEHOLDER)) {
-    throw new Error(`applyTemplate: reader disclosure requires placeholder ${JSON.stringify(READER_DISCLOSURE_PLACEHOLDER)}`);
+  if (readerUpdate && !template.includes(READER_UPDATE_PLACEHOLDER)) {
+    throw new Error(`applyTemplate: reader update requires placeholder ${JSON.stringify(READER_UPDATE_PLACEHOLDER)}`);
   }
   // Function replacers: a literal `$&`, `$'`, `$\`` or `$$` in titles, labels,
   // or rendered SVG must not be interpreted as a replacement pattern.
@@ -203,8 +203,8 @@ export function applyTemplate(template, {
     .replace(SOURCE_EVIDENCE_PLACEHOLDER, () => sourceEvidence
       ? `    <script id="archify-source-evidence-data" type="application/json">${sourceEvidenceJson}</script>`
       : '')
-    .replace(READER_DISCLOSURE_PLACEHOLDER, () => readerDisclosure
-      ? `    <script id="archify-reader-disclosure-data" type="application/json">${serializeScriptJson(readerDisclosure)}</script>`
+    .replace(READER_UPDATE_PLACEHOLDER, () => readerUpdate
+      ? `    <script id="archify-reader-update-data" type="application/json">${serializeScriptJson(readerUpdate)}</script>`
       : '');
 }
 

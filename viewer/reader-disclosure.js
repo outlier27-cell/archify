@@ -1,13 +1,12 @@
 (function () {
   'use strict';
-  var trigger = document.getElementById('btn-reader-disclosure');
-  var dialog = document.getElementById('reader-disclosure');
-  var payloadNode = document.getElementById('archify-reader-disclosure-data');
+  var trigger = document.getElementById('btn-reader-update');
+  var dialog = document.getElementById('reader-update');
+  var payloadNode = document.getElementById('archify-reader-update-data');
   if (!trigger || !dialog || !payloadNode) return;
   var payload;
   try { payload = JSON.parse(payloadNode.textContent); } catch (_) { trigger.hidden = true; return; }
   var artifact = payload && payload.artifact;
-  var feedback = payload && payload.feedback;
   var update = payload && payload.update;
   var safeHttps = function (value) {
     try {
@@ -29,33 +28,23 @@
   };
   var compareStableVersion = function (left, right) { var a = left.split('.').map(Number), b = right.split('.').map(Number); for (var i = 0; i < 3; i += 1) if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1; return 0; };
   if (!artifact || payload.schemaVersion !== 1 || !/^[a-f0-9]{64}$/.test(artifact.contentSha256)
-    || !safeHttps(feedback && feedback.href) || !safeHttps(update && update.manifestUrl)) { trigger.hidden = true; return; }
-  var facts = document.getElementById('reader-disclosure-facts');
-  var summary = document.getElementById('reader-disclosure-summary');
-  var status = document.getElementById('reader-disclosure-status');
-  var feedbackLink = document.getElementById('reader-disclosure-feedback');
+    || !safeHttps(update && update.manifestUrl)) { trigger.hidden = true; return; }
+  var facts = document.getElementById('reader-update-facts');
+  var status = document.getElementById('reader-update-status');
+  var current = document.getElementById('reader-update-current');
+  var available = document.getElementById('reader-update-available');
+  var summaries = document.getElementById('reader-update-summaries');
+  var notes = document.getElementById('reader-update-release-notes');
   var originalFocus = null;
-  var context = [
-    'Archify artifact feedback',
-    'type: ' + artifact.type,
-    'generator: ' + artifact.generatorVersion,
-    'content-sha256: ' + artifact.contentSha256,
-  ].join('\n');
-  summary.textContent = 'This standalone artifact includes a local build identity. Nothing is sent until you copy context, open feedback, or check for an update.';
   [['Type', artifact.type], ['Generator', artifact.generatorVersion], ['Content identity', artifact.contentSha256]].forEach(function (pair) {
     var term = document.createElement('dt'); term.textContent = pair[0];
     var definition = document.createElement('dd'); definition.textContent = pair[1];
     facts.appendChild(term); facts.appendChild(definition);
   });
-  feedbackLink.href = feedback.href;
-  feedbackLink.textContent = feedback.label;
-  trigger.textContent = 'Archify ' + artifact.generatorVersion;
+  trigger.textContent = 'Version ' + artifact.generatorVersion;
   trigger.addEventListener('click', function () { originalFocus = trigger; dialog.showModal(); dialog.querySelector('header button').focus(); });
   dialog.addEventListener('close', function () { if (originalFocus) originalFocus.focus(); });
-  document.getElementById('reader-disclosure-copy').addEventListener('click', function () {
-    copyReaderText(context).then(function (copied) { status.textContent = copied ? 'Diagnostic context copied locally.' : 'Copy was unavailable; select the identity above instead.'; });
-  });
-  document.getElementById('reader-disclosure-update').addEventListener('click', function () {
+  document.getElementById('reader-update-check').addEventListener('click', function () {
     var button = this;
     button.disabled = true; status.textContent = 'Checking the fixed stable manifest…';
     var controller = new AbortController();
@@ -65,8 +54,22 @@
       .then(function (text) {
         if (text.length > 65536) throw new Error('manifest too large');
         var manifest = validManifest(JSON.parse(text));
-        if (!manifest || !stableVersion(artifact.generatorVersion)) { status.textContent = 'Update status unavailable for this development artifact. No update result was recorded.'; return; }
-        status.textContent = compareStableVersion(artifact.generatorVersion, manifest.version) >= 0 ? 'Current stable version: ' + manifest.version + '.' : 'Stable version available: ' + manifest.version + '.';
+        if (!manifest || !stableVersion(artifact.generatorVersion)) {
+          status.textContent = 'Update status unavailable for this development artifact. No update result was recorded.';
+          return;
+        }
+        if (compareStableVersion(artifact.generatorVersion, manifest.version) >= 0) {
+          status.textContent = 'No newer stable version was found.';
+          return;
+        }
+        trigger.textContent = 'New version ' + manifest.version;
+        current.textContent = 'Current version: ' + artifact.generatorVersion;
+        available.textContent = 'New version: ' + manifest.version;
+        summaries.replaceChildren();
+        [manifest.summary].slice(0, 3).forEach(function (summary) { var item = document.createElement('li'); item.textContent = summary; summaries.appendChild(item); });
+        notes.href = manifest.releaseNotes;
+        notes.hidden = false;
+        status.textContent = 'A newer stable version is available.';
       })
       .catch(function () { status.textContent = 'Update status unavailable. No update result was recorded.'; })
       .finally(function () { clearTimeout(timeout); button.disabled = false; });

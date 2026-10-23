@@ -174,6 +174,10 @@ Another user turned a Shanghai CityWalk guide into a four-day itinerary: switch 
 
 The output is a self-contained HTML file. Download it and open it in your browser to use the node details and path exploration included in that artifact. No Archify installation is needed to view it. Send the HTML to someone else and the interactions go with it; external websites and map links need a network connection.
 
+### Standalone artifact updates
+
+A forwarded artifact remains offline-first: opening it performs no update request or background polling. A reader can explicitly open **Artifact version** and choose **Check for update**; only a strictly validated newer stable release changes the control to **New version X** and exposes up to three release summaries with the release-notes link. Reader feedback, diagnostic copying, and recipient routing are intentionally deferred to a future, separate issue.
+
 **[Explore the Shanghai CityWalk ↗](https://archify.si/cases/community/shanghai-citywalk.html)** · **[Download HTML ↓](https://github.com/tt-a1i/archify/raw/refs/heads/main/docs/cases/community/shanghai-citywalk.html)**
 
 <sub>Try switching between D1–D4, opening a place card, or following a map link. Times and place information reflect the author's original itinerary.</sub>
