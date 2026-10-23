@@ -101,3 +101,31 @@ test('development artifacts never claim a stable result', {
   assert.doesNotMatch(result.result.value.trigger, /New version/i);
   assert.equal(result.result.value.notesHidden, true);
 });
+
+test('a malformed stable manifest cannot promote an artifact to a new version', {
+  skip: chrome ? false : 'Chrome is unavailable.',
+}, async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-reader-update-invalid-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const artifact = path.join(directory, 'diagram.html');
+  execFileSync(process.execPath, [path.join(root, 'archify/bin/archify.mjs'), 'render', 'workflow', path.join(root, 'archify/examples/agent-tool-call.workflow.json'), artifact]);
+  fs.writeFileSync(artifact, fs.readFileSync(artifact, 'utf8').replace(/"generatorVersion":"[^"]+"/, '"generatorVersion":"3.2.1"'));
+  const browser = new ChromeVisualBrowser(chrome);
+  t.after(() => browser.close());
+  const session = await browser.sessionPromise;
+  const send = (method, params = {}) => browser.cdp.send(method, params, session);
+  const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
+  await send('Page.navigate', { url: pathToFileURL(artifact).href });
+  await loaded;
+  const invalid = { ...stableManifest(), summary: `Unexpected${String.fromCharCode(0)}control character` };
+  await send('Runtime.evaluate', { expression: `window.fetch = () => Promise.resolve(new Response(JSON.stringify(${JSON.stringify(invalid)}))); document.getElementById('btn-reader-update').click(); document.getElementById('reader-update-check').click();` });
+  await new Promise(resolve => setTimeout(resolve, 50));
+  const result = await send('Runtime.evaluate', { returnByValue: true, expression: `({
+    trigger: document.getElementById('btn-reader-update').textContent,
+    status: document.getElementById('reader-update-status').textContent,
+    notesHidden: document.getElementById('reader-update-release-notes').hidden
+  })` });
+  assert.match(result.result.value.status, /unavailable/i);
+  assert.doesNotMatch(result.result.value.trigger, /New version/i);
+  assert.equal(result.result.value.notesHidden, true);
+});
