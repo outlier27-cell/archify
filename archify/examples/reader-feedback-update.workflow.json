@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "diagram_type": "workflow",
+  "meta": {
+    "title": "Reader Feedback and Update Flow",
+    "output": "examples/reader-feedback-update.workflow.html",
+    "quality_profile": "showcase",
+    "feedback": {
+      "label": "Project feedback",
+      "href": "https://github.com/tt-a1i/archify/issues/new?template=artifact-feedback.yml"
+    }
+  },
+  "lanes": [
+    { "id": "reader", "label": "Reader" },
+    { "id": "artifact", "label": "Standalone Artifact" },
+    { "id": "project", "label": "Project" }
+  ],
+  "mainPath": ["open", "inspect", "copy", "share"],
+  "nodes": [
+    { "id": "open", "lane": "reader", "col": 0, "type": "frontend", "label": "Open artifact", "sublabel": "offline by default" },
+    { "id": "inspect", "lane": "artifact", "col": 1, "width": 118, "type": "backend", "label": "Inspect identity", "sublabel": "type, version, digest" },
+    { "id": "copy", "lane": "reader", "col": 2, "type": "frontend", "label": "Copy context", "sublabel": "reader initiated" },
+    { "id": "share", "lane": "project", "col": 3, "width": 150, "type": "external", "label": "Open feedback form", "sublabel": "no automatic data transfer" }
+  ],
+  "edges": [
+    { "from": "open", "to": "inspect" },
+    { "from": "inspect", "to": "copy" },
+    { "from": "copy", "to": "share" }
+  ],
+  "cards": [
+    { "dot": "emerald", "title": "Reader control", "items": ["Opening a file is network silent", "Feedback context is copied only after a click"] },
+    { "dot": "cyan", "title": "Trusted destinations", "items": ["Default feedback opens the repository form", "Manifest lookup uses one fixed stable URL"] }
+  ]
+}

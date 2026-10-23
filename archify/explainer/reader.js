@@ -11,6 +11,36 @@
   const all = (selector, within = document) => [...within.querySelectorAll(selector)];
   let toastTimer;
   function notify(text) { const toast=byId('toast');toast.textContent=text;toast.classList.add('visible');clearTimeout(toastTimer);toastTimer=setTimeout(()=>toast.classList.remove('visible'),3000); }
+  function setupReaderDisclosure() {
+    const trigger = document.querySelector('[data-reader-disclosure]'), dialog = byId('reader-disclosure');
+    let disclosure;
+    try { disclosure = read('archify-reader-disclosure-data'); } catch { trigger?.remove(); return; }
+    const safe = value => { try { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && !url.hash && url.href === value ? url : null; } catch { return null; } };
+    const stableVersion = value => typeof value === 'string' && /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(value);
+    const exactKeys = (value, keys) => value && typeof value === 'object' && !Array.isArray(value) && Object.keys(value).sort().join('\0') === [...keys].sort().join('\0');
+    const validManifest = value => {
+      if (!exactKeys(value,['schemaVersion','skillId','channel','version','publishedAt','source','artifact','summary','releaseNotes','severity']) || value.schemaVersion!==1 || value.skillId!=='archify' || value.channel!=='stable' || !stableVersion(value.version) || !exactKeys(value.source,['repository','ref','treeSha']) || value.source.repository!=='https://github.com/tt-a1i/archify' || value.source.ref!=='v'+value.version || !/^[a-f0-9]{40}$/.test(value.source.treeSha) || !exactKeys(value.artifact,['sha256']) || !/^[a-f0-9]{64}$/.test(value.artifact.sha256) || typeof value.summary!=='string' || !value.summary || value.summary.length>160 || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value.summary) || value.releaseNotes!=='https://github.com/tt-a1i/archify/releases/tag/v'+value.version || !['normal','security'].includes(value.severity) || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(value.publishedAt) || Number.isNaN(Date.parse(value.publishedAt))) return null;
+      return value;
+    };
+    const compareStableVersion = (left,right) => { const a=left.split('.').map(Number),b=right.split('.').map(Number); for(let index=0;index<3;index+=1)if(a[index]!==b[index])return a[index]<b[index]?-1:1;return 0; };
+    const artifact = disclosure?.artifact, feedback = disclosure?.feedback, update = disclosure?.update;
+    if (!trigger || !dialog || disclosure?.schemaVersion !== 1 || !artifact || !/^[a-f0-9]{64}$/.test(artifact.contentSha256) || !safe(feedback?.href) || !safe(update?.manifestUrl)) { trigger?.remove(); return; }
+    const facts = dialog.querySelector('[data-reader-disclosure-facts]');
+    dialog.querySelector('[data-reader-disclosure-summary]').textContent = say('This page keeps its artifact identity locally. Nothing is sent until you choose an action.', '此页面在本地保留生成身份；仅在你主动操作时才会发生外部请求。');
+    [['Type',artifact.type],['Generator',artifact.generatorVersion],['Content identity',artifact.contentSha256]].forEach(([key,value]) => { const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=key;dd.textContent=value;facts.append(dt,dd); });
+    const feedbackLink = dialog.querySelector('[data-reader-disclosure-feedback]'); feedbackLink.href = feedback.href; feedbackLink.textContent = feedback.label;
+    const status = dialog.querySelector('[data-reader-disclosure-status]');
+    const context = ['Archify artifact feedback','type: '+artifact.type,'generator: '+artifact.generatorVersion,'content-sha256: '+artifact.contentSha256].join('\n');
+    let opener;
+    trigger.addEventListener('click',()=>{opener=trigger;dialog.showModal();});
+    dialog.querySelector('[data-close-reader-disclosure]').addEventListener('click',()=>dialog.close());
+    dialog.addEventListener('close',()=>opener?.focus());
+    dialog.querySelector('[data-reader-disclosure-copy]').addEventListener('click',()=>Promise.resolve(navigator.clipboard?.writeText(context)).then(()=>status.textContent=say('Diagnostic context copied locally.','诊断上下文已复制到本地剪贴板。'),()=>status.textContent=say('Copy unavailable. Select the identity above instead.','复制不可用；请改为选择上方身份信息。')));
+    dialog.querySelector('[data-reader-disclosure-update]').addEventListener('click',function () {
+      const button=this, controller=new AbortController(), timeout=setTimeout(()=>controller.abort(),5000); button.disabled=true;status.textContent=say('Checking the fixed stable manifest…','正在检查固定的稳定版清单…');
+      fetch(update.manifestUrl,{method:'GET',credentials:'omit',cache:'no-store',redirect:'error',signal:controller.signal}).then(response=>{if(!response.ok)throw new Error('unavailable');return response.text();}).then(text=>{if(text.length>65536)throw new Error('too large');const manifest=validManifest(JSON.parse(text));if(!manifest||!stableVersion(artifact.generatorVersion)){status.textContent=say('Update status unavailable for this development artifact. No update result was recorded.','开发版生成物无法确定更新状态，未记录任何更新结果。');return;}status.textContent=compareStableVersion(artifact.generatorVersion,manifest.version)>=0?say('Current stable version: ','当前稳定版本：')+manifest.version:say('Stable version available: ','发现稳定版本：')+manifest.version;}).catch(()=>status.textContent=say('Update status unavailable. No update result was recorded.','更新状态不可用，未记录任何更新结果。')).finally(()=>{clearTimeout(timeout);button.disabled=false;});
+    });
+  }
   // Measured board layout. Each panel is measured at every column width, then each column template is
   // simulated and the one with the least page height and blank area wins. Panels keep source order on
   // a 1px row grid, so the DOM and reading order never change.
@@ -682,6 +712,7 @@
   setupWalks();
   setupAsk();
   setupSourceCards();
+  setupReaderDisclosure();
   layoutBoard();
   const relayout = () => { layoutBoard(); ensureDiagramReadability(); };
   Promise.resolve(document.fonts?.ready).then(()=>requestAnimationFrame(()=>requestAnimationFrame(relayout)));

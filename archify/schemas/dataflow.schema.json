@@ -34,6 +34,7 @@
         "locale": {
           "$ref": "common.schema.json#/$defs/locale"
         },
+        "feedback": { "$ref": "common.schema.json#/$defs/feedbackDestination" },
         "translations": {
           "$ref": "common.schema.json#/$defs/translations"
         },

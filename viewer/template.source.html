@@ -600,6 +600,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         <button id="btn-semantic-lens" type="button" aria-label="{{i18n:viewer.nav.lens}}" aria-haspopup="dialog" aria-expanded="false" aria-pressed="false" aria-controls="semantic-lens" title="{{i18n:viewer.nav.lens.title}}">{{i18n:viewer.nav.lens.short}}</button>
         <button id="btn-node-finder" type="button" aria-label="{{i18n:viewer.nav.find}}" aria-haspopup="dialog" aria-expanded="false" aria-controls="node-finder" title="{{i18n:viewer.nav.find.title}}" data-node-finder-trigger><span class="diagram-nav-icon find" aria-hidden="true"></span></button>
         <button id="btn-diagram-guide" type="button" aria-label="{{i18n:viewer.nav.guide}}" aria-haspopup="dialog" aria-expanded="false" aria-controls="diagram-guide" title="{{i18n:viewer.nav.guide.title}}"><span class="diagram-nav-icon guide" aria-hidden="true"></span></button>
+        <button id="btn-reader-disclosure" type="button" aria-haspopup="dialog" aria-controls="reader-disclosure" title="Artifact information and feedback">Info</button>
         <button data-view="out" type="button" aria-label="{{i18n:viewer.nav.zoomOut}}" title="{{i18n:viewer.nav.zoomOut.title}}"><span class="diagram-nav-icon minus" aria-hidden="true"></span></button>
         <button data-view="reset" type="button" aria-label="{{i18n:viewer.nav.reset}}" title="{{i18n:viewer.nav.reset.title}}"><span class="diagram-nav-detail" data-view-detail hidden>{{i18n:viewer.nav.read}}</span><span class="diagram-nav-percent" data-view-percent>100%</span></button>
         <button data-view="in" type="button" aria-label="{{i18n:viewer.nav.zoomIn}}" title="{{i18n:viewer.nav.zoomIn.title}}"><span class="diagram-nav-icon plus" aria-hidden="true"></span></button>
@@ -664,6 +665,17 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
   </div>
 
+  <dialog class="reader-disclosure no-print" id="reader-disclosure" aria-labelledby="reader-disclosure-title">
+    <form method="dialog">
+      <header><h2 id="reader-disclosure-title">Artifact information</h2><button id="reader-disclosure-close" type="submit" aria-label="Close artifact information">Close</button></header>
+      <p id="reader-disclosure-summary"></p>
+      <dl id="reader-disclosure-facts"></dl>
+      <p class="reader-disclosure-status" id="reader-disclosure-status" role="status"></p>
+      <div class="reader-disclosure-actions"><button type="button" id="reader-disclosure-copy">Copy diagnostic context</button><a id="reader-disclosure-feedback" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">Share feedback</a><button type="button" id="reader-disclosure-update">Check for update</button></div>
+    </form>
+  </dialog>
+
+    <!-- ARCHIFY:READER_DISCLOSURE_DATA -->
   <script>
     var Archify = {};
     var archifyI18nData = (function () {
@@ -1069,6 +1081,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
     };
 
 /* ARCHIFY:READER_LAYOUT */
+/* ARCHIFY:READER_DISCLOSURE */
 /* ARCHIFY:CHROME_LAYOUT */
     Archify.layoutStability = {
       whenStable: function () {
