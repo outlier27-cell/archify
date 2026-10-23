@@ -83,6 +83,7 @@ test('development artifacts never claim a stable result', {
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const artifact = path.join(directory, 'diagram.html');
   execFileSync(process.execPath, [path.join(root, 'archify/bin/archify.mjs'), 'render', 'workflow', path.join(root, 'archify/examples/agent-tool-call.workflow.json'), artifact]);
+  fs.writeFileSync(artifact, fs.readFileSync(artifact, 'utf8').replace(/"generatorVersion":"[^"]+"/, '"generatorVersion":"3.2.1-dev.1"'));
   const browser = new ChromeVisualBrowser(chrome);
   t.after(() => browser.close());
   const session = await browser.sessionPromise;
@@ -91,13 +92,17 @@ test('development artifacts never claim a stable result', {
   await send('Page.navigate', { url: pathToFileURL(artifact).href });
   await loaded;
   await send('Runtime.evaluate', { expression: `window.fetch = () => Promise.resolve(new Response(JSON.stringify(${JSON.stringify(stableManifest())}))); document.getElementById('btn-reader-update').click(); document.getElementById('reader-update-check').click();` });
-  await new Promise(resolve => setTimeout(resolve, 50));
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const status = await send('Runtime.evaluate', { returnByValue: true, expression: "document.getElementById('reader-update-status').textContent" });
+    if (!/Checking the fixed stable manifest/.test(status.result.value)) break;
+    await new Promise(resolve => setTimeout(resolve, 10));
+  }
   const result = await send('Runtime.evaluate', { returnByValue: true, expression: `({
     trigger: document.getElementById('btn-reader-update').textContent,
     status: document.getElementById('reader-update-status').textContent,
     notesHidden: document.getElementById('reader-update-release-notes').hidden
   })` });
-  assert.match(result.result.value.status, /unavailable/i);
+  assert.match(result.result.value.status, /development artifact/i);
   assert.doesNotMatch(result.result.value.trigger, /New version/i);
   assert.equal(result.result.value.notesHidden, true);
 });

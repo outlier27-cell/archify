@@ -178,9 +178,6 @@ export function applyTemplate(template, {
   if (sourceEvidence && !template.includes(SOURCE_EVIDENCE_PLACEHOLDER)) {
     throw new Error(`applyTemplate: repository evidence requires placeholder ${JSON.stringify(SOURCE_EVIDENCE_PLACEHOLDER)}`);
   }
-  if (readerUpdate && !template.includes(READER_UPDATE_PLACEHOLDER)) {
-    throw new Error(`applyTemplate: reader update requires placeholder ${JSON.stringify(READER_UPDATE_PLACEHOLDER)}`);
-  }
   // Function replacers: a literal `$&`, `$'`, `$\`` or `$$` in titles, labels,
   // or rendered SVG must not be interpreted as a replacement pattern.
   const sourceEvidenceJson = serializeScriptJson(sourceEvidence);
