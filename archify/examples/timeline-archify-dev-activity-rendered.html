@@ -11011,7 +11011,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       || !exactKeys(value.artifact, ['sha256']) || !/^[a-f0-9]{64}$/.test(value.artifact.sha256)
       || typeof value.summary !== 'string' || !value.summary || value.summary.length > 160 || /[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/u.test(value.summary)
       || value.releaseNotes !== 'https://github.com/tt-a1i/archify/releases/tag/v' + value.version || !['normal', 'security'].includes(value.severity)
-      || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(value.publishedAt) || Number.isNaN(Date.parse(value.publishedAt))) return null;
+      || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/.test(value.publishedAt) || !Number.isFinite(Date.parse(value.publishedAt))) return null;
     return value;
   };
   var compareStableVersion = function (left, right) { var a = left.split('.').map(Number), b = right.split('.').map(Number); for (var i = 0; i < 3; i += 1) if (a[i] !== b[i]) return a[i] < b[i] ? -1 : 1; return 0; };

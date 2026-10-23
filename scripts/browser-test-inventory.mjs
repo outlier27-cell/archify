@@ -6,7 +6,6 @@ export const browserTestFiles = [
   'reader-readability-maintained-browser.test.mjs',
   'reader-layout-browser.test.mjs',
   'reader-layout-settle-browser.test.mjs',
-  'reader-disclosure-browser.test.mjs',
   'reader-cards-overflow-browser.test.mjs',
   'joint-layout-browser.test.mjs',
   'sequence-header-clearance.test.mjs',
@@ -46,4 +45,5 @@ export const browserTestFiles = [
   'bottom-node-index-browser.test.mjs',
   'explainer-browser.test.mjs',
   'story-browser.test.mjs',
+  'reader-disclosure-browser.test.mjs',
 ];

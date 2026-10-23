@@ -19,6 +19,33 @@ function stableManifest() {
   };
 }
 
+async function installNetworkProbe(send, manifest = stableManifest()) {
+  const source = `(() => {
+    const calls = [];
+    Object.defineProperty(window, '__archifyNetworkCalls', { value: calls });
+    const record = (kind, value) => calls.push({ kind, url: String(value) });
+    window.fetch = (input) => {
+      record('fetch', input);
+      return Promise.resolve(new Response(JSON.stringify(${JSON.stringify(manifest)}), {
+        status: 200, headers: { 'content-type': 'application/json' }
+      }));
+    };
+    const xhrOpen = XMLHttpRequest.prototype.open;
+    XMLHttpRequest.prototype.open = function (_method, url, ...rest) {
+      record('xhr', url);
+      return xhrOpen.call(this, _method, url, ...rest);
+    };
+    for (const key of ['WebSocket', 'EventSource']) {
+      const Native = window[key];
+      if (!Native) continue;
+      const Wrapped = function (...args) { record(key.toLowerCase(), args[0]); return new Native(...args); };
+      Wrapped.prototype = Native.prototype;
+      window[key] = Wrapped;
+    }
+  })();`;
+  await send('Page.addScriptToEvaluateOnNewDocument', { source });
+}
+
 test('reader update is local on load and exposes a strict, accessible notice only after an explicit check', {
   skip: chrome ? false : 'Chrome is unavailable.',
 }, async (t) => {
@@ -33,6 +60,7 @@ test('reader update is local on load and exposes a strict, accessible notice onl
   t.after(() => browser.close());
   const session = await browser.sessionPromise;
   const send = (method, params = {}) => browser.cdp.send(method, params, session);
+  await installNetworkProbe(send);
   const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
   await send('Page.navigate', { url: pathToFileURL(artifact).href });
   await loaded;
@@ -40,17 +68,14 @@ test('reader update is local on load and exposes a strict, accessible notice onl
     dialogOpen: document.getElementById('reader-update').open,
     trigger: document.getElementById('btn-reader-update').textContent,
     feedback: document.querySelector('[data-reader-feedback]'),
-    requests: window.__readerUpdateRequests || 0
+    requests: window.__archifyNetworkCalls
   }))()` });
   assert.equal(before.result.value.dialogOpen, false);
   assert.match(before.result.value.trigger, /Version 3\.2\.1/);
   assert.equal(before.result.value.feedback, null);
-  assert.equal(before.result.value.requests, 0, 'loading the artifact does not fetch a manifest');
+  assert.deepEqual(before.result.value.requests, [], 'loading the artifact makes no fetch, XHR, WebSocket, or EventSource request');
 
-  const intercepted = await send('Runtime.evaluate', { expression: `window.__readerUpdateRequests = 0; window.fetch = () => {
-    window.__readerUpdateRequests += 1;
-    return Promise.resolve(new Response(JSON.stringify(${JSON.stringify(stableManifest())})));
-  }; document.getElementById('btn-reader-update').focus(); document.getElementById('btn-reader-update').click(); document.getElementById('reader-update-check').click();` });
+  const intercepted = await send('Runtime.evaluate', { expression: `document.getElementById('btn-reader-update').focus(); document.getElementById('btn-reader-update').click(); document.getElementById('reader-update-check').click();` });
   assert.equal(intercepted.exceptionDetails, undefined, intercepted.exceptionDetails?.exception?.description);
   await new Promise(resolve => setTimeout(resolve, 50));
   const after = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => {
@@ -63,7 +88,7 @@ test('reader update is local on load and exposes a strict, accessible notice onl
       available: document.getElementById('reader-update-available').textContent,
       summaries: [...document.querySelectorAll('#reader-update-summaries li')].map(node => node.textContent),
       releaseNotes: document.getElementById('reader-update-release-notes').href,
-      requests: window.__readerUpdateRequests,
+      requests: window.__archifyNetworkCalls,
     };
   })()` });
   assert.equal(after.result.value.open, true);
@@ -73,7 +98,30 @@ test('reader update is local on load and exposes a strict, accessible notice onl
   assert.match(after.result.value.available, /3\.2\.2/);
   assert.deepEqual(after.result.value.summaries, ['Reader update notice is available.']);
   assert.equal(after.result.value.releaseNotes, 'https://github.com/tt-a1i/archify/releases/tag/v3.2.2');
-  assert.equal(after.result.value.requests, 1);
+  assert.deepEqual(after.result.value.requests, [{ kind: 'fetch', url: 'https://tt-a1i.github.io/archify/skill-updates/archify/stable.json' }]);
+});
+
+test('explainer initial load makes no network requests', {
+  skip: chrome ? false : 'Chrome is unavailable.',
+}, async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-reader-update-explainer-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
+  const { renderExplainer } = await import('../archify/explainer/render.mjs');
+  const artifact = path.join(directory, 'explainer.html');
+  fs.writeFileSync(artifact, renderExplainer({
+    schema_version: 1, diagram_type: 'explainer', meta: { id: 'offline-explainer', title: 'Offline explainer', locale: 'en' },
+    answer: { summary: 'Read locally.' }, panels: [{ id: 'main', title: 'Main', blocks: [{ id: 'text', type: 'prose', text: 'No network request is needed.' }] }], sources: [],
+  }, { sourceText: '{}' }));
+  const browser = new ChromeVisualBrowser(chrome);
+  t.after(() => browser.close());
+  const session = await browser.sessionPromise;
+  const send = (method, params = {}) => browser.cdp.send(method, params, session);
+  await installNetworkProbe(send);
+  const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
+  await send('Page.navigate', { url: pathToFileURL(artifact).href });
+  await loaded;
+  const result = await send('Runtime.evaluate', { returnByValue: true, expression: 'window.__archifyNetworkCalls' });
+  assert.deepEqual(result.result.value, [], 'loading an explainer makes no fetch, XHR, WebSocket, or EventSource request');
 });
 
 test('development artifacts never claim a stable result', {
