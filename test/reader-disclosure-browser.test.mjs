@@ -24,9 +24,10 @@ async function installNetworkProbe(send, manifest = stableManifest()) {
     const calls = [];
     Object.defineProperty(window, '__archifyNetworkCalls', { value: calls });
     const record = (kind, value) => calls.push({ kind, url: String(value) });
+    window.__archifyManifest = ${JSON.stringify(manifest)};
     window.fetch = (input) => {
       record('fetch', input);
-      return Promise.resolve(new Response(JSON.stringify(${JSON.stringify(manifest)}), {
+      return Promise.resolve(new Response(JSON.stringify(window.__archifyManifest), {
         status: 200, headers: { 'content-type': 'application/json' }
       }));
     };
@@ -44,6 +45,28 @@ async function installNetworkProbe(send, manifest = stableManifest()) {
     }
   })();`;
   await send('Page.addScriptToEvaluateOnNewDocument', { source });
+}
+
+async function renderExplainerArtifact(directory, version = '3.2.1') {
+  const { renderExplainer } = await import('../archify/explainer/render.mjs');
+  const artifact = path.join(directory, 'explainer.html');
+  const html = renderExplainer({
+    schema_version: 1, diagram_type: 'explainer', meta: { id: 'offline-explainer', title: 'Offline explainer', locale: 'en' },
+    answer: { summary: 'Read locally.' }, panels: [{ id: 'main', title: 'Main', blocks: [{ id: 'text', type: 'prose', text: 'No network request is needed.' }] }], sources: [],
+  }, { sourceText: '{}' });
+  fs.writeFileSync(artifact, html.replace(/"generatorVersion":"[^"]+"/, `"generatorVersion":"${version}"`));
+  return artifact;
+}
+
+async function openArtifact(browser, artifact, manifest = stableManifest()) {
+  const session = await browser.sessionPromise;
+  const send = (method, params = {}) => browser.cdp.send(method, params, session);
+  await installNetworkProbe(send, manifest);
+  const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
+  await send('Page.navigate', { url: pathToFileURL(artifact).href });
+  await loaded;
+  await send('Runtime.evaluate', { expression: `window.__archifyManifest = ${JSON.stringify(manifest)}` });
+  return send;
 }
 
 test('reader update is local on load and exposes a strict, accessible notice only after an explicit check', {
@@ -101,27 +124,76 @@ test('reader update is local on load and exposes a strict, accessible notice onl
   assert.deepEqual(after.result.value.requests, [{ kind: 'fetch', url: 'https://tt-a1i.github.io/archify/skill-updates/archify/stable.json' }]);
 });
 
-test('explainer initial load makes no network requests', {
+test('explainer initial load calls none of the four instrumented JavaScript network APIs', {
   skip: chrome ? false : 'Chrome is unavailable.',
 }, async (t) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-reader-update-explainer-'));
   t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
-  const { renderExplainer } = await import('../archify/explainer/render.mjs');
-  const artifact = path.join(directory, 'explainer.html');
-  fs.writeFileSync(artifact, renderExplainer({
-    schema_version: 1, diagram_type: 'explainer', meta: { id: 'offline-explainer', title: 'Offline explainer', locale: 'en' },
-    answer: { summary: 'Read locally.' }, panels: [{ id: 'main', title: 'Main', blocks: [{ id: 'text', type: 'prose', text: 'No network request is needed.' }] }], sources: [],
-  }, { sourceText: '{}' }));
+  const artifact = await renderExplainerArtifact(directory);
+  const browser = new ChromeVisualBrowser(chrome);
+  t.after(() => browser.close());
+  const send = await openArtifact(browser, artifact);
+  const result = await send('Runtime.evaluate', { returnByValue: true, expression: 'window.__archifyNetworkCalls' });
+  assert.deepEqual(result.result.value, [], 'loading an explainer calls none of fetch, XHR, WebSocket, or EventSource');
+});
+
+test('explainer reader update follows the native development and manifest failure contract', {
+  skip: chrome ? false : 'Chrome is unavailable.',
+}, async (t) => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-reader-update-explainer-contract-'));
+  t.after(() => fs.rmSync(directory, { recursive: true, force: true }));
   const browser = new ChromeVisualBrowser(chrome);
   t.after(() => browser.close());
   const session = await browser.sessionPromise;
   const send = (method, params = {}) => browser.cdp.send(method, params, session);
   await installNetworkProbe(send);
-  const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
-  await send('Page.navigate', { url: pathToFileURL(artifact).href });
-  await loaded;
-  const result = await send('Runtime.evaluate', { returnByValue: true, expression: 'window.__archifyNetworkCalls' });
-  assert.deepEqual(result.result.value, [], 'loading an explainer makes no fetch, XHR, WebSocket, or EventSource request');
+  async function inspectUpdate({ version = '3.2.1', manifest = stableManifest() }) {
+    const artifact = await renderExplainerArtifact(directory, version);
+    const loaded = browser.cdp.waitFor('Page.loadEventFired', session);
+    await send('Page.navigate', { url: pathToFileURL(artifact).href });
+    await loaded;
+    await send('Runtime.evaluate', { expression: `window.__archifyManifest = ${JSON.stringify(manifest)}; window.__archifyNetworkCalls.length = 0;` });
+    await send('Runtime.evaluate', { expression: "document.querySelector('[data-reader-update]').click(); document.querySelector('[data-reader-update-check]').click();" });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    const result = await send('Runtime.evaluate', { returnByValue: true, expression: `(() => ({
+      trigger: document.querySelector('[data-reader-update]').textContent,
+      status: document.querySelector('[data-reader-update-status]').textContent,
+      notesHidden: document.querySelector('[data-reader-update-release-notes]').hidden,
+      requests: window.__archifyNetworkCalls,
+    }))()` });
+    return result.result.value;
+  }
+
+  await t.test('development artifacts do not request a manifest', async () => {
+    const result = await inspectUpdate({ version: '3.2.1-dev.1' });
+    assert.match(result.status, /development artifact/i);
+    assert.doesNotMatch(result.trigger, /New version/i);
+    assert.equal(result.notesHidden, true);
+    assert.deepEqual(result.requests, [], 'a development explainer must return before fetch');
+  });
+
+  await t.test('a malformed stable manifest fails closed', async () => {
+    const result = await inspectUpdate({ manifest: {} });
+    assert.equal(result.status, 'Update status unavailable. No update result was recorded.');
+    assert.doesNotMatch(result.trigger, /New version/i);
+    assert.equal(result.notesHidden, true);
+    assert.deepEqual(result.requests, [{ kind: 'fetch', url: 'https://tt-a1i.github.io/archify/skill-updates/archify/stable.json' }]);
+  });
+
+  await t.test('a calendar-invalid stable manifest fails closed', async () => {
+    const result = await inspectUpdate({ manifest: { ...stableManifest(), publishedAt: '2025-02-30T00:00:00Z' } });
+    assert.equal(result.status, 'Update status unavailable. No update result was recorded.');
+    assert.doesNotMatch(result.trigger, /New version/i);
+    assert.equal(result.notesHidden, true);
+  });
+
+  await t.test('a valid stable manifest is read once after explicit check', async () => {
+    const result = await inspectUpdate({ manifest: stableManifest() });
+    assert.equal(result.status, 'A newer stable version is available.');
+    assert.equal(result.trigger, 'New version 3.2.2');
+    assert.equal(result.notesHidden, false);
+    assert.deepEqual(result.requests, [{ kind: 'fetch', url: 'https://tt-a1i.github.io/archify/skill-updates/archify/stable.json' }]);
+  });
 });
 
 test('development artifacts never claim a stable result', {
