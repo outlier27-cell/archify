@@ -20,9 +20,14 @@ import {
 
 const input = process.argv[2];
 const DEFAULT_MAX_CROSSING_PAIR_CHECKS = 50_000;
+const DEFAULT_MAX_CROSSING_SEGMENT_PAIR_CHECKS = 500_000;
 const maxCrossingPairChecks = positiveIntegerEnvironment(
   'ARCHIFY_CHECK_MAX_CROSSING_PAIR_CHECKS',
   DEFAULT_MAX_CROSSING_PAIR_CHECKS,
+);
+const maxCrossingSegmentPairChecks = positiveIntegerEnvironment(
+  'ARCHIFY_CHECK_MAX_CROSSING_SEGMENT_PAIR_CHECKS',
+  DEFAULT_MAX_CROSSING_SEGMENT_PAIR_CHECKS,
 );
 
 if (!input || input === '-h' || input === '--help') {
@@ -147,7 +152,12 @@ if (svgMatches.length === 1) {
     diagonal.length === 0,
     diagonal.map(({ arrow, segmentIndex }) => `${arrow.kind} ${arrow.index} segment ${segmentIndex + 1}: expected an orthogonal segment or an explicitly authored direct straight route; ${arrow.raw}`),
   );
-  const crossingAnalysis = collectRelationshipCrossings(arrows, workflowV2, maxCrossingPairChecks);
+  const crossingAnalysis = collectRelationshipCrossings(
+    arrows,
+    workflowV2,
+    maxCrossingPairChecks,
+    maxCrossingSegmentPairChecks,
+  );
   const measuredRelationshipCrossings = crossingAnalysis.crossings;
   const resolvedCrossovers = measuredRelationshipCrossings.filter((hit) => (
     hit.left.crossoverHalo && hit.right.crossoverHalo
@@ -339,8 +349,12 @@ if (svgMatches.length === 1) {
         severity: 'error',
         code: 'composition/crossing-analysis-budget',
         attemptedPairs: crossingAnalysis.attemptedPairs,
-        limit: maxCrossingPairChecks,
-        detail: `Crossing analysis stopped after ${crossingAnalysis.attemptedPairs} relationship pairs (limit ${maxCrossingPairChecks}); inspection is incomplete. Increase ARCHIFY_CHECK_MAX_CROSSING_PAIR_CHECKS and rerun the check.`,
+        attemptedSegmentPairs: crossingAnalysis.attemptedSegmentPairs,
+        pairLimit: maxCrossingPairChecks,
+        segmentPairLimit: maxCrossingSegmentPairChecks,
+        exhaustedBudget: crossingAnalysis.exhaustedBudget,
+        detail: crossingBudgetDetail(crossingAnalysis),
+        supportedFixes: crossingBudgetFixes(crossingAnalysis),
       }] : []),
       ...ambiguousCorridors.map((hit) => ({
         severity: corridorIsError ? 'error' : 'warning',
@@ -416,7 +430,7 @@ if (svgMatches.length === 1) {
     !crossingAnalysis.exhausted && (!crossingIsError || relationshipCrossings.length === 0),
     [...relationshipCrossings.map((hit) => (
       `[composition/proper-crossing] ${qualityProfile} ${relationshipName(hit.left)} crosses ${relationshipName(hit.right)} at [${formatPoint(hit.point)}]`
-    )), ...(crossingAnalysis.exhausted ? [`[composition/crossing-analysis-budget] stopped after ${crossingAnalysis.attemptedPairs} relationship pairs (limit ${maxCrossingPairChecks})`] : [])],
+    )), ...(crossingAnalysis.exhausted ? [`[composition/crossing-analysis-budget] ${crossingBudgetDetail(crossingAnalysis)}`] : [])],
   );
   addCheck(
     'relationship_corridors',
@@ -748,7 +762,12 @@ function parseRoutePoints(value) {
   return points.length >= 2 && points.every(isPoint) ? points : null;
 }
 
-function collectRelationshipCrossings(arrows, includeSharedEndpoints = false, limit = DEFAULT_MAX_CROSSING_PAIR_CHECKS) {
+function collectRelationshipCrossings(
+  arrows,
+  includeSharedEndpoints = false,
+  pairLimit = DEFAULT_MAX_CROSSING_PAIR_CHECKS,
+  segmentPairLimit = DEFAULT_MAX_CROSSING_SEGMENT_PAIR_CHECKS,
+) {
   const relationships = arrows.filter((arrow) => arrow.from && arrow.to && arrow.segments.length).map(arrow => ({
     ...arrow,
     // Readable-v2 routePoints come from the visible path, never its metadata.
@@ -757,6 +776,7 @@ function collectRelationshipCrossings(arrows, includeSharedEndpoints = false, li
   }));
   const crossings = [];
   let attemptedPairs = 0;
+  let attemptedSegmentPairs = 0;
   for (let leftIndex = 0; leftIndex < relationships.length; leftIndex += 1) {
     const left = relationships[leftIndex];
     for (let rightIndex = leftIndex + 1; rightIndex < relationships.length; rightIndex += 1) {
@@ -767,11 +787,17 @@ function collectRelationshipCrossings(arrows, includeSharedEndpoints = false, li
           && !includeSharedEndpoints
           && !(left.independentPorts && right.independentPorts)
           && !(left.automaticWorkflowRoute && right.automaticWorkflowRoute)) continue;
-      if (attemptedPairs >= limit) return { crossings, attemptedPairs, exhausted: true };
+      if (attemptedPairs >= pairLimit) {
+        return { crossings, attemptedPairs, attemptedSegmentPairs, exhausted: true, exhaustedBudget: 'relationship-pairs' };
+      }
       attemptedPairs += 1;
       let point = null;
       for (const leftSegment of left.segments) {
         for (const rightSegment of right.segments) {
+          if (attemptedSegmentPairs >= segmentPairLimit) {
+            return { crossings, attemptedPairs, attemptedSegmentPairs, exhausted: true, exhaustedBudget: 'segment-pairs' };
+          }
+          attemptedSegmentPairs += 1;
           point = properSegmentIntersection(leftSegment.start, leftSegment.end, rightSegment.start, rightSegment.end);
           if (point) break;
         }
@@ -780,7 +806,20 @@ function collectRelationshipCrossings(arrows, includeSharedEndpoints = false, li
       if (point) crossings.push({ left, right, point });
     }
   }
-  return { crossings, attemptedPairs, exhausted: false };
+  return { crossings, attemptedPairs, attemptedSegmentPairs, exhausted: false, exhaustedBudget: null };
+}
+
+function crossingBudgetDetail(analysis) {
+  const attempted = analysis.exhaustedBudget === 'segment-pairs'
+    ? `${analysis.attemptedSegmentPairs} segment pairs (limit ${maxCrossingSegmentPairChecks}) after ${analysis.attemptedPairs} relationship pairs`
+    : `${analysis.attemptedPairs} relationship pairs (limit ${maxCrossingPairChecks}) after ${analysis.attemptedSegmentPairs} segment pairs`;
+  return `Crossing analysis stopped after ${attempted}; inspection is incomplete.`;
+}
+
+function crossingBudgetFixes(analysis) {
+  return analysis.exhaustedBudget === 'segment-pairs'
+    ? ['increase ARCHIFY_CHECK_MAX_CROSSING_SEGMENT_PAIR_CHECKS for this known-large artifact and rerun the check']
+    : ['increase ARCHIFY_CHECK_MAX_CROSSING_PAIR_CHECKS for this known-large artifact and rerun the check'];
 }
 
 function positiveIntegerEnvironment(name, fallback) {

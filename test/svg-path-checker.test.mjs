@@ -213,6 +213,27 @@ test('交叉分析预算耗尽时以失败回执结束，不把未完成检查�
     result.receipt.composition.issues.find(item => item.code === 'composition/crossing-analysis-budget')?.attemptedPairs,
     1,
   );
+  assert.match(
+    result.receipt.composition.issues.find(item => item.code === 'composition/crossing-analysis-budget')?.supportedFixes?.join('\n') || '',
+    /ARCHIFY_CHECK_MAX_CROSSING_PAIR_CHECKS/,
+  );
+});
+
+test('交叉分析限制每个关系对内的线段乘积，并给出可执行的恢复指引', async t => {
+  const result = await check(t, [
+    arrow('M20 20H100V40H20V60H100', { id: 'many-left', from: 'a', to: 'b' }),
+    arrow('M200 120H280V140H200V160H280', { id: 'many-right', from: 'c', to: 'd' }),
+  ].join(''), {
+    env: { ARCHIFY_CHECK_MAX_CROSSING_SEGMENT_PAIR_CHECKS: '1' },
+    publicCli: true,
+  });
+  assert.equal(result.code, 1);
+  const issue = result.receipt.composition.issues.find(item => item.code === 'composition/crossing-analysis-budget');
+  assert.equal(issue?.exhaustedBudget, 'segment-pairs');
+  assert.equal(issue?.attemptedPairs, 1);
+  assert.equal(issue?.attemptedSegmentPairs, 1);
+  assert.match(issue?.detail || '', /segment pairs \(limit 1\)/);
+  assert.match(issue?.supportedFixes?.join('\n') || '', /ARCHIFY_CHECK_MAX_CROSSING_SEGMENT_PAIR_CHECKS/);
 });
 
 test('Z 回到当前子路径起点，后续相对 m 不沿旧终点移动', async t => {
