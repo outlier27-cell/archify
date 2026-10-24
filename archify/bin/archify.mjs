@@ -2711,6 +2711,7 @@ const CHECK_FIXES = {
 };
 
 const COMPOSITION_FIXES = {
+  'composition/crossing-analysis-budget': ['increase the reported ARCHIFY_CHECK_MAX_CROSSING_PAIR_CHECKS or ARCHIFY_CHECK_MAX_CROSSING_SEGMENT_PAIR_CHECKS value for this known-large artifact and rerun the check'],
   'composition/proper-crossing': ['if authored via/route/channelX/channelY controls exist and are not required by the user, remove them to let the renderer re-plan; otherwise preserve that intent and adjust route/via or channel coordinates so unrelated relationships use separate corridors'],
   'composition/ambiguous-corridor': ['if authored via/route/channelX/channelY controls exist and are not required by the user, remove them to let the renderer re-plan; otherwise preserve that intent and adjust route/via or channel coordinates so unrelated relationships do not visually merge'],
   'composition/container-border-run': ['if authored via/route/channelX/channelY controls exist and are not required by the user, remove them to let the renderer re-plan; otherwise preserve that intent and route across the frame perpendicularly through a clear opening'],
