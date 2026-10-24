@@ -253,6 +253,24 @@ test('公共 deliver CLI 将交叉预算恢复指引写入诊断', async t => {
   assert.match(diagnostic?.supportedFixes?.join('\n') || '', /ARCHIFY_CHECK_MAX_CROSSING_PAIR_CHECKS/);
 });
 
+test('公共 deliver CLI 保留线段对预算的特定恢复指引', async t => {
+  const output = path.join(scratch, `${sequence++}-event-stream-segment-budget.html`);
+  const result = await execute(t, [
+    cli,
+    'deliver',
+    'dataflow',
+    path.join(skillRoot, 'examples', 'event-stream.dataflow.json'),
+    output,
+    '--json',
+  ], 'event-stream dataflow with an intentionally exhausted segment-pair budget', deadlineMs, {
+    ARCHIFY_CHECK_MAX_CROSSING_SEGMENT_PAIR_CHECKS: '1',
+  });
+  assert.equal(result.code, 1);
+  const diagnostic = result.receipt.diagnostics.find(item => item.code === 'composition/crossing-analysis-budget');
+  assert.match(diagnostic?.supportedFixes?.join('\n') || '', /ARCHIFY_CHECK_MAX_CROSSING_SEGMENT_PAIR_CHECKS/);
+  assert.doesNotMatch(diagnostic?.supportedFixes?.join('\n') || '', /ARCHIFY_CHECK_MAX_CROSSING_PAIR_CHECKS/);
+});
+
 test('Z 回到当前子路径起点，后续相对 m 不沿旧终点移动', async t => {
   const d = 'M20 20H100V100H20Z m0 120h60';
   const other = arrow('M10 180H30', { id: 'other', from: 'c', to: 'd' });
