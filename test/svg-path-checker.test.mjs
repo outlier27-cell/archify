@@ -219,6 +219,34 @@ test('交叉分析预算耗尽时以失败回执结束，不把未完成检查�
   );
 });
 
+test('交叉分析关系对预算只接受安全正整数环境变量', async t => {
+  // 318 relationships produce 50,403 eligible pairs, so invalid overrides
+  // must fall back to the production 50,000-pair limit rather than merely
+  // differing from an explicitly tiny valid override.
+  const body = Array.from({ length: 318 }, (_, index) => arrow('M20 20H80', {
+    id: `fallback-${index}`,
+    from: `source-${index}`,
+    to: `target-${index}`,
+  })).join('');
+  for (const [value, expectedLimit] of [
+    ['', 50_000],
+    ['not-a-number', 50_000],
+    ['0', 50_000],
+    ['1.5', 50_000],
+    ['9007199254740992', 50_000],
+    ['1', 1],
+  ]) {
+    const result = await check(t, body, {
+      env: { ARCHIFY_CHECK_MAX_CROSSING_PAIR_CHECKS: value },
+    });
+    assert.equal(result.code, 1);
+    const issue = result.receipt.composition.issues.find(item => item.code === 'composition/crossing-analysis-budget');
+    assert.equal(issue?.exhaustedBudget, 'relationship-pairs');
+    assert.equal(issue?.attemptedPairs, expectedLimit);
+    assert.match(issue?.detail || '', new RegExp(`relationship pairs \\(limit ${expectedLimit}\\)`));
+  }
+});
+
 test('交叉分析限制每个关系对内的线段乘积，并给出可执行的恢复指引', async t => {
   const result = await check(t, [
     arrow('M20 20H100V40H20V60H100', { id: 'many-left', from: 'a', to: 'b' }),
