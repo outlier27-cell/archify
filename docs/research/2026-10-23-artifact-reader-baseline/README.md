@@ -4,7 +4,7 @@ This record answers the baseline request on [#1068](https://github.com/tt-a1i/ar
 
 ## Question
 
-Does the narrow-screen Explainer overflow described in #1068 already exist on current `dev`, or does it appear only when the #1066 Version control is present?
+What did this recorded Chinese Explainer input do at `390x844` on the two exact revisions below? This record does not decide whether narrow-screen overflow exists in every locale, style, or current-`dev` scenario.
 
 ## Exact inputs and revisions
 
@@ -74,14 +74,18 @@ States:
 
 The raw structured measurements are retained in [observations.json](observations.json).
 
-## Conclusion and scope consequence
+## Recorded result and scope
 
-The P0 narrow-screen overflow is **not present on current dev** for this input and viewport. It appears with the #1066 Version control:
+For this historical Chinese/`390x844` comparison, current `dev` was contained while the recorded #1066 revision overflowed:
 
 - current dev ends with the Export control at 352px and remains contained at 390px;
 - the #1066 head appends Version at 438px initially and New version at 451px after an explicit check.
 
-Therefore P0 is an **integration fix that depends on #1066** (or an equivalent Version-control change reaching `dev`). It must not be implemented as an independent current-dev UI improvement. P1 (identity presentation) and P2 (possible lighter disclosure) remain deferred and have not begun.
+This result preserves the exact revision and fixture evidence above. It does **not** establish that P0 must depend on #1066, or that current `dev` cannot have an independent narrow-screen fix.
+
+Later, separately owned evidence on [#1068's exact-upstream matrix](https://github.com/tt-a1i/archify/issues/1068#issuecomment-6371368371) covers English and Chinese, four styles, and `320`/`390`/`1440` viewports on exact upstream `dev` and the current #1066 head. Its [single-`reader.css` before/after follow-up](https://github.com/tt-a1i/archify/issues/1068#issuecomment-6371823416) reports the same matrix before and after BlueboxC's candidate, while keeping stable-version fixtures distinct from untouched artifacts. Those records support the current P0 scope; this PR neither reruns them nor adopts their candidate.
+
+This remains a narrow evidence PR, not a P0 implementation or approval to change the rendering path. P1 (identity presentation) and P2 (possible lighter disclosure) remain deferred.
 
 ## Limits
 
