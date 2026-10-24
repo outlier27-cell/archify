@@ -83,7 +83,7 @@ For this historical Chinese/`390x844` comparison, current `dev` was contained wh
 
 This result preserves the exact revision and fixture evidence above. It does **not** establish that P0 must depend on #1066, or that current `dev` cannot have an independent narrow-screen fix.
 
-Later, separately owned evidence on [#1068's exact-upstream matrix](https://github.com/tt-a1i/archify/issues/1068#issuecomment-6371368371) covers English and Chinese, four styles, and `320`/`390`/`1440` viewports on exact upstream `dev` and the current #1066 head. Its [single-`reader.css` before/after follow-up](https://github.com/tt-a1i/archify/issues/1068#issuecomment-6371823416) reports the same matrix before and after BlueboxC's candidate, while keeping stable-version fixtures distinct from untouched artifacts. Those records support the current P0 scope; this PR neither reruns them nor adopts their candidate.
+Later, [BlueboxC's separately owned exact-upstream matrix on #1068](https://github.com/tt-a1i/archify/issues/1068#issuecomment-6371368371) covers English and Chinese, four styles, and `320`/`390`/`1440` viewports on exact upstream `dev` and the current #1066 head. BlueboxC's [single-`reader.css` before/after follow-up](https://github.com/tt-a1i/archify/issues/1068#issuecomment-6371823416) reports the same matrix before and after their candidate, while keeping stable-version fixtures distinct from untouched artifacts. Those records support the current P0 scope; this PR neither reruns them nor adopts their candidate.
 
 This remains a narrow evidence PR, not a P0 implementation or approval to change the rendering path. P1 (identity presentation) and P2 (possible lighter disclosure) remain deferred.
 
