@@ -25,14 +25,20 @@ archify/examples/delivery.explainer.json
 
 The tracked [capture harness](capture-baseline.mjs) renders both artifacts and opens them in the repository's `ChromeVisualBrowser` adapter. It applies identical desktop and narrow viewport metrics, then records layout boxes, control visibility, document overflow, and a PNG screenshot. For the #1066 head only, it substitutes a deterministic response to the existing explicit update-check action so the post-check control label can be measured. This response is installed before navigation; it does not create an initial-load request and it is not part of either artifact.
 
-Commands used from a checkout at current dev:
+Commands used from this PR checkout (the checkout that contains this capture harness):
 
 ```powershell
 git fetch origin dev --prune
-git worktree add -b docs/1068-artifact-reader-baseline <worktree> origin/dev
-$env:ARCHIFY_REFERENCE_ROOT='<checkout at bd5244388fedd4e74462fb04c588bbbea5c18956>'
+$devRoot = '<checkout at b71d1b3e38f71d0f7fe91207b750cc307357c91a>'
+$referenceRoot = '<checkout at bd5244388fedd4e74462fb04c588bbbea5c18956>'
+git -C $devRoot rev-parse HEAD
+git -C $referenceRoot rev-parse HEAD
+$env:ARCHIFY_DEV_ROOT = $devRoot
+$env:ARCHIFY_REFERENCE_ROOT = $referenceRoot
 node docs/research/2026-10-23-artifact-reader-baseline/capture-baseline.mjs
 ```
+
+The harness rejects either root unless its checked-out `HEAD` exactly equals the SHA in the table above. It deliberately does not render the PR checkout as `dev`.
 
 Viewports:
 

@@ -5,20 +5,31 @@ import {fileURLToPath, pathToFileURL} from 'node:url';
 import {ChromeVisualBrowser, findChrome} from '../../../archify/bin/visual-check.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+const devRoot = process.env.ARCHIFY_DEV_ROOT;
 const referenceRoot = process.env.ARCHIFY_REFERENCE_ROOT;
-if (!referenceRoot || !fs.existsSync(path.join(referenceRoot, 'archify/examples/delivery.explainer.json'))) {
-  throw new Error('Set ARCHIFY_REFERENCE_ROOT to a checkout at the audited reference revision.');
+const expectedDevSha = 'b71d1b3e38f71d0f7fe91207b750cc307357c91a';
+const expectedReferenceSha = 'bd5244388fedd4e74462fb04c588bbbea5c18956';
+const input = 'archify/examples/delivery.explainer.json';
+function verifiedRoot(variable, value, expectedSha) {
+  if (!value || !fs.existsSync(path.join(value, input))) {
+    throw new Error(`Set ${variable} to a checkout containing ${input}.`);
+  }
+  const checkout = path.resolve(value);
+  const sha = execFileSync('git', ['rev-parse', 'HEAD'], {cwd: checkout, encoding: 'utf8'}).trim();
+  if (sha !== expectedSha) throw new Error(`${variable} must resolve to ${expectedSha}; received ${sha}.`);
+  return {root: checkout, sha};
 }
+const dev = verifiedRoot('ARCHIFY_DEV_ROOT', devRoot, expectedDevSha);
+const reference = verifiedRoot('ARCHIFY_REFERENCE_ROOT', referenceRoot, expectedReferenceSha);
 const out = path.dirname(fileURLToPath(import.meta.url));
 const artifacts = path.join(out, 'artifacts');
 const screenshots = path.join(out, 'screenshots');
 fs.mkdirSync(artifacts, {recursive: true});
 fs.mkdirSync(screenshots, {recursive: true});
 
-const input = 'archify/examples/delivery.explainer.json';
 const revisions = [
-  {id: 'dev-b71d1b3', root, sha: execFileSync('git', ['rev-parse', 'HEAD'], {cwd: root, encoding: 'utf8'}).trim()},
-  {id: 'bd524438', root: path.resolve(referenceRoot), sha: execFileSync('git', ['rev-parse', 'HEAD'], {cwd: referenceRoot, encoding: 'utf8'}).trim()},
+  {id: 'dev-b71d1b3', ...dev},
+  {id: 'bd524438', ...reference},
 ];
 for (const revision of revisions) {
   revision.artifact = path.join(artifacts, `${revision.id}.delivery-explainer.html`);
@@ -55,7 +66,7 @@ async function screenshot(browser, label, revision, viewport, state) {
     const dialog = document.getElementById('reader-update');
     return {innerWidth,innerHeight,scrollWidth:document.documentElement.scrollWidth,scrollHeight:document.documentElement.scrollHeight,overflowX:document.documentElement.scrollWidth > innerWidth,tools:tools ? rect(tools) : null,controls,dialog:dialog ? {open:dialog.open,rect:rect(dialog),status:(document.getElementById('reader-update-status') || document.querySelector('[data-reader-update-status]'))?.textContent.trim() || ''} : null};
   })()`);
-  records.push({revision: revision.id, sha: revision.sha, viewport, state, screenshot: path.relative(out, file).replaceAll('\\\\', '/'), measurement});
+  records.push({revision: revision.id, sha: revision.sha, viewport, state, screenshot: path.relative(out, file).replaceAll('\\', '/'), measurement});
 }
 async function load(browser, artifact, viewport) {
   const session = await browser.sessionPromise;

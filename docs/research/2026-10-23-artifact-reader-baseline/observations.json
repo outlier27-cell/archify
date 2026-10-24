@@ -31,7 +31,7 @@
         "height": 900
       },
       "state": "initial",
-      "screenshot": "screenshots\\dev-b71d1b3-1440x900-initial.png",
+      "screenshot": "screenshots/dev-b71d1b3-1440x900-initial.png",
       "measurement": {
         "innerWidth": 1440,
         "innerHeight": 900,
@@ -124,7 +124,7 @@
         "height": 844
       },
       "state": "initial",
-      "screenshot": "screenshots\\dev-b71d1b3-390x844-initial.png",
+      "screenshot": "screenshots/dev-b71d1b3-390x844-initial.png",
       "measurement": {
         "innerWidth": 390,
         "innerHeight": 844,
@@ -217,7 +217,7 @@
         "height": 900
       },
       "state": "initial",
-      "screenshot": "screenshots\\bd524438-1440x900-initial.png",
+      "screenshot": "screenshots/bd524438-1440x900-initial.png",
       "measurement": {
         "innerWidth": 1440,
         "innerHeight": 900,
@@ -334,7 +334,7 @@
         "height": 900
       },
       "state": "update-available",
-      "screenshot": "screenshots\\bd524438-1440x900-update-available.png",
+      "screenshot": "screenshots/bd524438-1440x900-update-available.png",
       "measurement": {
         "innerWidth": 1440,
         "innerHeight": 900,
@@ -451,7 +451,7 @@
         "height": 844
       },
       "state": "initial",
-      "screenshot": "screenshots\\bd524438-390x844-initial.png",
+      "screenshot": "screenshots/bd524438-390x844-initial.png",
       "measurement": {
         "innerWidth": 390,
         "innerHeight": 844,
@@ -568,7 +568,7 @@
         "height": 844
       },
       "state": "update-available",
-      "screenshot": "screenshots\\bd524438-390x844-update-available.png",
+      "screenshot": "screenshots/bd524438-390x844-update-available.png",
       "measurement": {
         "innerWidth": 390,
         "innerHeight": 844,
