@@ -67,6 +67,8 @@
 
   --frontend-fill: rgba(34, 211, 238, 0.15);
   --frontend-stroke: #0891b2;
+  /* #1040: darker accent for small bold reader text; the diagram stroke above is untouched. */
+  --reader-accent: #077f9c;
   --backend-fill: rgba(52, 211, 153, 0.18);
   --backend-stroke: #059669;
   --database-fill: rgba(167, 139, 250, 0.2);
@@ -135,10 +137,12 @@
   --text: #102638;
   --text-muted: #587287;
   --text-dim: #8aa2b4;
-  --text-faint: #668397;
+  --text-faint: #5d778a; /* #1040: was #668397 at 3.99:1 on reader surfaces */
   --mask: #ffffff;
   --frontend-fill: rgba(6, 182, 212, 0.09);
   --frontend-stroke: #0789a1;
+  /* #1040: darker accent for small bold reader text; the diagram stroke above is untouched. */
+  --reader-accent: #067e95;
   --backend-fill: rgba(5, 150, 105, 0.09);
   --backend-stroke: #087f69;
   --database-fill: rgba(124, 58, 237, 0.09);
@@ -206,7 +210,7 @@
   --text: #123344;
   --text-muted: #4e7486;
   --text-dim: #86a6b4;
-  --text-faint: #668c9d;
+  --text-faint: #577786; /* #1040: was #668c9d at 3.54:1 on reader surfaces */
   --mask: #f9fdff;
   --frontend-fill: rgba(8, 145, 178, 0.08);
   --frontend-stroke: #087f9c;
@@ -283,10 +287,12 @@
   --text: #242018;
   --text-muted: #6f6658;
   --text-dim: #a09788;
-  --text-faint: #817767;
+  --text-faint: #796f60; /* #1040: was #817767 at 4.15:1 on reader surfaces */
   --mask: #fbf8f1;
   --frontend-fill: rgba(31, 117, 126, 0.09);
   --frontend-stroke: #287e84;
+  /* #1040: darker accent for small bold reader text; the diagram stroke above is untouched. */
+  --reader-accent: #267a80;
   --backend-fill: rgba(42, 119, 75, 0.09);
   --backend-stroke: #397b53;
   --database-fill: rgba(105, 75, 130, 0.09);
@@ -2359,6 +2365,18 @@ html[data-preset="blueprint"] .node-finder-results { border-radius: 0.18rem; }
   padding: 0.1rem 0.8rem 0.65rem;
   color: var(--text-faint);
   font-size: 0.5625rem;
+}
+/* #1040: small bold reader text in the semantic accent color (Passport
+   direction chip, Finder result count) falls below the 4.5:1 normal-text
+   floor in some light themes. Resolve a darker --reader-accent where the
+   preset defines one; the diagram's --frontend-stroke itself is untouched,
+   as are dark themes and presets that already pass. Zero counts stay faint
+   on purpose, so they are excluded from the darker rule. Route-target
+   finders keep their --security-stroke status color, so they are excluded
+   too. */
+html[data-theme="light"] .semantic-passport-meta [data-passport="kind"],
+html[data-theme="light"] .node-finder:not([data-context="route-target"]) .node-finder-result em:not([data-zero]) {
+  color: var(--reader-accent, var(--frontend-stroke));
 }
 
 .cards {
