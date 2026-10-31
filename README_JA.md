@@ -58,10 +58,6 @@ https://github.com/user-attachments/assets/78570807-ba1d-4737-953f-55504a378a87
 
 Cursor、Claude Code、Codex CLI、OpenCode で利用できます。その他の連携については下記のインストール方法を参照してください。
 
-```bash
-npx skills add tt-a1i/archify -g
-```
-
 **AI エージェントに任せる。** 次の文をそのまま貼り付けてください:
 
 ```text
@@ -198,10 +194,6 @@ Export メニューから PNG をクリップボードにコピーしたり、�
 
 ### 1. インストール
 
-```bash
-npx skills add tt-a1i/archify -g
-```
-
 **AI エージェントに任せる**
 
 次の文をそのまま貼り付けてください:
@@ -215,13 +207,13 @@ Install Archify for me by reading https://raw.githubusercontent.com/tt-a1i/archi
 Cursor のみにインストールする場合:
 
 ```bash
-npx -y skills add tt-a1i/archify --skill archify --agent cursor --global --copy --yes
+npx -y skills@latest add https://archify.si --skill archify --agent cursor --global --copy --yes
 ```
 
 または、5 つすべてのエージェントが必要な場合のみ:
 
 ```bash
-npx -y skills add tt-a1i/archify --skill archify --agent cursor --agent codex --agent claude-code --agent opencode --agent github-copilot --global --copy --yes
+npx -y skills@latest add https://archify.si --skill archify --agent cursor --agent codex --agent claude-code --agent opencode --agent github-copilot --global --copy --yes
 ```
 
 <details>
