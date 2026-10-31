@@ -275,7 +275,7 @@
       "nodeCount": 7,
       "edgeCount": 12,
       "artifactBytes": 871847,
-      "artifactSha256": "3fc1d3c1087a8c1916fc9122d6d553842441b963ce345d4986995a226f1f09b4",
+      "artifactSha256": "00b86d57a01145cb0b0827d8101efa56fc1e533a175d0c50f09d2c479bba217a",
       "sourceBytes": 3805,
       "sourceSha256": "f8486daa803fff6c295cecca4604c561fbbf9acb2e83326022b5a87639e8afe6",
       "checks": [
@@ -870,7 +870,7 @@
       "nodeCount": 7,
       "edgeCount": 14,
       "artifactBytes": 872193,
-      "artifactSha256": "a9dd9e6d5888435d8657972085bf293469a74515168278aca02679492fa7acbb",
+      "artifactSha256": "08ad7ac28f96264b3a59007322137c76ecde992526baf7d419f4d72c4578b829",
       "sourceBytes": 3766,
       "sourceSha256": "b8c6c52f1763ede2933c77deb8da59b3e06917bc41d27e66df896136456b859a",
       "checks": [
