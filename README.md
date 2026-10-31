@@ -60,10 +60,6 @@ https://github.com/user-attachments/assets/78570807-ba1d-4737-953f-55504a378a87
 
 Works with Cursor, Claude Code, Codex CLI, and OpenCode. See installation options below for additional integrations.
 
-```bash
-npx skills add tt-a1i/archify -g
-```
-
 **With an AI agent.** Paste this:
 
 ```text
@@ -224,10 +220,6 @@ Open [`examples/web-app.html`](examples/web-app.html) locally to try the complet
 
 ### 1. Install
 
-```bash
-npx skills add tt-a1i/archify -g
-```
-
 **With an AI agent**
 
 Paste this to your agent:
@@ -241,13 +233,13 @@ Or install without prompts. Pass one agent, or repeat `--agent` for every switch
 Cursor only:
 
 ```bash
-npx -y skills add tt-a1i/archify --skill archify --agent cursor --global --copy --yes
+npx -y skills@latest add https://archify.si --skill archify --agent cursor --global --copy --yes
 ```
 
 Or, only if you want all five agents:
 
 ```bash
-npx -y skills add tt-a1i/archify --skill archify --agent cursor --agent codex --agent claude-code --agent opencode --agent github-copilot --global --copy --yes
+npx -y skills@latest add https://archify.si --skill archify --agent cursor --agent codex --agent claude-code --agent opencode --agent github-copilot --global --copy --yes
 ```
 
 <details>
