@@ -54,6 +54,16 @@ test('overlay: components map to modules through their sources; descendants foll
   assert.equal(result.mapped, 2);
 });
 
+test('overlay: compares only mapped static relationships and preserves unknown edges', () => {
+  const declared = { ...ir, connections: [{ from: 'app', to: 'lib', label: 'uses' }] };
+  const p = payloadOf(buildOverlay({ ir: declared, graph, html: FAKE_HTML, map: null }).html);
+  assert.equal(p.consistency.status, 'comparable');
+  assert.deepEqual(p.consistency.missing, []);
+  assert.deepEqual(p.consistency.extra, []);
+  const undeclared = payloadOf(buildOverlay({ ir, graph, html: FAKE_HTML, map: null }).html);
+  assert.equal(undeclared.consistency.status, 'unknown');
+});
+
 test('overlay: an absent source path does not claim a module by directory prefix', () => {
   const missingSource = { ...ir, components: [{ id: 'app', type: 'backend', label: 'App', sources: [{ path: 'src/missing.mjs' }] }] };
   const graphWithFiles = { ...graph, fileModules: { 'src/index.mjs': 'src', 'src/lib/helper.mjs': 'src-lib', 'tools/x.mjs': 'tools' } };
@@ -69,19 +79,19 @@ test('overlay: missing paths remain unknown without file facts or file ownership
   assert.deepEqual(p.components[0].modules.map((m) => m.id), ['src', 'src-lib'], 'legacy graph mapping remains a compatibility inference');
 });
 
-test('overlay: indicators are red for a proven load-time failure, amber for an eager cycle, blue for a lazy-closed or package-level one, green otherwise', () => {
+test('overlay: indicators follow structural cycle severity while preserving runtime caveats', () => {
   const facts = { schema_version: 1, repository: graph.repository, files: [{ path: 'src/index.mjs', loc: 1, role: 'source' }, { path: 'src/lib/helper.mjs', loc: 1, role: 'source' }], symbols: [], calls: [], imports: [], unresolved: { external: 0, outside: 0, unknown: 0, opaque: 0 } };
   const base = { id: 'COUP-0001', dimension: 'coupling', confidence: 1, message: 'm', supportedFixes: [] };
   const fileCycle = (kind, severity = kind === 'eager' ? 'warning' : 'info') => ({ ...base, code: 'coupling/import-cycle', severity, subject: { files: ['src/index.mjs', 'src/lib/helper.mjs'] }, evidence: { kind, risk: { loading: severity === 'error' ? 'proven-failure' : kind === 'eager' ? 'order-dependent' : 'none-at-import', coupling: 'present', loadingNote: 'n' }, path: [], imports: [], lazyImports: 0, totalImports: 2, threshold: null } });
-  const pkgCycle = { ...base, code: 'coupling/cycle', severity: 'info', subject: { modules: ['src', 'src-lib'] }, evidence: { kind: 'eager', path: [], edges: [], imports: [], totalImports: 2, threshold: null } };
+  const pkgCycle = { ...base, code: 'coupling/cycle', severity: 'error', subject: { modules: ['src', 'src-lib'] }, evidence: { kind: 'eager', path: [], edges: [], imports: [], totalImports: 2, threshold: null } };
   const status = (findings) => payloadOf(buildOverlay({ ir, graph, html: FAKE_HTML, map: null, facts, findings }).html).components.find((c) => c.id === 'app').indicators;
   assert.equal(status([fileCycle('eager', 'error')]).status, 'red');
   assert.equal(status([fileCycle('eager')]).status, 'amber');
   assert.equal(status([fileCycle('lazy-closed')]).status, 'blue');
   const pkg = status([pkgCycle]);
-  assert.equal(pkg.status, 'blue');
+  assert.equal(pkg.status, 'red');
   assert.deepEqual(pkg.items[0].detail, ['component:lib']);
-  assert.match(pkg.items[0].value, /package-level cycle/);
+  assert.match(pkg.items[0].value, /module cycle error/);
   const clean = status([]);
   assert.equal(clean.status, 'green');
   assert.equal(clean.items[0].value, 'none');

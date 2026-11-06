@@ -102,7 +102,7 @@ test('Python submodule imports include package initialization, exposing the real
     'pkg/__init__.py': 'from a import A\n', 'pkg/sub.py': 'B = 1\n',
   });
   assert.ok(facts.imports.some((e) => e.from === 'a.py' && e.to === 'pkg/__init__.py' && e.implicit && e.line === 1));
-  assert.ok(cycles.some((f) => f.severity === 'warning' && f.subject.files.includes('pkg/__init__.py')));
+  assert.ok(cycles.some((f) => f.severity === 'error' && f.subject.files.includes('pkg/__init__.py')));
   assert.match(python(root, 'import a').stderr, /ImportError/);
 });
 
@@ -115,7 +115,7 @@ test('Python nested package initializers are included once, without false ancest
 test('Python simple eager failure is a candidate, not a claim that static line order is proof', (t) => {
   const { root, cycles } = analyze(t, { 'a.py': 'from b import B\nclass A: pass\n', 'b.py': 'from a import A\nclass B: pass\n' });
   assert.match(python(root, 'import a').stderr, /ImportError/);
-  assert.equal(cycles[0].severity, 'warning');
+  assert.equal(cycles[0].severity, 'error');
   assert.equal(cycles[0].evidence.risk.loading, 'potential-partial-init');
   assert.ok(cycles[0].evidence.partialInitCandidate);
   assert.ok(cycles[0].confidence < 1);
@@ -202,7 +202,7 @@ test('single-file runtime cycles retain eager and deferred risk semantics', (t) 
   assert.equal(eager.cycles.length, 1);
   assert.deepEqual(eager.cycles[0].subject.files, ['a/x.py']);
   assert.deepEqual(eager.cycles[0].evidence.path, ['a/x.py']);
-  assert.equal(eager.cycles[0].severity, 'warning');
+  assert.equal(eager.cycles[0].severity, 'error');
   assert.equal(eager.cycles[0].evidence.risk.loading, 'potential-partial-init');
   const lazy = analyze(t, { 'a/x.py': 'def load():\n    import a.x\n' });
   assert.equal(lazy.cycles.length, 1);
@@ -380,14 +380,14 @@ test('Python expression guards preserve eager prefixes and deferred bodies', (t)
   for (const expression of expressions) {
     const { facts, cycles } = analyze(t, { 'a.py': `value = ${expression}\n`, 'b.py': 'import a\n' });
     assert.equal(facts.imports.find(e => e.to === 'b.py').conditional, true, expression);
-    assert.equal(cycles[0].severity, 'info', expression);
+    assert.equal(cycles[0].severity, 'warning', expression);
   }
   for (const expression of ['__import__("b") and flag', 'value if __import__("b") else None', '(x for x in __import__("b"))', '[x for x in __import__("b")]']) {
     const { facts, cycles } = analyze(t, { 'a.py': `value = ${expression}\n`, 'b.py': 'import a\n' });
     const edge = facts.imports.find(e => e.to === 'b.py');
     assert.equal(edge.conditional, undefined, expression);
     assert.equal(edge.lazy, undefined, expression);
-    assert.equal(cycles[0].severity, 'warning', expression);
+    assert.equal(cycles[0].severity, 'error', expression);
   }
   const { facts } = analyze(t, {
     'a.py': 'value = (__import__("elt") for x in __import__("outer") if __import__("guard") for y in __import__("inner"))\ndef f():\n    return [x for x in __import__("nested")]\n',

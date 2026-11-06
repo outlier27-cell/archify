@@ -88,6 +88,7 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
     edgeMap.set(key, { from: c.id, to: o.component, weight: o.weight, evidence: o.evidence });
   }
   const edges = [...edgeMap.values()].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : 1));
+  const consistency = compareDeclaredEdges(ir, graph, mapping);
   const unmapped = graph.modules.filter((m) => !claimed.has(m.id)).map((m) => ({ id: m.id, label: m.label, files: m.files, loc: m.loc, fanIn: m.fanIn, fanOut: m.fanOut, fileList: (fileIndex.get(m.id) || []).map((f) => ({ ...f, module: m.id })) }));
   const fileModule = new Map([...fileIndex].flatMap(([id, list]) => list.map((f) => [f.path, id])));
   const reviewed = run.review ? run.review.findings : {};
@@ -107,6 +108,7 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
     hasFileFacts: Boolean(facts),
     components,
     edges,
+    consistency,
     unmapped,
     findings: listed,
     baselineConfigured: Boolean(run.baselineConfigured),
@@ -124,6 +126,24 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
   const idx = html.lastIndexOf('</body>');
   const out = idx === -1 ? html + injection : html.slice(0, idx) + injection + html.slice(idx);
   return { html: out, overview: payload.overview, mapped: components.filter((c) => c.modules.length).length, components: components.length, edges: edges.length, unmapped: unmapped.length, snippets: Object.keys(payload.snippets).length };
+}
+
+// Compare only resolved static module relationships that can be mapped to an
+// authored component. Dynamic/unmapped relationships stay unknown rather than
+// being presented as architecture errors.
+function compareDeclaredEdges(ir, graph, mapping) {
+  const declared = new Set((ir.connections || []).filter((edge) => edge && edge.from && edge.to).map((edge) => `${edge.from}>${edge.to}`));
+  if (!declared.size) return { status: 'unknown', reason: 'the authored diagram declares no comparable connections', missing: [], extra: [] };
+  const componentForModule = new Map();
+  for (const [component, modules] of mapping) for (const module of modules) componentForModule.set(module, component);
+  const actual = new Set(), unknown = [];
+  for (const edge of graph.edges || []) {
+    const from = componentForModule.get(edge.from), to = componentForModule.get(edge.to);
+    if (!from || !to) { unknown.push({ from: edge.from, to: edge.to, reason: 'module is not mapped to an authored component' }); continue; }
+    if ((edge.kinds?.lazy || edge.kinds?.conditional || edge.kinds?.typeOnly) && !edge.kinds?.eager) { unknown.push({ from, to, reason: 'relationship is deferred, conditional, or type-only' }); continue; }
+    actual.add(`${from}>${to}`);
+  }
+  return { status: unknown.length ? 'partial' : 'comparable', missing: [...actual].filter((edge) => !declared.has(edge)).sort(), extra: [...declared].filter((edge) => !actual.has(edge)).sort(), unknown };
 }
 
 // Modules a finding is about: named directly, or owning one of its files.
@@ -172,24 +192,27 @@ function indicators(set, mods, findings, mapping, filePaths) {
   if (!mods.length) return { status: 'grey', items: [] };
   const owner = new Map();
   for (const [cid, ids] of mapping) for (const id of ids) owner.set(id, cid);
-  // Tiers follow reported severity. Current cycle rules use warning or info;
-  // neither a deferred cycle nor a missing finding establishes import safety.
+  // Tiers follow the reported structural severity. Error means the dependency
+  // shape requires attention; the text still avoids claiming runtime failure.
   const fileCycles = findings.filter((f) => f.code === 'coupling/import-cycle' && f.subject.files.some((p) => filePaths.has(p)));
   const proven = fileCycles.filter((f) => f.severity === 'error');
   const eagerFileCycles = fileCycles.filter((f) => f.evidence.kind === 'eager' && f.severity !== 'error');
   const structuralFileCycles = fileCycles.filter((f) => f.evidence.kind === 'structural');
   const lazyFileCycles = fileCycles.filter((f) => !['eager', 'structural'].includes(f.evidence.kind));
   const cycles = findings.filter((f) => f.code === 'coupling/cycle' && f.subject.modules.some((m) => set.has(m)));
+  const moduleErrors = cycles.filter((f) => f.severity === 'error');
   const partners = new Set();
   for (const f of cycles) for (const m of f.subject.modules) if (!set.has(m)) partners.add(owner.get(m) ? `component:${owner.get(m)}` : `module:${m}`);
   const internalOnly = cycles.length > 0 && partners.size === 0;
-  const cycleStatus = proven.length ? 'red' : eagerFileCycles.length ? 'amber' : (structuralFileCycles.length || lazyFileCycles.length || cycles.length) ? 'blue' : 'green';
-  const cycleValue = proven.length
+  const cycleStatus = proven.length || moduleErrors.length ? 'red' : eagerFileCycles.length ? 'amber' : (structuralFileCycles.length || lazyFileCycles.length || cycles.length) ? 'blue' : 'green';
+  const cycleValue = structuralFileCycles.length
+    ? `structural Java dependency cycle (${structuralFileCycles.map(f => f.subject.files.length).join(', ')} files); class initialization not assessed`
+    : proven.length
     ? `reported import-cycle error (${proven.map((f) => f.subject.files.length).join(', ')} files) ${proven[0].evidence.risk ? ` — ${proven[0].evidence.risk.loadingNote}` : ""}`
+    : moduleErrors.length
+      ? `module cycle error (${moduleErrors.map((f) => f.subject.modules.length).join(', ')} modules); runtime failure is not proven`
     : eagerFileCycles.length
       ? `module-scope import cycle (${eagerFileCycles.map((f) => f.subject.files.length).join(', ')} files); load-time behavior unverified`
-      : structuralFileCycles.length
-        ? `structural Java dependency cycle (${structuralFileCycles.map(f => f.subject.files.length).join(', ')} files); class initialization not assessed`
       : lazyFileCycles.length
         ? `cycle with deferred or conditional imports (${lazyFileCycles.map((f) => f.subject.files.length).join(', ')} files); initialization behavior not proven`
         : cycles.length
@@ -983,6 +1006,12 @@ const JS = `
     var pe = files.parseErrors || [];
     if (pe.length) lines.push(plural(pe.length, 'file') + ' could not be parsed: ' + pe.slice(0, 3).join(', ') + (pe.length > 3 ? ' …' : ''));
     var u = c.unresolved || {}, unresolved = (u.unknown || 0) + (u.opaque || 0);
+    if (data.consistency) {
+      var consistency = data.consistency;
+      if (consistency.status === 'comparable' && (consistency.missing.length || consistency.extra.length)) lines.push('Static source relationships differ from the authored diagram; review the declared and observed edges.');
+      else if (consistency.status === 'partial') lines.push('Static relationship comparison is partial; some edges are unmapped or deferred and require review.');
+      else if (consistency.status === 'unknown') lines.push('Static relationship comparison is unavailable for this authored diagram.');
+    }
     // Java counts each unresolved type reference as well as imports.
     if (unresolved) lines.push(plural(unresolved, c.language === 'java' ? 'dependency record' : 'import') + ' could not be resolved');
     if ((c.unmappedModules || []).length) lines.push(plural(c.unmappedModules.length, 'module') + ' not on this diagram');

@@ -7,8 +7,9 @@ import { cyclicComponents } from './scc.mjs';
 // info: a design signal to read next to the file-level result.
 export const code = 'coupling/cycle';
 export const dimension = 'coupling';
-export const severity = 'info';
+export const severity = 'error';
 export const confidence = 1.0;
+export const version = 2;
 
 // An edge is "lazy-only" when every import behind it sits inside a function
 // body. This is lexical evidence only; the function may run at import time.
@@ -43,7 +44,7 @@ export function run({ graph }) {
     for (const targets of pathOut.values()) targets.sort();
     const path = shortestCycle(scc[0], pathOut, set);
     return {
-      code, dimension, severity, confidence,
+      code, dimension, severity: java || eagerSurvives ? 'error' : 'warning', confidence,
       message: java
         ? `${scc.length} modules form a structural Java dependency cycle: ${path.map(id => labelOf.get(id)).join(' → ')} → ${labelOf.get(path[0])}. Directory grouping does not establish file cycles or class initialization behavior.`
         : eagerSurvives

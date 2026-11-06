@@ -9,6 +9,7 @@ export const code = 'coupling/import-cycle';
 export const dimension = 'coupling';
 export const severity = 'warning';
 export const confidence = 0.7;
+export const version = 2;
 
 /** Canonicalize ties before choosing candidates or truncating evidence. */
 const canonical = (v) => JSON.stringify(Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object'
@@ -27,7 +28,7 @@ export function run({ graph, facts }) {
     const internal = edges.filter(e => set.has(e.from) && set.has(e.to));
     const path = shortestCycle(scc[0], internal, set);
     return {
-      code, dimension, confidence, severity: 'info',
+      code, dimension, confidence, severity: 'error',
       message: `${scc.length} Java files form a structural dependency cycle: ${path.join(' → ')} → ${path[0]}. Imports and type references do not establish class initialization order or runtime failure.`,
       subject: { files: scc },
       evidence: {
@@ -62,7 +63,7 @@ export function run({ graph, facts }) {
     const internal = (isEager ? eagerEdges : edges).filter((e) => set.has(e.from) && set.has(e.to));
     const path = shortestCycle(scc[0], internal, set);
     const candidate = isEager ? findPartialInitCandidate(set, internal, bindings) : null;
-    const tier = isEager ? 'warning' : 'info';
+    const tier = isEager ? 'error' : 'warning';
     const cycleText = `${path.join(' → ')} → ${path[0]}`;
     findings.push({
       code, dimension, confidence,

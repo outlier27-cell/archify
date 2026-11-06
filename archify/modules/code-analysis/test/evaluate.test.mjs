@@ -22,7 +22,7 @@ test('cycle: a DAG yields no finding; a 3-cycle yields one finding naming exactl
   assert.equal(out.diagnostics.length, 1);
   const f = out.diagnostics[0];
   assert.equal(f.code, 'coupling/cycle');
-  assert.equal(f.severity, 'info', 'package-level cycles are a signal, not a verdict');
+  assert.equal(f.severity, 'error', 'eager package cycles are structural errors');
   assert.equal(f.evidence.kind, 'eager');
   assert.equal(f.confidence, 1);
   assert.deepEqual(f.subject.modules, ['a', 'b', 'c']);
@@ -36,8 +36,8 @@ test('cycle: two separate cycles are two findings; a self-contained 2-cycle quot
   const out = evaluate(graphOf([['a', 'b'], ['b', 'a'], ['x', 'y'], ['y', 'z'], ['z', 'x']]));
   // evaluate() orders findings by code, then subject, so ids are stable across runs.
   assert.deepEqual(out.diagnostics.map((d) => d.subject.modules), [['a', 'b'], ['x', 'y', 'z']]);
-  assert.equal(out.diagnostics[0].evidence.imports.length, 2);
-  assert.equal(out.summary.info, 2);
+  assert.equal(out.diagnostics[0].evidence.edges.length, 2);
+  assert.equal(out.summary.errors, 2);
 });
 
 test('ids: a finding keeps its id when an unrelated finding sorting before it appears or disappears', () => {
@@ -148,14 +148,14 @@ test('import-cycle: eager cycles warn and deferred cycles remain unverified, nev
   const graph = graphOf([['a', 'b'], ['b', 'a']]);
   const eager = evaluate(graph, {}, factsOf([{ from: 'a/x.py', to: 'b/y.py' }, { from: 'b/y.py', to: 'a/x.py' }]));
   const f = eager.diagnostics.find((d) => d.code === 'coupling/import-cycle');
-  assert.equal(f.severity, 'warning', 'a dependency graph is not an execution proof');
+  assert.equal(f.severity, 'error', 'eager dependency cycles are structural errors even when runtime failure is not proven');
   assert.equal(f.evidence.kind, 'eager');
   assert.equal(f.evidence.risk.loading, 'potential-at-import');
   assert.deepEqual(f.subject.files, ['a/x.py', 'b/y.py']);
   assert.deepEqual(f.evidence.path, ['a/x.py', 'b/y.py']);
   const lazy = evaluate(graph, {}, factsOf([{ from: 'a/x.py', to: 'b/y.py' }, { from: 'b/y.py', to: 'a/x.py', lazy: true, line: 40 }]));
   const g = lazy.diagnostics.find((d) => d.code === 'coupling/import-cycle');
-  assert.equal(g.severity, 'info');
+  assert.equal(g.severity, 'warning');
   assert.equal(g.evidence.kind, 'deferred');
   assert.equal(g.evidence.risk.loading, 'not-proven');
   assert.equal(g.evidence.lazyImports, 1);
@@ -171,7 +171,7 @@ test('import-cycle: binding line order produces a partial-init candidate with it
     { file: 'b/y.py', name: 'bar', kind: 'import', line: 1 }, { file: 'b/y.py', name: 'foo', kind: 'function', line: 3 },
   ];
   const f = evaluate(graph, {}, facts).diagnostics.find((d) => d.code === 'coupling/import-cycle');
-  assert.equal(f.severity, 'warning');
+  assert.equal(f.severity, 'error');
   assert.equal(f.evidence.risk.loading, 'potential-partial-init');
   // Both load orders fail here; the rule reports the first in deterministic (edge) order: b imported first, a asks it for foo too early.
   assert.deepEqual(f.evidence.partialInitCandidate, { entry: 'b/y.py', module: 'b/y.py', name: 'foo', boundAt: 3, viaLine: 1, importer: 'a/x.py', line: 1, chain: ['b/y.py', 'a/x.py'] });
@@ -182,7 +182,7 @@ test('import-cycle: binding line order produces a partial-init candidate with it
     { file: 'a/x.py', name: 'bar', kind: 'function', line: 2 }, { file: 'a/x.py', name: 'foo', kind: 'import', line: 5 },
     { file: 'b/y.py', name: 'foo', kind: 'function', line: 2 }, { file: 'b/y.py', name: 'bar', kind: 'import', line: 5 },
   ];
-  assert.equal(evaluate(graph, {}, safe).diagnostics.find((d) => d.code === 'coupling/import-cycle').severity, 'warning');
+  assert.equal(evaluate(graph, {}, safe).diagnostics.find((d) => d.code === 'coupling/import-cycle').severity, 'error');
 });
 
 test('import-cycle: a package-level cycle made of two different files is not a file cycle', () => {
@@ -190,7 +190,7 @@ test('import-cycle: a package-level cycle made of two different files is not a f
   const graph = graphOf([['tools', 'news'], ['news', 'tools']]);
   const out = evaluate(graph, {}, factsOf([{ from: 'tools/a.py', to: 'news/w.py' }, { from: 'news/w.py', to: 'tools/t.py' }]));
   assert.ok(!out.diagnostics.some((d) => d.code === 'coupling/import-cycle'), 'no file imports itself back');
-  assert.ok(out.diagnostics.some((d) => d.code === 'coupling/cycle' && d.severity === 'info'), 'package-level signal remains, as info');
+  assert.ok(out.diagnostics.some((d) => d.code === 'coupling/cycle' && d.severity === 'error'), 'eager package cycle remains an error');
 });
 
 test('import-cycle: test files are excluded like the module graph excludes them', () => {
