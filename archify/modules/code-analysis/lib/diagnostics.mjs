@@ -21,7 +21,7 @@ export function importSarif(document, { root = '.', source = 'sarif', importedAt
       const primary = locations[0] || { file: null, line: null, column: null, status: 'unverifiable', reason: 'SARIF result has no supported location' };
       const message = typeof result.message?.text === 'string' && result.message.text ? result.message.text : `External diagnostic ${rule}`;
       const finding = {
-        code: `external/${source.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || 'sarif'}`,
+        code: `external/${toolName.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || 'tool'}`,
         dimension: 'ai-smell', severity: 'warning', confidence: 0.5,
         message, subject: { file: primary.file, line: primary.line, column: primary.column, rule, tool: toolName },
         evidence: { threshold: null, source, tool: toolName, toolVersion, rule, originalLevel: level, ruleDescription: rules.get(rule)?.shortDescription?.text || null, locations, importedAt },

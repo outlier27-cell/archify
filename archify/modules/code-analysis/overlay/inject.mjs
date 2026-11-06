@@ -1042,7 +1042,15 @@ const JS = `
     var unchecked = [['redundancy/', 'duplicate code'], ['conventions/', 'project coding conventions']].filter(function (x) { return !checkedRules.some(function (r) { return r.indexOf(x[0]) === 0; }); }).map(function (x) { return x[1]; });
     if (unchecked.length) h += '<div class="coverage-notice">Not checked: ' + esc(unchecked.join(', ')) + '. See Coverage for the full scope.</div>';
     h += reviewHtml(o.review);
-    var priorities = o.priorities.filter(function (id) { return visibleIds.has(id); });
+    var priorities = [], priorityRules = new Set(), priorityCovered = new Set();
+    var openVisible = visible.filter(function (entry) { return entry.status !== 'accepted'; });
+    var topVisibleSeverity = openVisible.length ? openVisible[0].severity : null;
+    openVisible.forEach(function (entry) {
+      if (priorities.length >= 3 || entry.severity !== topVisibleSeverity || priorityRules.has(entry.code)) return;
+      priorityRules.add(entry.code); priorityCovered.add(entry.id); priorities.push(entry.id);
+      (entry.relatedIds || []).forEach(function (id) { priorityCovered.add(id); });
+    });
+    openVisible.forEach(function (entry) { if (priorities.length < 3 && !priorityCovered.has(entry.id)) { priorities.push(entry.id); priorityCovered.add(entry.id); } });
     if (priorities.length) {
       var picks = priorities.map(function (id) { return findingById[id]; }).filter(Boolean);
       var hubs = picks.filter(function (f) { return f.code === 'coupling/hub'; });
@@ -1077,7 +1085,13 @@ const JS = `
     var ruleSelect = overview.querySelector('.finding-rule'), severitySelect = overview.querySelector('.finding-severity'), search = overview.querySelector('.finding-search');
     ruleSelect.addEventListener('change', function () { findingFilter.rule = ruleSelect.value; renderOverview(); });
     severitySelect.addEventListener('change', function () { findingFilter.severity = severitySelect.value; renderOverview(); });
-    search.addEventListener('input', function () { findingFilter.query = search.value.trim().toLowerCase(); renderOverview(); });
+    search.addEventListener('input', function () {
+      findingFilter.query = search.value.trim().toLowerCase();
+      var cursor = search.selectionStart;
+      renderOverview();
+      var next = overview.querySelector('.finding-search');
+      if (next) { next.focus(); next.setSelectionRange(cursor, cursor); }
+    });
     var again = overview.querySelector('.bauify-reanalyze');
     if (again) again.addEventListener('click', function () {
       again.disabled = true; again.textContent = 'Analyzing…';

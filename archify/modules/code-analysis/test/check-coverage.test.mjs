@@ -69,7 +69,7 @@ test('check: imports bounded SARIF findings without running the external tool', 
   const json = check(root, ['--language', 'py', '--sarif', sarif, '--json']);
   assert.equal(json.status, 1, json.stdout + json.stderr);
   const receipt = JSON.parse(json.stdout);
-  assert.equal(receipt.gate.failing[0].code, 'external/sarif');
+  assert.equal(receipt.gate.failing[0].code, 'external/ruff');
   assert.equal(receipt.gate.failing[0].severity, 'warning');
-  assert.equal(receipt.rules.includes('external/sarif'), true);
+  assert.equal(receipt.rules.includes('external/ruff'), true);
 });
