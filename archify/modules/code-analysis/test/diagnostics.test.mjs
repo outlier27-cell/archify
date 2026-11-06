@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { importSarif } from '../lib/diagnostics.mjs';
+import { findDuplicateGroups } from '../lib/duplicate.mjs';
 
 const sarif = (result) => ({ version: '2.1.0', runs: [{ tool: { driver: { name: 'eslint', version: '9', rules: [{ id: 'no-alert', shortDescription: { text: 'Avoid alert' } }] } }, results: [result] }] });
 
@@ -27,4 +28,11 @@ test('SARIF import keeps outside, missing and duplicate locations explicit', () 
 
 test('SARIF invalid input fails closed', () => {
   assert.throws(() => importSarif({}), (error) => error.diagnostics[0].code === 'diagnostics/sarif-invalid');
+});
+
+test('duplicate detector groups exact token windows across files and excludes configured files', () => {
+  const body = Array.from({ length: 45 }, (_, i) => `value${i} = value${i} + 1`).join('\n');
+  const groups = findDuplicateGroups([{ path: 'a.py', sourceText: body }, { path: 'b.py', sourceText: `# header\n${body}` }, { path: 'tests/c.py', sourceText: body }], { minTokens: 40, exclude: (file) => file.path.startsWith('tests/') });
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].locations.map((location) => location.file), ['a.py', 'b.py']);
 });
