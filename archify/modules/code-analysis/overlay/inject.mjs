@@ -41,7 +41,7 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
     });
   }
   const modules = new Map(graph.modules.map((m) => [m.id, m]));
-  const mapping = resolveMapping(ir, graph, map);
+  const mapping = resolveMapping(ir, graph, map, facts);
   const claimed = new Set([...mapping.values()].flat());
   const fileIndex = indexFiles(graph, facts);
   const findingsByFile = new Map();
@@ -277,11 +277,13 @@ function indexFiles(graph, facts) {
 // componentId -> [moduleId]. Explicit `map` wins; otherwise derive from each
 // component's `sources` paths: a source under a module's path claims that
 // module and, when no other component claims them, its descendant modules.
-function resolveMapping(ir, graph, map) {
+function resolveMapping(ir, graph, map, facts) {
   const result = new Map();
   const byPathDepth = [...graph.modules].sort((a, b) => b.path.split('/').length - a.path.split('/').length);
+  const knownFiles = facts ? new Set(facts.files.map((file) => file.path)) : graph.fileModules ? new Set(Object.keys(graph.fileModules)) : null;
   const moduleForFile = (file) => {
     const rel = graph.repository.root && graph.repository.root !== '.' && file.startsWith(`${graph.repository.root}/`) ? file.slice(graph.repository.root.length + 1) : file;
+    if (knownFiles && !knownFiles.has(rel)) return null;
     if (graph.fileModules && graph.fileModules[rel]) return graph.fileModules[rel];
     for (const m of byPathDepth) {
       if (m.path === '' ) continue;

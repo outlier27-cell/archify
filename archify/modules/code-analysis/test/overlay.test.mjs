@@ -54,6 +54,21 @@ test('overlay: components map to modules through their sources; descendants foll
   assert.equal(result.mapped, 2);
 });
 
+test('overlay: an absent source path does not claim a module by directory prefix', () => {
+  const missingSource = { ...ir, components: [{ id: 'app', type: 'backend', label: 'App', sources: [{ path: 'src/missing.mjs' }] }] };
+  const graphWithFiles = { ...graph, fileModules: { 'src/index.mjs': 'src', 'src/lib/helper.mjs': 'src-lib', 'tools/x.mjs': 'tools' } };
+  const p = payloadOf(buildOverlay({ ir: missingSource, graph: graphWithFiles, html: FAKE_HTML, map: null, facts: { files: [{ path: 'src/index.mjs' }, { path: 'src/lib/helper.mjs' }, { path: 'tools/x.mjs' }], imports: [] } }).html);
+  assert.deepEqual(p.components[0].modules, []);
+  assert.deepEqual(p.unmapped.map((m) => m.id), ['src', 'src-lib', 'tools']);
+});
+
+test('overlay: missing paths remain unknown without file facts or file ownership', () => {
+  const missingSource = { ...ir, components: [{ id: 'app', type: 'backend', label: 'App', sources: [{ path: 'src/missing.mjs' }] }] };
+  const compatGraph = { ...graph, fileModules: undefined };
+  const p = payloadOf(buildOverlay({ ir: missingSource, graph: compatGraph, html: FAKE_HTML, map: null }).html);
+  assert.deepEqual(p.components[0].modules.map((m) => m.id), ['src', 'src-lib'], 'legacy graph mapping remains a compatibility inference');
+});
+
 test('overlay: indicators are red for a proven load-time failure, amber for an eager cycle, blue for a lazy-closed or package-level one, green otherwise', () => {
   const facts = { schema_version: 1, repository: graph.repository, files: [{ path: 'src/index.mjs', loc: 1, role: 'source' }, { path: 'src/lib/helper.mjs', loc: 1, role: 'source' }], symbols: [], calls: [], imports: [], unresolved: { external: 0, outside: 0, unknown: 0, opaque: 0 } };
   const base = { id: 'COUP-0001', dimension: 'coupling', confidence: 1, message: 'm', supportedFixes: [] };
