@@ -7,6 +7,7 @@
 // the finding's evidence so a reader can re-check the call.
 import * as cycle from './rules/coupling/cycle.mjs';
 import * as hub from './rules/coupling/hub.mjs';
+import * as concentration from './rules/coupling/concentration.mjs';
 import * as internalLeak from './rules/coupling/internal-leak.mjs';
 import * as importCycle from './rules/coupling/import-cycle.mjs';
 import * as boundary from './rules/architecture/boundary.mjs';
@@ -16,7 +17,7 @@ import fs from 'node:fs';
 
 const PACKAGE = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
-export const RULES = [importCycle, cycle, hub, internalLeak, boundary, complexity];
+export const RULES = [importCycle, cycle, hub, concentration, internalLeak, boundary, complexity];
 
 export function evaluate(graph, config = {}, facts = null) {
   const suppressed = new Set(config.ignore || []);

@@ -103,6 +103,34 @@ test('hub: fires only when both fan-in and fan-out meet the configured threshold
   assert.ok(!stricter.diagnostics.some((d) => d.code === 'coupling/hub'));
 });
 
+test('concentration: deduplicates transitive reach, reports denominators, and handles cycles and missing file facts', () => {
+  const graph = graphOf([['core', 'a'], ['core', 'b'], ['a', 'b'], ['b', 'a'], ['b', 'core']]);
+  graph.modules = graph.modules.map((m) => ({ ...m, loc: m.id === 'core' ? 80 : 10 }));
+  graph.fileModules = { 'core/main.mjs': 'core', 'a/a.mjs': 'a', 'b/b.mjs': 'b' };
+  graph.excluded = { roles: ['test'], files: 1 };
+  const facts = factsOf([]);
+  facts.files = [
+    { path: 'core/main.mjs', loc: 150, role: 'source' },
+    { path: 'core/test.mjs', loc: 800, role: 'test' },
+    { path: 'a/a.mjs', loc: 20, role: 'source' },
+    { path: 'b/b.mjs', loc: 30, role: 'source' },
+  ];
+  const config = { rules: { coupling: { concentration: { reachRatio: 0.5, moduleLocRatio: 0.5, fileLoc: 100 } } } };
+  const out = evaluate(graph, config, facts);
+  const core = out.diagnostics.find((d) => d.code === 'coupling/concentration' && d.subject.module === 'core');
+  assert.ok(core);
+  assert.deepEqual(core.evidence.reachableModules, ['a', 'b']);
+  assert.equal(core.evidence.reachableCount, 2, 'repeated paths and cycle back-edges count a module once');
+  assert.equal(core.evidence.totalExternalModules, 2);
+  assert.equal(core.evidence.moduleLoc, 80);
+  assert.equal(core.evidence.totalAnalyzedLoc, 100);
+  assert.deepEqual(core.evidence.largestFile, { path: 'core/main.mjs', loc: 150 });
+  assert.deepEqual(schemaErrors('findings', out), []);
+  const withoutFacts = evaluate(graph, config).diagnostics.find((d) => d.code === 'coupling/concentration' && d.subject.module === 'core');
+  assert.deepEqual(withoutFacts.evidence.largestFile, { path: null, loc: null });
+  assert.throws(() => evaluate(graph, { rules: { coupling: { concentration: { reachRatio: '50%' } } } }, facts), (error) => error.diagnostics[0].code === 'config/concentration-threshold-invalid');
+});
+
 test('evaluate: ignore list suppresses a rule and counts it', () => {
   const out = evaluate(graphOf([['a', 'b'], ['b', 'a']]), { ignore: ['coupling/cycle'] });
   assert.deepEqual(out.diagnostics, []);
