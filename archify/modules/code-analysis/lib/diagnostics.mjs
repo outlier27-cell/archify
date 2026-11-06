@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { fail } from '../extract/shared/diagnostics.mjs';
 
 // Import the small SARIF subset that can be checked against a local repository.
@@ -19,13 +20,15 @@ export function importSarif(document, { root = '.', source = 'sarif', importedAt
       const locations = normalizeLocations(result.locations, root);
       const primary = locations[0] || { file: null, line: null, column: null, status: 'unverifiable', reason: 'SARIF result has no supported location' };
       const message = typeof result.message?.text === 'string' && result.message.text ? result.message.text : `External diagnostic ${rule}`;
-      findings.push({
+      const finding = {
         code: `external/${source.replace(/[^a-z0-9-]/gi, '-').toLowerCase() || 'sarif'}`,
         dimension: 'ai-smell', severity: 'warning', confidence: 0.5,
         message, subject: { file: primary.file, line: primary.line, column: primary.column, rule, tool: toolName },
         evidence: { threshold: null, source, tool: toolName, toolVersion, rule, originalLevel: level, ruleDescription: rules.get(rule)?.shortDescription?.text || null, locations, importedAt },
         supportedFixes: primary.status === 'ok' ? ['review the external diagnostic and verify it against the current source before changing code'] : ['re-run or export the diagnostic with a source location inside the repository'],
-      });
+      };
+      finding.id = `AISM-${createHash('sha256').update(JSON.stringify([finding.code, source, toolName, rule, primary.file, primary.line, message])).digest('hex').slice(0, 12)}`;
+      findings.push(finding);
     }
   }
   return findings;

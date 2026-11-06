@@ -61,3 +61,15 @@ test('check: a clean run says nothing about coverage and the gate is unchanged',
   assert.equal(text.status, 0, text.stdout + text.stderr);
   assert.doesNotMatch(text.stdout, /Not analyzed/);
 });
+
+test('check: imports bounded SARIF findings without running the external tool', (t) => {
+  const root = fixture(t, { 'src/ok.py': 'value = 1\n' });
+  const sarif = path.join(root, 'results.sarif');
+  fs.writeFileSync(sarif, JSON.stringify({ version: '2.1.0', runs: [{ tool: { driver: { name: 'ruff' } }, results: [{ ruleId: 'X001', level: 'error', message: { text: 'review this' }, locations: [{ physicalLocation: { artifactLocation: { uri: 'src/ok.py' }, region: { startLine: 1 } } }] }] }] }));
+  const json = check(root, ['--language', 'py', '--sarif', sarif, '--json']);
+  assert.equal(json.status, 1, json.stdout + json.stderr);
+  const receipt = JSON.parse(json.stdout);
+  assert.equal(receipt.gate.failing[0].code, 'external/sarif');
+  assert.equal(receipt.gate.failing[0].severity, 'warning');
+  assert.equal(receipt.rules.includes('external/sarif'), true);
+});

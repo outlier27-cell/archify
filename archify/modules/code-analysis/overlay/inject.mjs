@@ -1059,7 +1059,7 @@ const JS = `
     if (!visible.length && o.findings.length) h += '<div class="ev" style="margin-top:8px">No findings match these filters.</div>';
     else if (priorities.length) {
       h += '<div class="k">Look at first</div>';
-      o.priorities.forEach(function (id, i) { h += findingRow(id, i + 1); });
+      priorities.forEach(function (id, i) { h += findingRow(id, i + 1); });
     } else if (visible.length && acceptedCount && visible.every(function (entry) { return entry.status === 'accepted'; })) h += '<div class="ev" style="margin-top:8px">Every matching finding is accepted in the baseline.</div>';
     else if (!o.findings.length && acceptedCount) h += '<div class="ev" style="margin-top:8px">Every finding is accepted in the baseline. New findings, and accepted ones whose code changes, will show up here.</div>';
     else if (!o.findings.length) h += '<div class="ev" style="margin-top:8px">No rule fired. This covers only the checks listed under Coverage; it is not a quality guarantee.</div>';

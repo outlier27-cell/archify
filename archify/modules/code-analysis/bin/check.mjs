@@ -23,7 +23,7 @@ reasons; new entries get --reason) and exits 0.
 Exit codes: 0 passed, 1 gate failed, 2 analysis or usage error.
 Outputs with --out: raw-facts, module-graph, findings, review, overview (.json).`;
 
-const VALUE_OPTIONS = ['--language', '--config', '--baseline', '--compare', '--out', '--fail-on', '--reason'];
+const VALUE_OPTIONS = ['--language', '--config', '--baseline', '--compare', '--out', '--fail-on', '--reason', '--sarif'];
 const FLAG_OPTIONS = ['--new-only', '--update-baseline', '--json'];
 const SEVERITY = { error: 0, warning: 1, info: 2 };
 
@@ -63,6 +63,13 @@ export async function runCheck(argv) {
   const { facts, config, otherLanguages } = extractFacts(root, { language: options['--language'] || null, config: options['--config'] || null });
   const graph = buildGraph(facts, config);
   const findings = evaluateGraph(graph, config, facts);
+  if (options['--sarif']) {
+    const { importSarif } = await import('../lib/diagnostics.mjs');
+    const imported = importSarif(JSON.parse(fs.readFileSync(path.resolve(options['--sarif']), 'utf8')), { root, source: 'sarif' });
+    findings.diagnostics.push(...imported);
+    findings.rules = [...findings.rules, ...new Set(imported.map((finding) => finding.code))].sort();
+    findings.summary.warnings += imported.length;
+  }
   const baselineFile = options['--baseline'] ? path.resolve(options['--baseline']) : null;
 
   if (options['--update-baseline']) {
