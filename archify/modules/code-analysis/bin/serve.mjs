@@ -184,6 +184,7 @@ export async function startAnalysisView(argv) {
     }));
     // 3. The click returns the latest result; 4. a refresh request runs a new one.
     // Concurrent requests share the run in progress.
+    if (baselineWrite) return send(409, JSON.stringify({ error: 'A baseline decision is being saved.', diagnostics: [{ code: 'analysis/baseline-write-running', severity: 'error', message: 'A baseline decision is being saved.', subject: {}, evidence: {}, supportedFixes: ['retry after the baseline write completes'] }] }));
     const refreshing = req.headers['x-analysis-refresh'] === '1';
     const previousResult = result;
     try {
@@ -241,6 +242,7 @@ export async function startAnalysisView(argv) {
     try { payload = JSON.parse(body || '{}'); } catch { return send(400, JSON.stringify({ error: 'request body must be JSON' })); }
     const { id, action, reason } = payload;
     if (typeof id !== 'string' || !/^[A-Z]{2,4}-[0-9a-f]{12}$/.test(id)) return send(400, JSON.stringify({ error: 'id must be a finding id' }));
+    if (pending) return send(409, JSON.stringify({ error: 'An analysis is running.', diagnostics: [{ code: 'baseline/analysis-running', severity: 'error', message: 'An analysis is running.', subject: {}, evidence: {}, supportedFixes: ['retry after it finishes'] }] }));
     if (baselineWrite) return send(409, JSON.stringify({ error: 'Another baseline decision is being saved.', diagnostics: [{ code: 'baseline/write-conflict', severity: 'error', message: 'Another baseline decision is being saved.', subject: {}, evidence: {}, supportedFixes: ['retry after it finishes'] }] }));
     baselineWrite = true;
     try {
