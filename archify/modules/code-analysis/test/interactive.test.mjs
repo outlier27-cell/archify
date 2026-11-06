@@ -99,7 +99,8 @@ test('serve: arguments are validated up front', () => {
 test('serve: baseline decisions are scoped to the configured file and current finding', { skip: ARCHIFY_AVAILABLE ? false : 'needs an Archify checkout' }, async (t) => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-baseline-action-'));
   t.after(() => fs.rmSync(out, { recursive: true, force: true }));
-  const fixture = path.join(BAUIFY_ROOT, 'test/fixtures/ts-basic');
+  const fixture = path.join(out, 'repo');
+  fs.cpSync(path.join(BAUIFY_ROOT, 'test/fixtures/ts-basic'), fixture, { recursive: true });
   const ir = path.join(out, 'fixture.architecture.json');
   fs.writeFileSync(ir, JSON.stringify({ schema_version: 1, diagram_type: 'architecture', meta: { title: 'baseline', output: 'architecture.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [170, 64] }], connections: [] }));
   const config = path.join(out, 'config.json');
@@ -121,6 +122,14 @@ test('serve: baseline decisions are scoped to the configured file and current fi
   const revoked = await fetch(view.url + '/baseline', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: finding.id, action: 'revoke' }) });
   assert.equal(revoked.status, 200);
   assert.deepEqual(JSON.parse(fs.readFileSync(baseline, 'utf8')).accepted, []);
+  const source = path.join(fixture, 'src/index.mjs');
+  const original = fs.readFileSync(source);
+  fs.writeFileSync(source, original.toString().replace('return [fs, helper, other, gen, lazy, missing, computed];', 'return [fs, helper, other, gen, lazy, missing, computed, name];'));
+  const stale = await fetch(view.url + '/baseline', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: finding.id, action: 'accept', reason: 'stale evidence must be rejected' }) });
+  assert.equal(stale.status, 409);
+  assert.equal((await stale.json()).diagnostics[0].code, 'baseline/evidence-stale');
+  assert.deepEqual(JSON.parse(fs.readFileSync(baseline, 'utf8')).accepted, [], 'stale evidence leaves the baseline unchanged');
+  fs.writeFileSync(source, original);
 });
 
 test('serve: reads the required IR before creating output', async (t) => {

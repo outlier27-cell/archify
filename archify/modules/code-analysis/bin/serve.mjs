@@ -184,14 +184,21 @@ export async function startAnalysisView(argv) {
     }));
     // 3. The click returns the latest result; 4. a refresh request runs a new one.
     // Concurrent requests share the run in progress.
+    const refreshing = req.headers['x-analysis-refresh'] === '1';
+    const previousResult = result;
     try {
-      if (req.headers['x-analysis-refresh'] === '1' && !pending) result = null;
+      if (refreshing && !pending) result = null;
       if (!result) {
         pending ??= runAnalysis().then((html) => { result = html; return html; }).finally(() => { pending = null; });
       }
       send(200, result || await pending, 'text/html; charset=utf-8');
     } catch (error) {
       const diagnostics = error instanceof DiagnosticError ? error.diagnostics : [{ code: 'internal/unclassified', severity: 'error', message: error.message, subject: {}, evidence: {}, supportedFixes: [] }];
+      if (refreshing) {
+        const retained = result || previousResult;
+        if (retained) result = retained;
+        diagnostics.push({ code: 'analysis/refresh-failed-retained', severity: 'warning', message: retained ? 'The refresh failed; the last successful analysis remains available and is older than this request.' : 'The refresh failed; no previous successful analysis is available.', subject: {}, evidence: { retainedResult: Boolean(retained) }, supportedFixes: ['fix the reported analysis error and retry'] });
+      }
       send(500, JSON.stringify({ error: diagnostics.map((d) => d.message).join('\n'), diagnostics }));
     }
   });
@@ -239,8 +246,12 @@ export async function startAnalysisView(argv) {
     try {
       const { decideFinding, validateBaseline } = await import('../lib/review.mjs');
       const { stableJson } = await import('../lib/analysis.mjs');
+      const { digestMatches, readInside } = await import('../lib/evidence.mjs');
       const findings = JSON.parse(fs.readFileSync(path.join(analysisDir, 'findings.json'), 'utf8'));
       const finding = findings.diagnostics.find((d) => d.id === id) || null;
+      if (action === 'accept' && finding && digestMatches(finding.evidenceDigest, (file) => readInside(root, file)) !== true) {
+        return send(409, JSON.stringify({ error: `Finding ${id} evidence is no longer current. Re-analyze before accepting it.`, diagnostics: [{ code: 'baseline/evidence-stale', severity: 'error', message: `Finding ${id} evidence is no longer current.`, subject: { id }, evidence: { digest: finding.evidenceDigest || null }, supportedFixes: ['re-analyze and review the current finding'] }] }));
+      }
       const existing = fs.existsSync(baselineFile) ? validateBaseline(JSON.parse(fs.readFileSync(baselineFile, 'utf8')), baselineFile) : { schema_version: 1, accepted: [] };
       const updated = validateBaseline(decideFinding(existing, { id, action, reason, finding }));
       const temporary = `${baselineFile}.${randomBytes(6).toString('hex')}.tmp`;
@@ -361,7 +372,7 @@ function client(token) {
       if (location.search) history.replaceState(null, '', location.pathname);
     } catch (error) {
       button.disabled = false; button.textContent = 'Code Analysis';
-      say('Analysis failed: ' + error.message + ' — click Code Analysis to retry.');
+      say('Analysis failed; the last successful analysis remains visible. ' + error.message + ' — click Code Analysis to retry.');
     }
   });
   if (new URLSearchParams(location.search).get('analysis') === 'open') button.click();

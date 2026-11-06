@@ -52,7 +52,12 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
 
   // Indicators and the diagram rings show open findings: a finding accepted in
   // the baseline (with unchanged evidence) stays listed but does not colour the diagram.
-  const accepted = new Set(Object.entries(run.review ? run.review.findings : {}).filter(([, r]) => r.status === 'accepted').map(([id]) => id));
+  // Accepted warnings leave the diagram, priorities and verdict. Accepted
+  // errors may be exempt from CI, but remain visibly red so a severe finding
+  // cannot look resolved merely because it was baselined.
+  const accepted = new Set(Object.entries(run.review ? run.review.findings : {})
+    .filter(([id, r]) => r.status === 'accepted' && findings.find((f) => f.id === id)?.severity !== 'error')
+    .map(([id]) => id));
   const openFindings = findings.filter((f) => !accepted.has(f.id));
   const components = ir.components.map((c) => {
     const ids = mapping.get(c.id) || [];
