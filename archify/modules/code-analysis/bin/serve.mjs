@@ -145,7 +145,7 @@ export async function startAnalysisView(argv) {
   // 2. Serve it with the button. The token ties analysis requests to this page.
   const token = randomBytes(24).toString('hex');
   const page = fs.readFileSync(delivered, 'utf8').replace('</body>', `<script>(${client.toString()})(${JSON.stringify(token)})</script></body>`);
-  let pending = null, result = null, origin;
+  let pending = null, result = null, baselineWrite = null, origin;
   const analysisDir = path.join(out, 'analysis');
   // One run: fresh directory, then swap it in. The current result is the comparison.
   const runAnalysis = async () => {
@@ -227,13 +227,15 @@ export async function startAnalysisView(argv) {
   const handleBaseline = async (req, send) => {
     const baselineFile = options['--baseline'] ? path.resolve(options['--baseline']) : null;
     if (!baselineFile) return send(409, JSON.stringify({ error: 'Start the server with --baseline <file> to accept findings from the page.', diagnostics: [{ code: 'baseline/not-configured', severity: 'error', message: 'No baseline file was configured.', subject: {}, evidence: {}, supportedFixes: ['restart with --baseline <file>'] }] }));
-    if (pending) return send(409, JSON.stringify({ error: 'An analysis is running.', diagnostics: [{ code: 'baseline/analysis-running', severity: 'error', message: 'An analysis is running.', subject: {}, evidence: {}, supportedFixes: ['retry after it finishes'] }] }));
+    if (pending || baselineWrite) return send(409, JSON.stringify({ error: pending ? 'An analysis is running.' : 'Another baseline decision is being saved.', diagnostics: [{ code: pending ? 'baseline/analysis-running' : 'baseline/write-conflict', severity: 'error', message: pending ? 'An analysis is running.' : 'Another baseline decision is being saved.', subject: {}, evidence: {}, supportedFixes: ['retry after it finishes'] }] }));
     let body = '';
     try { for await (const chunk of req) { body += chunk; if (body.length > 8192) return send(413, JSON.stringify({ error: 'request too large' })); } } catch { return send(400, JSON.stringify({ error: 'request could not be read' })); }
     let payload;
     try { payload = JSON.parse(body || '{}'); } catch { return send(400, JSON.stringify({ error: 'request body must be JSON' })); }
     const { id, action, reason } = payload;
     if (typeof id !== 'string' || !/^[A-Z]{2,4}-[0-9a-f]{12}$/.test(id)) return send(400, JSON.stringify({ error: 'id must be a finding id' }));
+    if (baselineWrite) return send(409, JSON.stringify({ error: 'Another baseline decision is being saved.', diagnostics: [{ code: 'baseline/write-conflict', severity: 'error', message: 'Another baseline decision is being saved.', subject: {}, evidence: {}, supportedFixes: ['retry after it finishes'] }] }));
+    baselineWrite = true;
     try {
       const { decideFinding, validateBaseline } = await import('../lib/review.mjs');
       const { stableJson } = await import('../lib/analysis.mjs');
@@ -242,13 +244,15 @@ export async function startAnalysisView(argv) {
       const existing = fs.existsSync(baselineFile) ? validateBaseline(JSON.parse(fs.readFileSync(baselineFile, 'utf8')), baselineFile) : { schema_version: 1, accepted: [] };
       const updated = validateBaseline(decideFinding(existing, { id, action, reason, finding }));
       const temporary = `${baselineFile}.${randomBytes(6).toString('hex')}.tmp`;
-      fs.writeFileSync(temporary, stableJson(updated));
-      fs.renameSync(temporary, baselineFile);
+      try {
+        fs.writeFileSync(temporary, stableJson(updated));
+        fs.renameSync(temporary, baselineFile);
+      } finally { fs.rmSync(temporary, { force: true }); }
       send(200, JSON.stringify({ id, action, accepted: updated.accepted.length }));
     } catch (error) {
       const diagnostics = error instanceof DiagnosticError ? error.diagnostics : [{ code: 'internal/unclassified', severity: 'error', message: error.message, subject: {}, evidence: {}, supportedFixes: [] }];
       send(error instanceof DiagnosticError ? 422 : 500, JSON.stringify({ error: diagnostics.map((d) => d.message).join('\n'), diagnostics }));
-    }
+    } finally { baselineWrite = null; }
   };
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   origin = `http://127.0.0.1:${server.address().port}`;
@@ -259,6 +263,7 @@ export async function startAnalysisView(argv) {
 // layer is added to this page and switched on. From then on the layer's own
 // toggle (the same button, now owned by the layer) shows or hides it.
 function client(token) {
+  window.__archifyAnalysisToken = token;
   var toolbar = document.querySelector('.toolbar');
   if (!toolbar) return;
   var button = document.createElement('button');

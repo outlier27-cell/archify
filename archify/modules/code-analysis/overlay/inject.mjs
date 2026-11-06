@@ -104,6 +104,7 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
     edges,
     unmapped,
     findings: listed,
+    baselineConfigured: Boolean(run.baselineConfigured),
     tasks: facts && findingsDocument ? buildTaskPayloads({ findings: findingsDocument, facts, review: run.review }) : {},
     overview: buildOverview({ findings: listed, graph, facts, unmapped, run }),
     snippets: sourceRoot ? collectSnippets(findings, sourceRoot, components.concat(unmapped.filter((m) => listed.some((f) => (f.moduleIds || []).includes(m.id)))), facts) : {},
@@ -573,6 +574,9 @@ html[data-bauify="on"] .cards, html[data-bauify="on"] .guided-views { display: n
 #bauify-reader .task-actions button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--panel-border, #1e293b); color: var(--text, #f8fafc); background: none; cursor: pointer; }
 #bauify-reader .task-actions button:first-child { background: var(--text, #f8fafc); color: var(--panel, #0f172a); }
 #bauify-reader .task-actions button:disabled { opacity: .5; cursor: wait; }
+#bauify-reader .baseline-action { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 12px 0; padding: 10px; border: 1px solid var(--panel-border, #1e293b); border-radius: 6px; }
+#bauify-reader .baseline-button { font: inherit; font-size: 13px; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--panel-border, #1e293b); color: var(--text, #f8fafc); background: none; cursor: pointer; }
+#bauify-reader .baseline-button:disabled { opacity: .5; cursor: wait; }
 #bauify-reader .task-preview { display: block; box-sizing: border-box; width: 100%; min-height: 180px; max-height: 360px; resize: vertical; padding: 10px; border: 1px solid var(--panel-border, #1e293b); border-radius: 6px; color: var(--text, #f8fafc); background: var(--bg, #0b1220); font: 12px/1.6 ui-monospace, monospace; }
 #bauify-reader .coverage-notice { padding: 8px 0; color: var(--text-muted, #94a3b8); font-size: 12px; }
 #bauify-reader .relationship { margin: 16px 0; }
@@ -1174,6 +1178,7 @@ const JS = `
       : f.code === 'complexity/function' ? 'Cyclomatic complexity counts independent paths through the function. A high count is a maintenance signal, not a defect.' : lvl.text;
     h += '<div class="level"><b>' + esc(lvl.name) + '</b> — ' + esc(findingWhat(f)) + '<br>' + esc(explanation) + '</div>';
     if (f.review && f.review.reason) h += '<p class="ev"><span class="badge-accepted">' + (f.review.status === 'accepted-changed' ? 'accepted · evidence changed' : 'accepted') + '</span> ' + esc(f.review.reason) + (f.review.status === 'accepted-changed' ? ' — the code behind it changed since it was accepted; review it again.' : '') + '</p>';
+    if (data.baselineConfigured && window.__archifyAnalysisToken) h += baselineActionHtml(f);
     h += quickHandoff(f) + '<div class="k">Code evidence</div>' + evidencePreview(f);
     h += nextStepHtml(f) + taskHtml(f);
     if ((f.componentIds || []).length) h += '<button type="button" class="locate">Locate related components</button>';
@@ -1193,7 +1198,33 @@ const JS = `
     detail.querySelectorAll('[data-finding]').forEach(function (el) { el.addEventListener('click', function () { showFinding(el.getAttribute('data-finding')); }); });
     wireRefs();
     wireTasks();
+    wireBaselineAction(f);
     var heading = detail.querySelector('h3'); heading.tabIndex = -1; heading.focus({ preventScroll: true });
+  }
+  function baselineActionHtml(f) {
+    var accepted = f.review && f.review.status === 'accepted';
+    if (f.review && f.review.status === 'accepted-changed') accepted = false;
+    return '<div class="baseline-action"><button type="button" class="baseline-button" data-baseline-action="' + (accepted ? 'revoke' : 'accept') + '">' + (accepted ? 'Revoke baseline decision' : 'Keep after review') + '</button><span class="baseline-status ev" role="status" aria-live="polite">' + (accepted ? 'This finding is accepted in the current baseline.' : 'Add a reason before keeping this finding.') + '</span></div>';
+  }
+  function wireBaselineAction(f) {
+    var button = detail.querySelector('.baseline-button');
+    if (!button) return;
+    var status = detail.querySelector('.baseline-status');
+    button.addEventListener('click', async function () {
+      var action = button.getAttribute('data-baseline-action');
+      var reason = '';
+      if (action === 'accept') {
+        reason = window.prompt('Why should this finding remain in the baseline?') || '';
+        if (!reason.trim()) { status.textContent = 'A reason is required; the baseline was not changed.'; return; }
+      }
+      button.disabled = true; status.textContent = 'Saving baseline decision…';
+      try {
+        var response = await fetch('/baseline', { method: 'POST', headers: { 'X-Analysis-Token': window.__archifyAnalysisToken, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: f.id, action: action, reason: reason }) });
+        var body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'baseline update failed');
+        status.textContent = action === 'accept' ? 'Saved. Re-analyze to refresh the displayed baseline state.' : 'Revoked. Re-analyze to refresh the displayed baseline state.';
+      } catch (error) { status.textContent = 'Could not save baseline decision: ' + error.message; button.disabled = false; }
+    });
   }
   // Source links: GitHub-style blob/tree URLs from the origin + revision the facts were taken at.
   function repoBase() {

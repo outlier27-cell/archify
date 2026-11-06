@@ -96,6 +96,33 @@ test('serve: arguments are validated up front', () => {
   assert.deepEqual(parseArgs(['repo', '--ir', 'x.json', '--out', 'o', '--language', 'py']).options, { '--ir': 'x.json', '--out': 'o', '--language': 'py' });
 });
 
+test('serve: baseline decisions are scoped to the configured file and current finding', { skip: ARCHIFY_AVAILABLE ? false : 'needs an Archify checkout' }, async (t) => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-baseline-action-'));
+  t.after(() => fs.rmSync(out, { recursive: true, force: true }));
+  const fixture = path.join(BAUIFY_ROOT, 'test/fixtures/ts-basic');
+  const ir = path.join(out, 'fixture.architecture.json');
+  fs.writeFileSync(ir, JSON.stringify({ schema_version: 1, diagram_type: 'architecture', meta: { title: 'baseline', output: 'architecture.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [170, 64] }], connections: [] }));
+  const config = path.join(out, 'config.json');
+  fs.writeFileSync(config, JSON.stringify({ rules: { complexity: { function: { warning: { complexity: 0 } } } } }));
+  const baseline = path.join(out, 'baseline.json');
+  fs.writeFileSync(baseline, JSON.stringify({ schema_version: 1, accepted: [] }));
+  const view = await startAnalysisView([fixture, '--ir', ir, '--out', path.join(out, 'view'), '--language', 'ts', '--config', config, '--baseline', baseline]);
+  t.after(() => new Promise((resolve) => view.server.close(resolve)));
+  const headers = { Origin: view.url, 'X-Analysis-Token': view.token };
+  const analysis = await fetch(view.url + '/analyze', { method: 'POST', headers });
+  assert.equal(analysis.status, 200);
+  const html = await analysis.text();
+  const payload = JSON.parse(html.match(/id="bauify-analysis">([\s\S]*?)<\/script>/)[1]);
+  const finding = payload.findings.find((item) => item.code === 'complexity/function');
+  assert.ok(finding, 'fixture has a complexity finding');
+  const accepted = await fetch(view.url + '/baseline', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: finding.id, action: 'accept', reason: 'reviewed fixture' }) });
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(JSON.parse(fs.readFileSync(baseline, 'utf8')).accepted, [{ id: finding.id, code: finding.code, reason: 'reviewed fixture', sha256: finding.evidenceDigest.sha256 }]);
+  const revoked = await fetch(view.url + '/baseline', { method: 'POST', headers: { ...headers, 'Content-Type': 'application/json' }, body: JSON.stringify({ id: finding.id, action: 'revoke' }) });
+  assert.equal(revoked.status, 200);
+  assert.deepEqual(JSON.parse(fs.readFileSync(baseline, 'utf8')).accepted, []);
+});
+
 test('serve: reads the required IR before creating output', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-invalid-ir-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

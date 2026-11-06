@@ -121,6 +121,8 @@ node bin/archify.mjs code-analysis check "/path/to/project" --baseline analysis-
 
 This writes every current finding to `analysis-baseline.json` with that reason. Edit the reasons per entry if you like, and commit the file. Pass it to the page with `--baseline analysis-baseline.json` (`npm start -- … --baseline …`) or to `check`.
 
+When the page is started with an existing baseline file, an individual finding can be kept from the finding view with a required reason, or an existing decision can be revoked. The request is limited to the baseline path supplied at server startup and to a finding in the current analysis. A successful write asks for re-analysis before the page state is refreshed; failed or concurrent writes leave the previous file unchanged. Error findings remain visibly red when accepted.
+
 - Accepted findings stay listed, marked **accepted** with their reason, but no longer count toward the verdict, the priorities, the diagram colours, or a CI failure.
 - Each entry remembers a fingerprint of the code it was about. If that code changes, the finding is shown again as **accepted · evidence changed** so someone looks at it once more.
 - Entries whose finding no longer occurs are listed as no longer found: the problem was fixed or moved, and the entry can be removed. Running `--update-baseline` again keeps existing reasons, adds new findings, and drops those entries.
