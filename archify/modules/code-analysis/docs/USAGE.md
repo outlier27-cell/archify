@@ -131,6 +131,8 @@ When the page is started with an existing baseline file, an individual finding c
 
 `check` runs the same analysis without a diagram and exits with a status a pipeline can use:
 
+To review an existing SARIF export without running its producing tool, pass `--sarif results.sarif`. The adapter keeps the tool, rule, original level, message and locations in the finding evidence, normalizes imported diagnostics to warning, and marks root-external or missing locations as unverifiable. It does not fetch SARIF artifacts or execute lint commands.
+
 ```sh
 node bin/archify.mjs code-analysis check "/path/to/project" --baseline analysis-baseline.json --fail-on warning --out .analysis
 ```
