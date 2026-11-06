@@ -584,6 +584,9 @@ html[data-bauify="on"] .cards, html[data-bauify="on"] .guided-views { display: n
 #bauify-reader .baseline-button:disabled { opacity: .5; cursor: wait; }
 #bauify-reader .task-preview { display: block; box-sizing: border-box; width: 100%; min-height: 180px; max-height: 360px; resize: vertical; padding: 10px; border: 1px solid var(--panel-border, #1e293b); border-radius: 6px; color: var(--text, #f8fafc); background: var(--bg, #0b1220); font: 12px/1.6 ui-monospace, monospace; }
 #bauify-reader .coverage-notice { padding: 8px 0; color: var(--text-muted, #94a3b8); font-size: 12px; }
+#bauify-reader .finding-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; margin: 10px 0; }
+#bauify-reader .finding-filters label { display: grid; gap: 4px; color: var(--text-muted, #94a3b8); font-size: 12px; }
+#bauify-reader .finding-filters select, #bauify-reader .finding-filters input { min-height: 32px; max-width: 100%; padding: 5px 8px; color: var(--text, #f8fafc); background: var(--bg, #0b1220); border: 1px solid var(--panel-border, #1e293b); border-radius: 4px; font: inherit; }
 #bauify-reader .relationship { margin: 16px 0; }
 @media (max-width: 600px) { html[data-bauify="on"] .toolbar #btn-preset, html[data-bauify="on"] .toolbar #btn-present { display: none; } }
 `;
@@ -591,6 +594,7 @@ html[data-bauify="on"] .cards, html[data-bauify="on"] .guided-views { display: n
 const JS = `
 (function () {
   var data = JSON.parse(document.getElementById('bauify-analysis').textContent);
+  var findingFilter = { rule: '', severity: '', query: '' };
   var root = document.documentElement;
   var toolbar = document.querySelector('.toolbar');
   var svg = document.querySelector('svg');
@@ -1019,19 +1023,28 @@ const JS = `
     var v = VERDICT[o.verdict] || VERDICT['none-found'];
     var acceptedCount = o.counts.accepted || 0;
     var verdictText = o.verdict === 'none-found' && acceptedCount ? 'No open findings · ' + acceptedCount + ' accepted in the baseline' : v.text;
-    var counts = [plural(o.counts.findings, 'finding')]
+    var visible = (o.findings || []).filter(function (entry) {
+      var finding = findingById[entry.id] || {};
+      return (!findingFilter.rule || finding.code === findingFilter.rule)
+        && (!findingFilter.severity || finding.severity === findingFilter.severity)
+        && (!findingFilter.query || String(finding.message || '').toLowerCase().includes(findingFilter.query) || JSON.stringify([finding.subject || {}, finding.evidence || {}]).toLowerCase().includes(findingFilter.query));
+    });
+    var visibleIds = new Set(visible.map(function (entry) { return entry.id; }));
+    var counts = [plural(visible.length, 'finding') + (visible.length === o.findings.length ? '' : ' shown')]
       .concat(['error', 'warning', 'info'].filter(function (k) { return o.counts[k]; }).map(function (k) { return o.counts[k] + ' ' + k; }))
       .concat(acceptedCount ? [acceptedCount + ' accepted'] : [])
       .concat(o.counts.offDiagram ? [o.counts.offDiagram + ' not on this diagram'] : []).join(' · ');
     var h = typeof window.__archifyReanalyze === 'function' ? '<button type="button" class="bauify-reanalyze" title="Read the repository again and compare with this result">Re-analyze</button>' : '';
     h += '<h3><i class="bauify-' + v.tone + '"></i>' + esc(verdictText) + '</h3>';
     h += '<div class="ev">' + esc(counts) + '</div>';
+    h += '<div class="finding-filters"><label>Rule <select class="finding-rule"><option value="">All rules</option>' + o.groups.map(function (g) { return '<option value="' + esc(g.code) + '"' + (findingFilter.rule === g.code ? ' selected' : '') + '>' + esc(GROUPS[g.code] || g.code) + '</option>'; }).join('') + '</select></label><label>Severity <select class="finding-severity"><option value="">All levels</option>' + ['error', 'warning', 'info'].map(function (level) { return '<option value="' + level + '"' + (findingFilter.severity === level ? ' selected' : '') + '>' + level + '</option>'; }).join('') + '</select></label><label>Search <input class="finding-search" type="search" value="' + esc(findingFilter.query) + '" placeholder="path or message"></label></div>';
     var checkedRules = o.coverage && o.coverage.rules && o.coverage.rules.run || [];
     var unchecked = [['redundancy/', 'duplicate code'], ['conventions/', 'project coding conventions']].filter(function (x) { return !checkedRules.some(function (r) { return r.indexOf(x[0]) === 0; }); }).map(function (x) { return x[1]; });
     if (unchecked.length) h += '<div class="coverage-notice">Not checked: ' + esc(unchecked.join(', ')) + '. See Coverage for the full scope.</div>';
     h += reviewHtml(o.review);
-    if (o.priorities.length) {
-      var picks = o.priorities.map(function (id) { return findingById[id]; }).filter(Boolean);
+    var priorities = o.priorities.filter(function (id) { return visibleIds.has(id); });
+    if (priorities.length) {
+      var picks = priorities.map(function (id) { return findingById[id]; }).filter(Boolean);
       var hubs = picks.filter(function (f) { return f.code === 'coupling/hub'; });
       var onlyBoundaries = picks.every(function (f) { return f.code === 'architecture/boundary'; });
       var anyCycle = picks.some(function (f) { return f.code === 'coupling/import-cycle' || f.code === 'coupling/cycle'; });
@@ -1043,20 +1056,28 @@ const JS = `
         : 'Start with the dependency structures below. ';
       h += '<p class="verdict-note">' + lead + 'Each finding links to its evidence' + (anyCycle ? '; runtime failure is not proven.' : '.') + '</p>';
     }
-    if (o.priorities.length) {
+    if (!visible.length && o.findings.length) h += '<div class="ev" style="margin-top:8px">No findings match these filters.</div>';
+    else if (priorities.length) {
       h += '<div class="k">Look at first</div>';
       o.priorities.forEach(function (id, i) { h += findingRow(id, i + 1); });
-    } else if (acceptedCount) h += '<div class="ev" style="margin-top:8px">Every finding is accepted in the baseline. New findings, and accepted ones whose code changes, will show up here.</div>';
-    else h += '<div class="ev" style="margin-top:8px">No rule fired. This covers only the checks listed under Coverage; it is not a quality guarantee.</div>';
+    } else if (visible.length && acceptedCount && visible.every(function (entry) { return entry.status === 'accepted'; })) h += '<div class="ev" style="margin-top:8px">Every matching finding is accepted in the baseline.</div>';
+    else if (!o.findings.length && acceptedCount) h += '<div class="ev" style="margin-top:8px">Every finding is accepted in the baseline. New findings, and accepted ones whose code changes, will show up here.</div>';
+    else if (!o.findings.length) h += '<div class="ev" style="margin-top:8px">No rule fired. This covers only the checks listed under Coverage; it is not a quality guarantee.</div>';
     if (o.groups.length) {
       h += '<div class="k">All findings · click a component on the diagram for its own view</div>';
       o.groups.forEach(function (g) {
-        h += '<details><summary><i class="bauify-' + toneOf(g.severity) + '"></i>' + esc(GROUPS[g.code] || g.code) + ' · ' + g.count + '</summary>' + g.ids.map(function (id) { return findingRow(id); }).join('') + '</details>';
+        var ids = g.ids.filter(function (id) { return visibleIds.has(id); });
+        if (!ids.length) return;
+        h += '<details><summary><i class="bauify-' + toneOf(g.severity) + '"></i>' + esc(GROUPS[g.code] || g.code) + ' · ' + ids.length + '</summary>' + ids.map(function (id) { return findingRow(id); }).join('') + '</details>';
       });
     }
     h += coverageHtml(o.coverage);
     h += '<details><summary>Colour key</summary>' + legend() + '</details>';
     overview.innerHTML = h;
+    var ruleSelect = overview.querySelector('.finding-rule'), severitySelect = overview.querySelector('.finding-severity'), search = overview.querySelector('.finding-search');
+    ruleSelect.addEventListener('change', function () { findingFilter.rule = ruleSelect.value; renderOverview(); });
+    severitySelect.addEventListener('change', function () { findingFilter.severity = severitySelect.value; renderOverview(); });
+    search.addEventListener('input', function () { findingFilter.query = search.value.trim().toLowerCase(); renderOverview(); });
     var again = overview.querySelector('.bauify-reanalyze');
     if (again) again.addEventListener('click', function () {
       again.disabled = true; again.textContent = 'Analyzing…';
