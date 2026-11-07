@@ -26,6 +26,8 @@ If the architecture JSON changes or becomes unavailable after startup, the analy
 
 Python, JS/TS and Java are supported. For mixed-language projects, add `--language py`, `--language ts` or `--language java`; each run analyzes one language. A JS/TS or Python tree that also holds `.java` files keeps its language unless its root has a Maven/Gradle build file (see the [upgrade note](JAVA.md)). Add `--map overlay-map.json` when you need an explicit mapping between diagram components and code modules.
 
+The checked-in language examples and their limitations are summarized in [Language reference](LANGUAGE-REFERENCE.md).
+
 For a Java analysis without a diagram, run `node bin/archify.mjs code-analysis check /path/to/java-repo --language java --out out/java`. No JDK or project build is required. See [Java support and limitations](JAVA.md) for conservative dependency resolution, complexity measurements and syntax coverage.
 
 Output defaults to a system temporary directory. Add `--out out/my-project` to choose a persistent output directory. Use the printed URL: double-clicking a static HTML file cannot start local code analysis.
@@ -131,7 +133,11 @@ When the page is started with an existing baseline file, an individual finding c
 
 `check` runs the same analysis without a diagram and exits with a status a pipeline can use:
 
-To review an existing SARIF export without running its producing tool, pass `--sarif results.sarif`. The adapter keeps the tool, rule, original level, message and locations in the finding evidence, normalizes imported diagnostics to warning, and marks root-external or missing locations as unverifiable. It does not fetch SARIF artifacts or execute lint commands.
+To review existing tool output without running the producing tool, pass `--sarif results.sarif`, `--eslint results.json`, or `--ruff results.json`. These adapters keep the tool, rule, original level, message and locations in finding evidence, normalize imported diagnostics to warning, and mark root-external or missing locations as unverifiable. Unverifiable locations are not included in task modification scope. The adapters do not fetch artifacts or execute lint commands.
+
+Exact duplicate token detection is an opt-in JavaScript/TypeScript lexical experiment. Add `{"rules":{"coupling":{"duplicateCode":{"enabled":true}}}}` to the analysis config to enable it. It ignores comments and whitespace, expands matching token seeds into maximal exact sequences, and reports distinct occurrences rather than sliding windows. It does not parse language semantics; its findings do not establish equivalent behavior. The rule remains disabled by default after three-repository calibration. When enabled without explicit thresholds it uses 80 tokens and 10 lines; 50/7 is a high-recall review setting. Test, generated, vendor and third-party files are excluded. Python and Java are not checked by this rule.
+
+Organization heuristics are also opt-in experiments: `organization.mixedRoles`, `organization.folderRoles`, and `organization.genericName` can each be enabled under `rules`. They report warning-level, confidence-0.7 signals with the matched path, detected roles and (for text-role matches) trigger line/text. They remain disabled by default until cross-project false-positive review is complete.
 
 ```sh
 node bin/archify.mjs code-analysis check "/path/to/project" --baseline analysis-baseline.json --fail-on warning --out .analysis

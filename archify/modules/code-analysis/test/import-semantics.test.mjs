@@ -34,8 +34,8 @@ function analyze(t, files, language = 'py', options = {}) {
 function python(root, code) {
   const commands = process.env.BAUIFY_PYTHON ? [[process.env.BAUIFY_PYTHON]] : [['python3'], ['python'], ['py', '-3']];
   for (const [command, ...args] of commands) {
-    const result = spawnSync(command, [...args, '-c', code], { cwd: root, encoding: 'utf8', timeout: 10000 });
-    if (!result.error) return result;
+    const probe = spawnSync(command, [...args, '-c', 'import sys; sys.exit(0)'], { cwd: root, encoding: 'utf8', timeout: 10000 });
+    if (!probe.error && probe.status === 0) return spawnSync(command, [...args, '-c', code], { cwd: root, encoding: 'utf8', timeout: 10000 });
   }
   assert.fail('Python interpreter unavailable');
 }
@@ -254,9 +254,11 @@ test('review regressions: loop targets and statement-scoped initializer deduplic
 });
 
 test('review regressions: explicit zero eager counts and legacy graph classification', (t) => {
-  const { graph } = analyze(t, { 'a.py': 'def f():\n    import b\n', 'b.py': 'import a\n' });
+  const { facts, graph } = analyze(t, { 'a.py': 'def f():\n    import b\n', 'b.py': 'import a\n' });
   assert.ok(graph.edges.some((e) => e.kinds.eager === 0));
-  assert.equal(evaluate(graph).diagnostics.find((d) => d.code === 'coupling/cycle').evidence.kind, 'mixed');
+  const deferred = evaluate(graph, {}, facts).diagnostics.find((d) => d.code === 'coupling/cycle');
+  assert.equal(deferred.evidence.kind, 'mixed');
+  assert.equal(deferred.severity, 'warning', 'a deferred file cycle does not make the module cycle red');
   for (const e of graph.edges) e.kinds = { static: e.weight };
   assert.deepEqual(schemaErrors('module-graph', graph), []);
   assert.equal(evaluate(graph).diagnostics.find((d) => d.code === 'coupling/cycle').evidence.kind, 'eager');

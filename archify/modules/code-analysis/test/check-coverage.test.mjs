@@ -73,3 +73,34 @@ test('check: imports bounded SARIF findings without running the external tool', 
   assert.equal(receipt.gate.failing[0].severity, 'warning');
   assert.equal(receipt.rules.includes('external/ruff'), true);
 });
+
+test('check: imports native ESLint and Ruff JSON without executing either tool', (t) => {
+  const root = fixture(t, { 'src/ok.py': 'value = 1\n', 'src/app.js': 'alert(1)\n' });
+  const eslint = path.join(root, 'eslint.json');
+  fs.writeFileSync(eslint, JSON.stringify([{ filePath: path.join(root, 'src/app.js'), messages: [{ ruleId: 'no-alert', severity: 2, message: 'Avoid alert', line: 1, column: 1 }] }]));
+  const eslintRun = check(root, ['--language', 'py', '--eslint', eslint, '--json']);
+  assert.equal(eslintRun.status, 1, eslintRun.stdout + eslintRun.stderr);
+  const eslintReceipt = JSON.parse(eslintRun.stdout);
+  assert.equal(eslintReceipt.gate.failing[0].code, 'external/eslint');
+  const ruff = path.join(root, 'ruff.json');
+  fs.writeFileSync(ruff, JSON.stringify([{ filename: 'src/ok.py', code: 'F401', message: 'unused import', location: { row: 1, column: 1 } }]));
+  const ruffRun = check(root, ['--language', 'py', '--ruff', ruff, '--json']);
+  assert.equal(ruffRun.status, 1, ruffRun.stdout + ruffRun.stderr);
+  assert.equal(JSON.parse(ruffRun.stdout).gate.failing[0].code, 'external/ruff');
+});
+
+test('check: external diagnostics participate in a comparable follow-up run', (t) => {
+  const root = fixture(t, { 'src/app.js': 'alert(1)\n' });
+  const report = path.join(root, 'eslint.json');
+  const out = path.join(root, 'out');
+  fs.writeFileSync(report, JSON.stringify([{ filePath: path.join(root, 'src/app.js'), messages: [{ ruleId: 'no-alert', severity: 2, message: 'Avoid alert', line: 1, column: 1 }] }]));
+  const first = check(root, ['--language', 'ts', '--eslint', report, '--out', out, '--json', '--fail-on', 'never']);
+  assert.equal(first.status, 0, first.stdout + first.stderr);
+  const previous = path.join(out, 'findings.json');
+  fs.writeFileSync(path.join(root, 'src/app.js'), 'alert(2)\n');
+  const second = check(root, ['--language', 'ts', '--eslint', report, '--compare', previous, '--json', '--fail-on', 'never']);
+  assert.equal(second.status, 0, second.stdout + second.stderr);
+  const receipt = JSON.parse(second.stdout);
+  assert.equal(receipt.review.comparison.comparable, true);
+  assert.equal(receipt.review.comparison.evidenceChanged, 1);
+});

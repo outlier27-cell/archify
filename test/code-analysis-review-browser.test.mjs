@@ -83,8 +83,8 @@ test('Code Analysis marks baseline findings, re-analyzes without a restart, and 
   assert.match(overview, /No open findings · 2 accepted in the baseline/);
   assert.match(overview, /Since the previous analysis: 0 new · \d+ no longer detected/);
   assert.match(overview, /2 findings · 2 accepted\n/, 'counts read cleanly when nothing is open');
-  assert.match(overview, /Every finding is accepted in the baseline/);
-  assert.equal(await run("document.querySelector('#bauify-layer rect').getAttribute('class').split(' ')[0]"), 'green', 'accepted findings do not colour the diagram');
+  assert.match(overview, /Every matching finding is accepted in the baseline/);
+  assert.equal(await run("document.querySelector('#bauify-layer rect').getAttribute('class').split(' ')[0]"), 'red', 'accepted error findings remain visibly red');
   assert.ok(fs.existsSync(path.join(out, 'analysis.previous', 'findings.json')), 'the replaced run is kept for comparison');
   assert.deepEqual(fs.readdirSync(out).filter(name => name.startsWith('analysis.next-')), [], 'no half-written run is left behind');
   if (process.env.ARCHIFY_ANALYSIS_REVIEW_AFTER_SCREENSHOT) {
@@ -97,7 +97,9 @@ test('Code Analysis marks baseline findings, re-analyzes without a restart, and 
   fs.writeFileSync(baseline, '{ "schema_version": 1, "accepted": [{ "id": "broken" }] }');
   await run("document.querySelector('#bauify-overview .bauify-reanalyze').click()");
   await wait("document.querySelector('#bauify-overview .reanalyze-error')");
-  assert.match(await run("document.querySelector('#bauify-overview .reanalyze-error').textContent"), /Re-analysis failed: .*baseline.*last successful run/s);
+  const retainedMessage = await run("document.querySelector('#bauify-overview .reanalyze-error').textContent");
+  assert.match(retainedMessage, /Re-analysis failed: .*baseline/s);
+  assert.match(retainedMessage, /Last successful result: \d{4}-\d{2}-\d{2}T.* · ts · [0-9a-f]{12}\./, 'the retained page identifies its time, language and source snapshot');
   assert.equal(await run("document.querySelector('#bauify-overview .bauify-reanalyze').disabled"), false, 'the reader can retry');
   assert.equal(fs.readFileSync(path.join(out, 'analysis', 'findings.json'), 'utf8'), before);
 });

@@ -7,9 +7,9 @@
     "root": ".",
     "url": null,
     "language": "py",
-    "adapter": "python@3.13.17",
+    "adapter": "python@3.12.7",
     "adapterRevision": 1,
-    "snapshotId": "e414701d6bdde3ea4ac97af50ed6027fd31d94ea18cc91fbf601d10523f866b3"
+    "snapshotId": "1e277345488a9de1088df2b341dcacad3a422e103639f32ef28a5954e338cf04"
   },
   "rules": [
     "coupling/import-cycle",
@@ -20,9 +20,9 @@
     "complexity/function"
   ],
   "summary": {
-    "errors": 0,
+    "errors": 1,
     "warnings": 2,
-    "info": 4,
+    "info": 3,
     "suppressed": 0
   },
   "analysis": {
@@ -31,15 +31,15 @@
       "version": "0.1.0-dev.1"
     },
     "language": "py",
-    "adapter": "python@3.13.17",
+    "adapter": "python@3.12.7",
     "adapterRevision": 1,
-    "configDigest": "716da75c0e50bafceba14d3fee738f6e39d6a0d7a725f7122fe7eed031c4187e",
+    "configDigest": "aaf1d940b71796a8158080259b334588291a71b0ba14e07150d7af221e229701",
     "ruleVersions": {
       "architecture/boundary": 1,
       "complexity/function": 1,
-      "coupling/cycle": 1,
+      "coupling/cycle": 3,
       "coupling/hub": 1,
-      "coupling/import-cycle": 1,
+      "coupling/import-cycle": 2,
       "coupling/internal-leak": 1
     },
     "coverage": {
@@ -159,7 +159,7 @@
       "id": "COUP-543346eb7923",
       "code": "coupling/cycle",
       "dimension": "coupling",
-      "severity": "info",
+      "severity": "warning",
       "confidence": 1,
       "message": "2 modules depend on each other at package level: domain → ui → domain. See coupling/import-cycle for whether any file actually cycles.",
       "subject": {
@@ -237,7 +237,7 @@
       "code": "coupling/import-cycle",
       "dimension": "coupling",
       "confidence": 0.7,
-      "severity": "warning",
+      "severity": "error",
       "message": "2 files form a module-scope import cycle with a possible partial-initialization read: app/a.py:2 imports Handler from app/b.py, whose recorded binding is at line 5, after its line-2 import. Inspect the candidate load order starting with app/b.py; static line ordering alone does not prove failure.",
       "subject": {
         "files": [

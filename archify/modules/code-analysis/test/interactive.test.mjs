@@ -55,9 +55,50 @@ test('serve: delivers, waits for an authorized click, reuses the completed analy
   const written = fs.statSync(facts).mtimeMs;
   assert.equal((await fetch(view.url + '/analyze', { method: 'POST', headers })).status, 200);
   assert.equal(fs.statSync(facts).mtimeMs, written, 'a second click reuses the result');
+  fs.writeFileSync(config, '{');
+  const failedRefresh = await fetch(view.url + '/analyze', { method: 'POST', headers: { ...headers, 'X-Analysis-Refresh': '1' } });
+  assert.equal(failedRefresh.status, 500);
+  const failedBody = await failedRefresh.json();
+  const retained = failedBody.diagnostics.find((diagnostic) => diagnostic.code === 'analysis/refresh-failed-retained');
+  assert.equal(retained.evidence.retainedResult, true);
+  assert.match(retained.evidence.retainedIdentity.completedAt, /^\d{4}-/);
+  assert.equal(retained.evidence.retainedIdentity.language, 'ts');
+  assert.ok(retained.evidence.retainedIdentity.snapshotId || retained.evidence.retainedIdentity.revision);
+  const retainedPage = await fetch(view.url + '/analyze', { method: 'POST', headers });
+  assert.equal(retainedPage.status, 200);
+  assert.match(await retainedPage.text(), /id="bauify-analysis"/);
+  fs.writeFileSync(config, '{}');
   assert.equal(fs.readFileSync(view.delivered, 'utf8').includes('bauify-analysis'), false, 'the delivered artifact stays untouched');
   fs.appendFileSync(ir, '\n');
   assert.equal((await fetch(view.url + '/analyze', { method: 'POST', headers })).status, 409, 'changed IR also invalidates cached analysis responses');
+});
+
+test('serve: an unfixed server lets the page choose one analysis language', { skip: !ARCHIFY_AVAILABLE && 'needs an Archify checkout' }, async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-language-choice-root-'));
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-language-choice-out-'));
+  t.after(() => { fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(out, { recursive: true, force: true }); });
+  fs.writeFileSync(path.join(root, 'a.py'), 'value = 1\n');
+  fs.writeFileSync(path.join(root, 'a.js'), 'export const value = 1;\n');
+  const ir = path.join(out, 'input.json');
+  fs.writeFileSync(ir, JSON.stringify({ schema_version: 1, diagram_type: 'architecture', meta: { title: 'language', output: 'architecture.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [170, 64] }], connections: [] }));
+  const view = await startAnalysisView([root, '--ir', ir, '--out', path.join(out, 'view')]);
+  const sockets = new Set(); view.server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  t.after(() => new Promise(resolve => { view.server.close(resolve); for (const socket of sockets) socket.destroy(); }));
+  assert.match(await (await fetch(view.url)).text(), /code-analysis-language/);
+  const headers = { Origin: view.url, 'X-Analysis-Token': view.token, 'X-Analysis-Language': 'py' };
+  const response = await fetch(view.url + '/analyze', { method: 'POST', headers });
+  assert.equal(response.status, 200);
+  const findings = JSON.parse(fs.readFileSync(path.join(out, 'view/analysis/findings.json'), 'utf8'));
+  const overview = JSON.parse(fs.readFileSync(path.join(out, 'view/analysis/overview.json'), 'utf8'));
+  assert.equal(findings.repository.language, 'py');
+  assert.deepEqual(overview.coverage.otherLanguages, [{ adapter: 'ts', files: 1 }]);
+  const changed = await fetch(view.url + '/analyze', { method: 'POST', headers: { ...headers, 'X-Analysis-Language': 'ts' } });
+  assert.equal(changed.status, 200);
+  const changedFindings = JSON.parse(fs.readFileSync(path.join(out, 'view/analysis/findings.json'), 'utf8'));
+  const changedReview = JSON.parse(fs.readFileSync(path.join(out, 'view/analysis/review.json'), 'utf8'));
+  assert.equal(changedFindings.repository.language, 'ts');
+  assert.equal(changedReview.comparison.comparable, false);
+  assert.ok(changedReview.comparison.reasons.some((reason) => reason.code === 'language-changed'));
 });
 
 test('serve: editing or removing the IR requires redelivery before the first analysis', { skip: !ARCHIFY_AVAILABLE && 'needs an Archify checkout' }, async t => {
@@ -94,6 +135,31 @@ test('serve: arguments are validated up front', () => {
   assert.throws(() => parseArgs(['repo', '--ir', 'x.json']), /--out/);
   assert.throws(() => parseArgs(['repo', '--ir', 'x.json', '--out', 'o', '--bogus', '1']), /Invalid option/);
   assert.deepEqual(parseArgs(['repo', '--ir', 'x.json', '--out', 'o', '--language', 'py']).options, { '--ir': 'x.json', '--out': 'o', '--language': 'py' });
+});
+
+test('serve: imported ESLint finding reaches the page and checked task endpoint', { skip: ARCHIFY_AVAILABLE ? false : 'needs an Archify checkout' }, async (t) => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-external-serve-'));
+  t.after(() => fs.rmSync(out, { recursive: true, force: true }));
+  const repo = path.join(out, 'repo'); fs.cpSync(path.join(BAUIFY_ROOT, 'test/fixtures/ts-basic'), repo, { recursive: true });
+  const report = path.join(out, 'eslint.json');
+  fs.writeFileSync(report, JSON.stringify([{ filePath: path.join(repo, 'src/index.mjs'), messages: [{ ruleId: 'no-alert', severity: 2, message: 'Avoid alert', line: 1, column: 1 }] }]));
+  const ir = path.join(out, 'arch.json');
+  fs.writeFileSync(ir, JSON.stringify({ schema_version: 1, diagram_type: 'architecture', meta: { title: 'external', output: 'architecture.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [170, 64] }], connections: [] }));
+  const view = await startAnalysisView([repo, '--ir', ir, '--out', path.join(out, 'view'), '--language', 'ts', '--eslint', report]);
+  t.after(() => new Promise((resolve) => { view.server.close(resolve); view.server.closeAllConnections?.(); }));
+  const headers = { Origin: view.url, 'X-Analysis-Token': view.token, 'Content-Type': 'application/json' };
+  const response = await fetch(view.url + '/analyze', { method: 'POST', headers });
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /external\/eslint/);
+  const findings = JSON.parse(fs.readFileSync(path.join(out, 'view/analysis/findings.json'), 'utf8'));
+  const finding = findings.diagnostics.find((item) => item.code === 'external/eslint');
+  assert.ok(finding);
+  const taskResponse = await fetch(view.url + '/task', { method: 'POST', headers, body: JSON.stringify({ ids: [finding.id] }) });
+  assert.equal(taskResponse.status, 200);
+  const task = await taskResponse.json();
+  assert.equal(task.task.evidence.status, 'valid');
+  assert.deepEqual(task.task.scope.modify, ['src/index.mjs']);
 });
 
 test('serve: baseline decisions are scoped to the configured file and current finding', { skip: ARCHIFY_AVAILABLE ? false : 'needs an Archify checkout' }, async (t) => {

@@ -69,6 +69,45 @@ test('Code Analysis presents Java cycles as structural dependencies in the brows
   }
 });
 
+test('Code Analysis lets the page choose a language and remains reachable across target viewports and themes', {
+  skip: chrome ? false : 'Set ARCHIFY_CHROME to run Code Analysis browser coverage.',
+}, async t => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-language-browser-'));
+  t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+  const root = path.join(scratch, 'repo'); fs.mkdirSync(root);
+  fs.writeFileSync(path.join(root, 'a.py'), `def heavy(x):\n${Array.from({ length: 30 }, (_, i) => `    if x == ${i}: return ${i}`).join('\n')}\n`);
+  fs.writeFileSync(path.join(root, 'a.js'), 'export function value() { return 1; }\n');
+  const ir = path.join(scratch, 'input.json');
+  fs.writeFileSync(ir, JSON.stringify({ schema_version: 1, diagram_type: 'architecture', meta: { title: 'Language choice', output: 'architecture.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [180, 64] }], connections: [] }));
+  const view = await startAnalysisView([root, '--ir', ir, '--out', path.join(scratch, 'view')]);
+  const sockets = new Set(); view.server.on('connection', socket => { sockets.add(socket); socket.on('close', () => sockets.delete(socket)); });
+  t.after(() => new Promise(resolve => { view.server.close(resolve); for (const socket of sockets) socket.destroy(); }));
+  const browser = new ChromeVisualBrowser(chrome); t.after(() => browser.close());
+  const session = await browser.sessionPromise;
+  const send = (method, params = {}) => browser.cdp.send(method, params, session);
+  const run = async expression => { const response = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); assert.equal(response.exceptionDetails, undefined, response.exceptionDetails?.exception?.description); return response.result?.value; };
+  const loaded = browser.cdp.waitFor('Page.loadEventFired', session); await send('Page.navigate', { url: view.url }); await loaded;
+  assert.deepEqual(await run("[...document.querySelectorAll('#code-analysis-language option')].map(option => [option.value, option.textContent])"), [['', 'Auto'], ['ts', 'JS/TS'], ['py', 'Python'], ['java', 'Java']]);
+  await run("var select=document.getElementById('code-analysis-language');select.value='py';select.dispatchEvent(new Event('change',{bubbles:true}));document.getElementById('code-analysis-start').click()");
+  await run(`new Promise((resolve, reject) => { const deadline = Date.now() + 15000; const poll = () => { if (document.documentElement.getAttribute('data-bauify') === 'on') return resolve(true); if (Date.now() > deadline) return reject(new Error('Python analysis did not open')); setTimeout(poll, 25); }; poll(); })`);
+  assert.match(await run("document.querySelector('details.coverage').textContent"), /Python.*Not analyzed: 1 JS\/TS file/s);
+  for (const [width, height] of [[1440, 900], [1280, 800], [1280, 720]]) {
+    await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    const reachable = await run(`(() => { const button=document.querySelector('#bauify-overview .bauify-item'); if (!button) return false; const rect=button.getBoundingClientRect(); const top=document.elementFromPoint(rect.left+20,rect.top+10); return rect.height>0 && (top===button || button.contains(top)); })()`);
+    assert.equal(reachable, true, `first finding remains reachable at ${width}x${height}`);
+  }
+  await run("document.querySelector('#bauify-overview .bauify-item').focus()");
+  await send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r' });
+  await send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+  assert.equal(await run("document.querySelector('#bauify-detail').hidden"), false, 'Enter opens the focused finding detail');
+  assert.equal(await run("document.activeElement === document.querySelector('#bauify-detail h3')"), true, 'detail heading receives focus');
+  await run("document.querySelector('#bauify-detail .back').click()");
+  const themeButton = await run("[...document.querySelectorAll('button')].find(button => /color theme/i.test(button.getAttribute('aria-label')||''))?.textContent.trim()");
+  await run("[...document.querySelectorAll('button')].find(button => /color theme/i.test(button.getAttribute('aria-label')||''))?.click()");
+  const nextTheme = await run("[...document.querySelectorAll('button')].find(button => /color theme/i.test(button.getAttribute('aria-label')||''))?.textContent.trim()");
+  assert.notEqual(nextTheme, themeButton, 'the analysis remains open through a real theme toggle');
+});
+
 test('Code Analysis refuses changed IR and preserves captured source in the current Viewer', {
   skip: chrome ? false : 'Set ARCHIFY_CHROME to run Code Analysis browser coverage.',
 }, async t => {
@@ -139,7 +178,8 @@ test('Code Analysis refuses changed IR and preserves captured source in the curr
   assert.match(await run("document.querySelector('#bauify-overview h3').textContent"), /Needs attention/);
   assert.match(await run("document.getElementById('bauify-overview').textContent"), /Checked: import cycles, module cycles, hub modules/);
   // a.mjs <-> b.mjs is both a file cycle and a module cycle: one structure, one priority slot.
-  assert.equal(await run("document.querySelectorAll('#bauify-overview .bauify-item .n').length"), 1);
+  const priorityItems = await run("[...document.querySelectorAll('#bauify-overview .bauify-item')].map(el => ({ text: el.innerText, finding: el.dataset.finding, related: window.bauifyAnalysis?.overview?.findings?.find(f => f.id === el.dataset.finding)?.relatedIds }))");
+  assert.equal(await run("document.querySelectorAll('#bauify-overview .bauify-item .n').length"), 1, JSON.stringify(priorityItems));
   await run("document.querySelector('#bauify-overview .bauify-item').click()");
   assert.equal(await run("document.getElementById('bauify-detail').hidden"), false);
   // A source view must cover the detail on narrow screens, not remain a

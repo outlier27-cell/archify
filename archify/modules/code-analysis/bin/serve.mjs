@@ -78,7 +78,7 @@ export async function ensureDependencies(root = moduleRoot) {
 export const USAGE = `Usage:
   archify code-analysis serve <repo-root> --ir <architecture.json> --out <dir>
                               [--language ts|py|java] [--map overlay-map.json] [--config file.json]
-                              [--baseline baseline.json] [--quality standard|showcase]
+                              [--baseline baseline.json] [--sarif file] [--eslint file] [--ruff file] [--quality standard|showcase]
 
 Delivers the authored diagram with Archify, serves it on a local port, and runs the
 code analysis for <repo-root> when "Code Analysis" is clicked on that page. Nothing
@@ -95,7 +95,7 @@ export function parseArgs(argv) {
   const options = {};
   for (let i = 0; i < rest.length; i += 2) {
     const key = rest[i];
-    if (!['--ir', '--out', '--language', '--config', '--map', '--quality', '--baseline'].includes(key) || !rest[i + 1] || rest[i + 1].startsWith('--')) throw new Error(`Invalid option: ${key}\n${USAGE}`);
+    if (!['--ir', '--out', '--language', '--config', '--map', '--quality', '--baseline', '--sarif', '--eslint', '--ruff'].includes(key) || !rest[i + 1] || rest[i + 1].startsWith('--')) throw new Error(`Invalid option: ${key}\n${USAGE}`);
     options[key] = rest[i + 1];
   }
   if (!options['--ir'] || !options['--out']) throw new Error(`serve requires --ir and --out\n${USAGE}`);
@@ -144,17 +144,18 @@ export async function startAnalysisView(argv) {
 
   // 2. Serve it with the button. The token ties analysis requests to this page.
   const token = randomBytes(24).toString('hex');
-  const page = fs.readFileSync(delivered, 'utf8').replace('</body>', `<script>(${client.toString()})(${JSON.stringify(token)})</script></body>`);
+  const page = fs.readFileSync(delivered, 'utf8').replace('</body>', `<script>(${client.toString()})(${JSON.stringify(token)},${JSON.stringify(options['--language'] || null)})</script></body>`);
   let pending = null, result = null, baselineWrite = null, origin;
   const analysisDir = path.join(out, 'analysis');
   // One run: fresh directory, then swap it in. The current result is the comparison.
-  const runAnalysis = async () => {
+  const runAnalysis = async (requestedLanguage = null) => {
     const next = path.join(out, `analysis.next-${randomBytes(6).toString('hex')}`);
     try {
       await runWorker({
         root, ir, irSnapshot: doc, html: delivered, out: next,
-        language: options['--language'] || null, config: options['--config'] ? path.resolve(options['--config']) : null,
+        language: options['--language'] || requestedLanguage || null, config: options['--config'] ? path.resolve(options['--config']) : null,
         map: options['--map'] ? path.resolve(options['--map']) : null, baseline: options['--baseline'] ? path.resolve(options['--baseline']) : null,
+        external: ['--sarif', '--eslint', '--ruff'].filter((key) => options[key]).map((key) => ({ format: key.slice(2), file: path.resolve(options[key]) })),
         previous: path.join(analysisDir, 'findings.json'),
       });
     } catch (error) {
@@ -165,7 +166,16 @@ export async function startAnalysisView(argv) {
     fs.rmSync(previousDir, { recursive: true, force: true });
     if (fs.existsSync(analysisDir)) fs.renameSync(analysisDir, previousDir);
     fs.renameSync(next, analysisDir);
-    return fs.readFileSync(path.join(analysisDir, 'repo.analysis.html'), 'utf8');
+    const findings = JSON.parse(fs.readFileSync(path.join(analysisDir, 'findings.json'), 'utf8'));
+    return {
+      html: fs.readFileSync(path.join(analysisDir, 'repo.analysis.html'), 'utf8'),
+      identity: {
+        completedAt: new Date().toISOString(),
+        language: findings.repository?.language || null,
+        revision: findings.repository?.revision || findings.repository?.baseRevision || null,
+        snapshotId: findings.repository?.snapshotId || null,
+      },
+    };
   };
   const server = http.createServer(async (req, res) => {
     const send = (status, body, type = 'application/json') => { res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(body); };
@@ -186,19 +196,25 @@ export async function startAnalysisView(argv) {
     // Concurrent requests share the run in progress.
     if (baselineWrite) return send(409, JSON.stringify({ error: 'A baseline decision is being saved.', diagnostics: [{ code: 'analysis/baseline-write-running', severity: 'error', message: 'A baseline decision is being saved.', subject: {}, evidence: {}, supportedFixes: ['retry after the baseline write completes'] }] }));
     const refreshing = req.headers['x-analysis-refresh'] === '1';
+    const requestedLanguage = req.headers['x-analysis-language'] || null;
+    if (requestedLanguage !== null && !['ts', 'py', 'java'].includes(requestedLanguage)) return send(400, JSON.stringify({ error: 'X-Analysis-Language must be ts, py or java.', diagnostics: [{ code: 'analysis/language-invalid', severity: 'error', message: 'X-Analysis-Language must be ts, py or java.', subject: { language: requestedLanguage }, evidence: {}, supportedFixes: ['choose ts, py or java'] }] }));
+    if (options['--language'] && requestedLanguage && requestedLanguage !== options['--language']) return send(409, JSON.stringify({ error: `This server is fixed to ${options['--language']}.`, diagnostics: [{ code: 'analysis/language-fixed', severity: 'error', message: `This server is fixed to ${options['--language']}.`, subject: { language: requestedLanguage }, evidence: { configuredLanguage: options['--language'] }, supportedFixes: ['restart without --language to choose in the page'] }] }));
+    const changingLanguage = Boolean(result && requestedLanguage && result.identity.language !== requestedLanguage);
+    if (changingLanguage && pending) return send(409, JSON.stringify({ error: 'An analysis is already running.', diagnostics: [{ code: 'analysis/running', severity: 'error', message: 'An analysis is already running.', subject: { language: requestedLanguage }, evidence: {}, supportedFixes: ['retry after it finishes'] }] }));
     const previousResult = result;
+    if (changingLanguage && !refreshing) result = null;
     try {
       if (refreshing && !pending) result = null;
       if (!result) {
-        pending ??= runAnalysis().then((html) => { result = html; return html; }).finally(() => { pending = null; });
+        pending ??= runAnalysis(requestedLanguage).then((nextResult) => { result = nextResult; return nextResult; }).finally(() => { pending = null; });
       }
-      send(200, result || await pending, 'text/html; charset=utf-8');
+      send(200, (result || await pending).html, 'text/html; charset=utf-8');
     } catch (error) {
       const diagnostics = error instanceof DiagnosticError ? error.diagnostics : [{ code: 'internal/unclassified', severity: 'error', message: error.message, subject: {}, evidence: {}, supportedFixes: [] }];
       if (refreshing) {
         const retained = result || previousResult;
         if (retained) result = retained;
-        diagnostics.push({ code: 'analysis/refresh-failed-retained', severity: 'warning', message: retained ? 'The refresh failed; the last successful analysis remains available and is older than this request.' : 'The refresh failed; no previous successful analysis is available.', subject: {}, evidence: { retainedResult: Boolean(retained) }, supportedFixes: ['fix the reported analysis error and retry'] });
+        diagnostics.push({ code: 'analysis/refresh-failed-retained', severity: 'warning', message: retained ? 'The refresh failed; the last successful analysis remains available and is older than this request.' : 'The refresh failed; no previous successful analysis is available.', subject: {}, evidence: { retainedResult: Boolean(retained), retainedIdentity: retained?.identity || null }, supportedFixes: ['fix the reported analysis error and retry'] });
       }
       send(500, JSON.stringify({ error: diagnostics.map((d) => d.message).join('\n'), diagnostics }));
     }
@@ -275,10 +291,21 @@ export async function startAnalysisView(argv) {
 // Runs in the page. One toolbar button: click → analysis runs → the analysis
 // layer is added to this page and switched on. From then on the layer's own
 // toggle (the same button, now owned by the layer) shows or hides it.
-function client(token) {
+function client(token, configuredLanguage) {
   window.__archifyAnalysisToken = token;
   var toolbar = document.querySelector('.toolbar');
   if (!toolbar) return;
+  var language = null;
+  var languageSelect = null;
+  if (!configuredLanguage) {
+    languageSelect = document.createElement('select');
+    languageSelect.id = 'code-analysis-language';
+    languageSelect.title = 'Analyze one language';
+    languageSelect.setAttribute('aria-label', 'Code analysis language');
+    [['', 'Auto'], ['ts', 'JS/TS'], ['py', 'Python'], ['java', 'Java']].forEach(function (entry) { var option = document.createElement('option'); option.value = entry[0]; option.textContent = entry[1]; languageSelect.appendChild(option); });
+    languageSelect.addEventListener('change', function () { language = languageSelect.value || null; });
+    toolbar.appendChild(languageSelect);
+  } else language = configuredLanguage;
   var button = document.createElement('button');
   button.id = 'code-analysis-start'; button.type = 'button'; button.textContent = 'Code Analysis';
   button.title = 'Analyze the repository and show the result on this diagram';
@@ -331,18 +358,24 @@ function client(token) {
   // Re-analysis: the server runs a new analysis; the page then reloads and opens it,
   // which re-mounts the layer cleanly instead of patching a live one.
   window.__archifyReanalyze = async function () {
-    var response = await fetch('/analyze', { method: 'POST', headers: { 'X-Analysis-Token': token, 'X-Analysis-Refresh': '1' } });
+    var refreshHeaders = { 'X-Analysis-Token': token, 'X-Analysis-Refresh': '1' };
+    if (language) refreshHeaders['X-Analysis-Language'] = language;
+    var response = await fetch('/analyze', { method: 'POST', headers: refreshHeaders });
     if (!response.ok) {
       var body = {};
       try { body = await response.json(); } catch (e) { /* not JSON */ }
-      throw new Error(body.error || 'analysis failed');
+      var error = new Error(body.error || 'analysis failed');
+      error.diagnostics = body.diagnostics || [];
+      throw error;
     }
     location.replace(location.pathname + '?analysis=open');
   };
   button.addEventListener('click', async function () {
     button.disabled = true; button.textContent = 'Analyzing…'; say('Reading the repository — imports, modules, rules.');
     try {
-      var response = await fetch('/analyze', { method: 'POST', headers: { 'X-Analysis-Token': token } });
+      var analyzeHeaders = { 'X-Analysis-Token': token };
+      if (language) analyzeHeaders['X-Analysis-Language'] = language;
+      var response = await fetch('/analyze', { method: 'POST', headers: analyzeHeaders });
       if (!response.ok) {
         var body = await response.json();
         if (response.status === 409 && body.diagnostics?.[0]?.code === 'analysis/architecture-changed') {
@@ -358,7 +391,7 @@ function client(token) {
       // In document order; the Atlas parts are present only when raw facts were available.
       var ids = ['bauify-analysis', 'bauify-atlas-data', 'bauify-style', 'bauify-script', 'bauify-atlas-style', 'bauify-atlas-script'].filter(function (id) { return parsed.getElementById(id); });
       // Hand over to the layer: it adds its own toggle to the toolbar, so this button retires.
-      button.remove(); say('');
+      button.remove(); if (languageSelect) languageSelect.remove(); say('');
       window.removeEventListener('resize', reposition);
       window.removeEventListener('scroll', reposition, true);
       toolbar.removeEventListener('transitionend', reposition);

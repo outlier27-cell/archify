@@ -15,11 +15,21 @@ import { buildModuleGraph } from '../graphs/module.mjs';
 import { buildOverlay } from '../overlay/inject.mjs';
 import { evaluate } from '../evaluate/index.mjs';
 import { reviewFindings, validateBaseline } from './review.mjs';
+import { importEslint, importRuff, importSarif } from './diagnostics.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 export function stableJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
+}
+
+export function externalIdentity(file, format, findings) {
+  return {
+    format,
+    sha256: createHash('sha256').update(fs.readFileSync(file)).digest('hex'),
+    findings: findings.length,
+    rules: [...new Set(findings.map((finding) => `${finding.evidence?.tool || format}:${finding.evidence?.rule || 'unknown'}`))].sort(),
+  };
 }
 
 export function loadConfig(explicit) {
@@ -63,9 +73,13 @@ export function reviewSummary(review) {
   };
 }
 
-export function readJsonInput(file, what) {
+export function readJsonInput(file, what, { maxBytes = null } = {}) {
   if (!file) fail('cli/input-missing', `${what} requires an input file argument.`, { supportedFixes: ['pass the JSON file path'] });
   if (!fs.existsSync(file)) fail('cli/input-invalid', `Not a file: ${file}`, { subject: { file }, supportedFixes: ['pass an existing JSON file'] });
+  if (maxBytes !== null) {
+    const bytes = fs.statSync(file).size;
+    if (bytes > maxBytes) fail('diagnostics/input-too-large', `${file} is larger than the ${maxBytes}-byte diagnostic import limit.`, { subject: { file }, evidence: { bytes, maxBytes }, supportedFixes: ['split the diagnostic export into smaller files'] });
+  }
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (error) {
     fail('cli/input-not-json', `${file} is not valid JSON.`, { subject: { file }, evidence: { reason: error.message }, supportedFixes: ['regenerate the input'] });
   }
@@ -192,7 +206,7 @@ export function loadPrevious(file, { strict = false } = {}) {
 // `html` is the page Archify delivered for `ir`; it is read, never modified.
 // `baseline` (file) marks accepted findings; `previous` (a findings.json from
 // an earlier run) adds a comparison. Both are recorded in review.json.
-export function analyzeRepository({ root, ir, html, out, language = null, config = null, map = null, irSnapshot = null, baseline = null, previous = null }) {
+export function analyzeRepository({ root, ir, html, out, language = null, config = null, map = null, irSnapshot = null, baseline = null, previous = null, external = [] }) {
   const absRoot = path.resolve(root);
   const irPath = path.resolve(ir);
   const htmlPath = path.resolve(html);
@@ -206,6 +220,21 @@ export function analyzeRepository({ root, ir, html, out, language = null, config
   const graph = buildGraph(facts, cfg);
   fs.writeFileSync(path.join(dir, 'module-graph.json'), stableJson(graph));
   const findings = evaluateGraph(graph, cfg, facts);
+  const externalDiagnostics = [];
+  if (external.length) {
+    const importedAt = new Date().toISOString();
+    for (const input of external) {
+      const document = readJsonInput(input.file, `analysis --${input.format}`, { maxBytes: 50 * 1024 * 1024 });
+      const imported = input.format === 'sarif' ? importSarif(document, { root: absRoot, source: input.format, importedAt })
+        : input.format === 'eslint' ? importEslint(document, { root: absRoot, source: input.format, importedAt })
+          : importRuff(document, { root: absRoot, source: input.format, importedAt });
+      findings.diagnostics.push(...imported);
+      externalDiagnostics.push(externalIdentity(input.file, input.format, imported));
+      findings.rules = [...findings.rules, ...new Set(imported.map((finding) => finding.code))].sort();
+      findings.summary.warnings += imported.length;
+    }
+  }
+  findings.analysis.externalDiagnostics = externalDiagnostics.sort((a, b) => a.format < b.format ? -1 : a.format > b.format ? 1 : a.sha256 < b.sha256 ? -1 : 1);
   fs.writeFileSync(path.join(dir, 'findings.json'), stableJson(findings));
   const review = reviewFindings(findings.diagnostics, { baseline: loadBaseline(baseline), previous: loadPrevious(previous), analysis: findings.analysis, files: facts.files.map((f) => f.path) });
   fs.writeFileSync(path.join(dir, 'review.json'), stableJson(review));

@@ -8,6 +8,10 @@
 import * as cycle from './rules/coupling/cycle.mjs';
 import * as hub from './rules/coupling/hub.mjs';
 import * as concentration from './rules/coupling/concentration.mjs';
+import * as duplicate from './rules/coupling/duplicate.mjs';
+import * as mixedRoles from './rules/organization/mixed-roles.mjs';
+import * as folderRoles from './rules/organization/folder-roles.mjs';
+import * as genericName from './rules/organization/generic-name.mjs';
 import * as internalLeak from './rules/coupling/internal-leak.mjs';
 import * as importCycle from './rules/coupling/import-cycle.mjs';
 import * as boundary from './rules/architecture/boundary.mjs';
@@ -17,7 +21,7 @@ import fs from 'node:fs';
 
 const PACKAGE = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
-export const RULES = [importCycle, cycle, hub, concentration, internalLeak, boundary, complexity];
+export const RULES = [importCycle, cycle, hub, concentration, duplicate, mixedRoles, folderRoles, genericName, internalLeak, boundary, complexity];
 
 export function evaluate(graph, config = {}, facts = null) {
   const suppressed = new Set(config.ignore || []);
@@ -124,7 +128,8 @@ function subjectFiles(finding, moduleFiles) {
   // A boundary or internal-leak finding is about the imports it cites: both ends of each.
   if (subject?.boundary || finding.code === 'coupling/internal-leak') return (finding.evidence?.imports || []).flatMap((i) => [i.file, i.to]);
   const modules = Array.isArray(subject?.modules) ? subject.modules : typeof subject?.module === 'string' ? [subject.module] : [];
-  return modules.flatMap((id) => moduleFiles.get(id) || []);
+  const related = finding.code === 'coupling/concentration' ? finding.evidence?.dependentModules || [] : [];
+  return [...new Set([...modules, ...related].flatMap((id) => moduleFiles.get(id) || []))].sort(compareText);
 }
 
 function sha256(text) { return createHash('sha256').update(text).digest('hex'); }
@@ -135,6 +140,7 @@ function idFor(dimension, identity) {
 
 function identityOf(subject, anchors) {
   const anchor = (id) => anchors.get(id) ?? `id:${id}`;
+  if (typeof subject?.groupId === 'string') return { groupId: subject.groupId };
   // A function is identified by file and qualified name, not by its lines, so edits above it keep its id.
   if (typeof subject?.file === 'string' && typeof subject?.function === 'string') return { file: subject.file, function: subject.function };
   if (Array.isArray(subject?.files)) return { files: [...subject.files].sort(compareText) };

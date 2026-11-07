@@ -121,6 +121,8 @@ test('comparison: a previous run without analysis context has unknown comparabil
   assert.equal(comparability(findings.analysis, findings.analysis).comparable, true);
   const parse = comparability(findings.analysis, { ...findings.analysis, coverage: { ...findings.analysis.coverage, parseErrors: ['app/x.py'] } });
   assert.deepEqual(parse.reasons.map((r) => r.code), ['parse-errors']);
+  const external = comparability({ ...findings.analysis, externalDiagnostics: [] }, { ...findings.analysis, externalDiagnostics: [{ format: 'eslint', sha256: 'a'.repeat(64), findings: 1, rules: ['eslint:no-alert'] }] });
+  assert.deepEqual(external.reasons.map((r) => r.code), ['external-diagnostics-changed']);
 });
 
 // ---- review findings on PR #992 -------------------------------------------

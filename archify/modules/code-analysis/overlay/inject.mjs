@@ -617,7 +617,7 @@ html[data-bauify="on"] .cards, html[data-bauify="on"] .guided-views { display: n
 const JS = `
 (function () {
   var data = JSON.parse(document.getElementById('bauify-analysis').textContent);
-  var findingFilter = { rule: '', severity: '', query: '' };
+  var findingFilter = { rule: '', severity: '', source: '', status: '', query: '' };
   var root = document.documentElement;
   var toolbar = document.querySelector('.toolbar');
   var svg = document.querySelector('svg');
@@ -965,6 +965,7 @@ const JS = `
     if (f.code === 'coupling/cycle' && s.modules) return 'Module cycle · ' + plural(s.modules.length, 'module');
     if (f.code === 'coupling/hub' && s.module) return modLabel(s.module) + ' connects many modules';
     if (f.code === 'coupling/internal-leak' && s.module) return modLabel(s.module) + ' is imported through its internals';
+    if (f.code === 'coupling/concentration' && s.module) return modLabel(s.module) + ' is concentrated';
     if (f.code === 'architecture/boundary' && s.boundary) return s.boundary.from + ' depends on ' + s.boundary.to;
     // Java names carry their parameter types to tell overloads apart.
     if (f.code === 'complexity/function' && s.function) return s.function + (s.function.endsWith(')') ? '' : '()') + ' is complex';
@@ -976,6 +977,13 @@ const JS = `
     if (s.modules) return 'Modules: ' + s.modules.slice(0, 4).map(modLabel).join(', ') + (s.modules.length > 4 ? ' …' : '');
     if (f.code === 'coupling/hub' && f.evidence) return f.evidence.fanIn + ' modules depend on it; it depends on ' + f.evidence.fanOut + '.';
     if (f.code === 'coupling/internal-leak' && f.evidence) return plural(f.evidence.totalImports, 'import') + ' from ' + plural(f.evidence.consumers.length, 'module') + ' reach ' + plural(f.evidence.internalFiles.length, 'internal file') + ' of ' + f.evidence.moduleFiles + (f.evidence.entries.length ? ' · entry point: ' + f.evidence.entries.map(short).join(', ') : ' · no entry file');
+    if (f.code === 'coupling/concentration' && f.evidence) {
+      var threshold = f.evidence.threshold || {}, parts = [];
+      parts.push(f.evidence.dependentCount + ' / ' + f.evidence.totalExternalModules + ' modules depend on it (' + (f.evidence.dependentRatio * 100).toFixed(1) + '%; threshold ' + (threshold.reachRatio === null ? 'off' : (threshold.reachRatio * 100).toFixed(1) + '%') + ')');
+      parts.push(f.evidence.moduleLoc + ' / ' + f.evidence.totalAnalyzedLoc + ' LOC (' + (f.evidence.moduleLocRatio * 100).toFixed(1) + '%; threshold ' + (threshold.moduleLocRatio === null ? 'off' : (threshold.moduleLocRatio * 100).toFixed(1) + '%') + ')');
+      if (f.evidence.largestFile && f.evidence.largestFile.path) parts.push(short(f.evidence.largestFile.path) + ' · ' + f.evidence.largestFile.loc + ' LOC (threshold ' + (threshold.fileLoc === null ? 'off' : threshold.fileLoc) + ')');
+      return parts.join(' · ');
+    }
     if (f.code === 'complexity/function' && f.evidence) return 'complexity ' + f.evidence.complexity + ' · nesting ' + f.evidence.nesting + ' · ' + plural(f.evidence.length, 'line') + ' · ' + short(s.file);
     if (f.code === 'architecture/boundary' && f.evidence) return plural(f.evidence.totalImports, 'import') + ' in ' + plural(f.evidence.files.length, 'file') + ' · rule: ' + (f.evidence.rule.reason || s.boundary.from + ' must not depend on ' + s.boundary.to);
     return f.message;
@@ -1056,26 +1064,31 @@ const JS = `
       var finding = findingById[entry.id] || {};
       return (!findingFilter.rule || finding.code === findingFilter.rule)
         && (!findingFilter.severity || finding.severity === findingFilter.severity)
+        && (!findingFilter.source || (finding.evidence && (finding.evidence.source === findingFilter.source || finding.evidence.tool === findingFilter.source)))
+        && (!findingFilter.status || (findingFilter.status === 'accepted' ? entry.status === 'accepted' : entry.status !== 'accepted'))
         && (!findingFilter.query || String(finding.message || '').toLowerCase().includes(findingFilter.query) || JSON.stringify([finding.subject || {}, finding.evidence || {}]).toLowerCase().includes(findingFilter.query));
     });
     var visibleIds = new Set(visible.map(function (entry) { return entry.id; }));
+    var visibleCounts = { error: 0, warning: 0, info: 0, accepted: 0 };
+    visible.forEach(function (entry) { if (entry.status === 'accepted') visibleCounts.accepted += 1; else visibleCounts[entry.severity] += 1; });
     var counts = [plural(visible.length, 'finding') + (visible.length === o.findings.length ? '' : ' shown')]
-      .concat(['error', 'warning', 'info'].filter(function (k) { return o.counts[k]; }).map(function (k) { return o.counts[k] + ' ' + k; }))
-      .concat(acceptedCount ? [acceptedCount + ' accepted'] : [])
+      .concat(['error', 'warning', 'info'].filter(function (k) { return visibleCounts[k]; }).map(function (k) { return visibleCounts[k] + ' ' + k; }))
+      .concat(visibleCounts.accepted ? [visibleCounts.accepted + ' accepted'] : [])
       .concat(o.counts.offDiagram ? [o.counts.offDiagram + ' not on this diagram'] : []).join(' · ');
     var h = typeof window.__archifyReanalyze === 'function' ? '<button type="button" class="bauify-reanalyze" title="Read the repository again and compare with this result">Re-analyze</button>' : '';
     h += '<h3><i class="bauify-' + v.tone + '"></i>' + esc(verdictText) + '</h3>';
     h += '<div class="ev">' + esc(counts) + '</div>';
-    h += '<div class="finding-filters"><label>Rule <select class="finding-rule"><option value="">All rules</option>' + o.groups.map(function (g) { return '<option value="' + esc(g.code) + '"' + (findingFilter.rule === g.code ? ' selected' : '') + '>' + esc(GROUPS[g.code] || g.code) + '</option>'; }).join('') + '</select></label><label>Severity <select class="finding-severity"><option value="">All levels</option>' + ['error', 'warning', 'info'].map(function (level) { return '<option value="' + level + '"' + (findingFilter.severity === level ? ' selected' : '') + '>' + level + '</option>'; }).join('') + '</select></label><label>Search <input class="finding-search" type="search" value="' + esc(findingFilter.query) + '" placeholder="path or message"></label></div>';
+    var sources = [...new Set((o.findings || []).map(function (entry) { var f = findingById[entry.id] || {}; return f.evidence && (f.evidence.tool || f.evidence.source); }).filter(Boolean))].sort();
+    h += '<div class="finding-filters"><label>Rule <select class="finding-rule"><option value="">All rules</option>' + o.groups.map(function (g) { return '<option value="' + esc(g.code) + '"' + (findingFilter.rule === g.code ? ' selected' : '') + '>' + esc(GROUPS[g.code] || g.code) + '</option>'; }).join('') + '</select></label><label>Severity <select class="finding-severity"><option value="">All levels</option>' + ['error', 'warning', 'info'].map(function (level) { return '<option value="' + level + '"' + (findingFilter.severity === level ? ' selected' : '') + '>' + level + '</option>'; }).join('') + '</select></label><label>Source <select class="finding-source"><option value="">All sources</option>' + sources.map(function (source) { return '<option value="' + esc(source) + '"' + (findingFilter.source === source ? ' selected' : '') + '>' + esc(source) + '</option>'; }).join('') + '</select></label><label>Status <select class="finding-status"><option value="">All statuses</option><option value="open"' + (findingFilter.status === 'open' ? ' selected' : '') + '>Open</option><option value="accepted"' + (findingFilter.status === 'accepted' ? ' selected' : '') + '>Accepted</option></select></label><label>Search <input class="finding-search" type="search" value="' + esc(findingFilter.query) + '" placeholder="path or message"></label><button type="button" class="finding-clear" title="Clear finding filters">Clear</button></div>';
     var checkedRules = o.coverage && o.coverage.rules && o.coverage.rules.run || [];
-    var unchecked = [['redundancy/', 'duplicate code'], ['conventions/', 'project coding conventions']].filter(function (x) { return !checkedRules.some(function (r) { return r.indexOf(x[0]) === 0; }); }).map(function (x) { return x[1]; });
+    var unchecked = [['coupling/duplicate-code', 'duplicate code'], ['organization/', 'project coding conventions']].filter(function (x) { return !checkedRules.includes(x[0]) && !checkedRules.some(function (r) { return r.indexOf(x[0]) === 0; }); }).map(function (x) { return x[1]; });
     if (unchecked.length) h += '<div class="coverage-notice">Not checked: ' + esc(unchecked.join(', ')) + '. See Coverage for the full scope.</div>';
     h += reviewHtml(o.review);
     var priorities = [], priorityRules = new Set(), priorityCovered = new Set();
     var openVisible = visible.filter(function (entry) { return entry.status !== 'accepted'; });
     var topVisibleSeverity = openVisible.length ? openVisible[0].severity : null;
     openVisible.forEach(function (entry) {
-      if (priorities.length >= 3 || entry.severity !== topVisibleSeverity || priorityRules.has(entry.code)) return;
+      if (priorities.length >= 3 || entry.severity !== topVisibleSeverity || priorityRules.has(entry.code) || priorityCovered.has(entry.id)) return;
       priorityRules.add(entry.code); priorityCovered.add(entry.id); priorities.push(entry.id);
       (entry.relatedIds || []).forEach(function (id) { priorityCovered.add(id); });
     });
@@ -1111,9 +1124,12 @@ const JS = `
     h += coverageHtml(o.coverage);
     h += '<details><summary>Colour key</summary>' + legend() + '</details>';
     overview.innerHTML = h;
-    var ruleSelect = overview.querySelector('.finding-rule'), severitySelect = overview.querySelector('.finding-severity'), search = overview.querySelector('.finding-search');
+    var ruleSelect = overview.querySelector('.finding-rule'), severitySelect = overview.querySelector('.finding-severity'), sourceSelect = overview.querySelector('.finding-source'), statusSelect = overview.querySelector('.finding-status'), clear = overview.querySelector('.finding-clear'), search = overview.querySelector('.finding-search');
     ruleSelect.addEventListener('change', function () { findingFilter.rule = ruleSelect.value; renderOverview(); });
     severitySelect.addEventListener('change', function () { findingFilter.severity = severitySelect.value; renderOverview(); });
+    sourceSelect.addEventListener('change', function () { findingFilter.source = sourceSelect.value; renderOverview(); });
+    statusSelect.addEventListener('change', function () { findingFilter.status = statusSelect.value; renderOverview(); });
+    clear.addEventListener('click', function () { findingFilter = { rule: '', severity: '', source: '', status: '', query: '' }; renderOverview(); });
     search.addEventListener('input', function () {
       findingFilter.query = search.value.trim().toLowerCase();
       var cursor = search.selectionStart;
@@ -1127,7 +1143,10 @@ const JS = `
       window.__archifyReanalyze().catch(function (error) {
         again.disabled = false; again.textContent = 'Re-analyze';
         var note = overview.querySelector('.reanalyze-error') || again.insertAdjacentElement('afterend', document.createElement('div'));
-        note.className = 'ev reanalyze-error'; note.textContent = 'Re-analysis failed: ' + error.message + ' The result shown is from the last successful run.';
+        var retained = (error.diagnostics || []).find(function (diagnostic) { return diagnostic.code === 'analysis/refresh-failed-retained'; });
+        var identity = retained && retained.evidence && retained.evidence.retainedIdentity;
+        var identityText = identity ? ' Last successful result: ' + (identity.completedAt || 'unknown time') + ' · ' + (identity.language || 'unknown language') + ' · ' + String(identity.revision || identity.snapshotId || 'unknown source').slice(0, 12) + '.' : ' The result shown is from the last successful run.';
+        note.className = 'ev reanalyze-error'; note.textContent = 'Re-analysis failed: ' + error.message + identityText;
       });
     });
     overview.querySelectorAll('[data-finding]').forEach(function (el) {
@@ -1163,6 +1182,25 @@ const JS = `
       h += '</pre><div class="ev">Captured lines ' + (start + 1) + '–' + end + ' of ' + snip.lines.length + ' · excerpt only; click the path to expand.</div></div>';
       return h;
     }).join('');
+  }
+  function duplicateLocationsHtml(f) {
+    if (f.code !== 'coupling/duplicate-code' || !Array.isArray(f.evidence && f.evidence.locations)) return '';
+    return '<details class="duplicate-locations" data-duplicate-id="' + esc(f.id) + '"><summary>Duplicate locations · ' + f.evidence.locations.length + '</summary><div class="duplicate-page"></div><div class="task-actions"><button type="button" class="duplicate-prev">Previous</button><span class="ev duplicate-status"></span><button type="button" class="duplicate-next">Next</button></div></details>';
+  }
+  function wireDuplicateLocations(f) {
+    var box = detail.querySelector('[data-duplicate-id="' + f.id + '"]'); if (!box) return;
+    var locations = f.evidence.locations || [], pageSize = 20, page = 0, pages = Math.max(1, Math.ceil(locations.length / pageSize));
+    var list = box.querySelector('.duplicate-page'), status = box.querySelector('.duplicate-status'), previous = box.querySelector('.duplicate-prev'), next = box.querySelector('.duplicate-next');
+    var render = function () {
+      var start = page * pageSize, current = locations.slice(start, start + pageSize);
+      list.innerHTML = current.map(function (location) { return ref(location.file, location.startLine, 'lines ' + location.startLine + '–' + location.endLine, 'Exact token duplicate; compare responsibilities before sharing code.', toneOf(f.severity), location.startLine, location.endLine); }).join('');
+      status.textContent = 'Page ' + (page + 1) + ' of ' + pages + ' · ' + (start + 1) + '–' + (start + current.length) + ' of ' + locations.length;
+      previous.disabled = page === 0; next.disabled = page + 1 >= pages; wireRefs();
+    };
+    previous.addEventListener('click', function () { if (page > 0) { page -= 1; render(); } });
+    next.addEventListener('click', function () { if (page + 1 < pages) { page += 1; render(); } });
+    box.addEventListener('toggle', function () { if (box.open) render(); });
+    render();
   }
   function taskHtml(f) {
     return '<details class="ai-task" data-task-id="' + esc(f.id) + '"><summary>Task preview and download</summary><p class="ev">Review the brief, then give it to your coding AI. Exporting does not modify code.</p><p class="task-status ev" role="status" aria-live="polite">Open to prepare the task.</p><div class="task-actions"><button type="button" class="task-copy" disabled>Copy AI task</button><button type="button" class="task-download" disabled>Download .md</button><button type="button" class="task-refresh">Check again</button></div><label class="ev">Task preview · select text to copy manually<textarea class="task-preview" readonly spellcheck="false" aria-label="AI task preview"></textarea></label></details>';
@@ -1248,7 +1286,7 @@ const JS = `
     h += '<div class="level"><b>' + esc(lvl.name) + '</b> — ' + esc(findingWhat(f)) + '<br>' + esc(explanation) + '</div>';
     if (f.review && f.review.reason) h += '<p class="ev"><span class="badge-accepted">' + (f.review.status === 'accepted-changed' ? 'accepted · evidence changed' : 'accepted') + '</span> ' + esc(f.review.reason) + (f.review.status === 'accepted-changed' ? ' — the code behind it changed since it was accepted; review it again.' : '') + '</p>';
     if (data.baselineConfigured && window.__archifyAnalysisToken) h += baselineActionHtml(f);
-    h += quickHandoff(f) + '<div class="k">Code evidence</div>' + evidencePreview(f);
+    h += quickHandoff(f) + '<div class="k">Code evidence</div>' + evidencePreview(f) + duplicateLocationsHtml(f);
     h += nextStepHtml(f) + taskHtml(f);
     if ((f.componentIds || []).length) h += '<button type="button" class="locate">Locate related components</button>';
     else h += '<p class="ev">Not mapped to this diagram. Use the code evidence above.</p>';
@@ -1266,6 +1304,7 @@ const JS = `
     if (locate) locate.addEventListener('click', function () { locateComponents(f.componentIds, true); });
     detail.querySelectorAll('[data-finding]').forEach(function (el) { el.addEventListener('click', function () { showFinding(el.getAttribute('data-finding')); }); });
     wireRefs();
+    wireDuplicateLocations(f);
     wireTasks();
     wireBaselineAction(f);
     var heading = detail.querySelector('h3'); heading.tabIndex = -1; heading.focus({ preventScroll: true });

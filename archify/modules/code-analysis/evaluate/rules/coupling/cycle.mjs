@@ -3,13 +3,13 @@ import { cyclicComponents } from './scc.mjs';
 // components. A module cycle says two directories each need something from
 // the other; it does NOT by itself mean a file imports itself back, which is
 // what coupling/import-cycle checks. Module granularity can manufacture a
-// cycle out of two unrelated files in one directory, so this is reported as
-// info: a design signal to read next to the file-level result.
+// cycle out of two unrelated files in one directory, so package-only SCCs
+// remain warning signals; only corroborating file evidence is an error.
 export const code = 'coupling/cycle';
 export const dimension = 'coupling';
 export const severity = 'error';
 export const confidence = 1.0;
-export const version = 2;
+export const version = 3;
 
 // An edge is "lazy-only" when every import behind it sits inside a function
 // body. This is lexical evidence only; the function may run at import time.
@@ -19,7 +19,7 @@ const lazyOnly = (e) => (e.kinds.lazy || 0) > 0 && e.kinds.lazy === e.weight;
 const isEager = (e) => e.kinds.eager !== undefined ? e.kinds.eager > 0
   : !['lazy', 'typeOnly', 'conditional'].some((flag) => e.kinds[flag] > 0);
 
-export function run({ graph }) {
+export function run({ graph, facts = null }) {
   const java = graph.repository?.language === 'java';
   const ids = graph.modules.map((m) => m.id).sort();
   const sccsOf = (edges) => cyclicComponents(ids, edges);
@@ -28,6 +28,7 @@ export function run({ graph }) {
   const eagerKey = new Set(eager.map((scc) => scc.join(' ')));
 
   const labelOf = new Map(graph.modules.map((m) => [m.id, m.label]));
+  const fileCycles = fileCycleModuleSets(graph, facts);
   const sccs = all;
   return sccs.sort((a, b) => b.length - a.length || (a[0] < b[0] ? -1 : 1)).map((scc) => {
     const set = new Set(scc);
@@ -43,8 +44,11 @@ export function run({ graph }) {
     for (const edge of pathEdges) pathOut.get(edge.from).push(edge.to);
     for (const targets of pathOut.values()) targets.sort();
     const path = shortestCycle(scc[0], pathOut, set);
+    const hasFileCycle = java || (facts
+      ? fileCycles.some((modules) => modules.size > 1 && [...modules].every((module) => set.has(module)))
+      : eagerSurvives);
     return {
-      code, dimension, severity: java || eagerSurvives ? 'error' : 'warning', confidence,
+      code, dimension, severity: hasFileCycle ? 'error' : 'warning', confidence,
       message: java
         ? `${scc.length} modules form a structural Java dependency cycle: ${path.map(id => labelOf.get(id)).join(' → ')} → ${labelOf.get(path[0])}. Directory grouping does not establish file cycles or class initialization behavior.`
         : eagerSurvives
@@ -67,6 +71,16 @@ export function run({ graph }) {
       ],
     };
   });
+}
+
+function fileCycleModuleSets(graph, facts) {
+  if (!facts?.imports || !graph?.fileModules) return [];
+  const files = facts.files.filter((file) => !graph.excluded.roles.includes(file.role)).map((file) => file.path).sort();
+  const fileSet = new Set(files);
+  const edges = facts.imports.filter((edge) => edge.resolved && !edge.typeOnly && !edge.lazy && !edge.conditional
+    && !(facts.repository.language === 'ts' && edge.kind === 'dynamic')
+    && fileSet.has(edge.from) && fileSet.has(edge.to) && graph.fileModules[edge.from] !== undefined && graph.fileModules[edge.to] !== undefined);
+  return cyclicComponents(files, edges, true).map((cycle) => new Set(cycle.map((file) => graph.fileModules[file])));
 }
 
 
