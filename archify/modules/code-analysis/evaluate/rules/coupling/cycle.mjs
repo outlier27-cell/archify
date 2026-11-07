@@ -44,9 +44,7 @@ export function run({ graph, facts = null }) {
     for (const edge of pathEdges) pathOut.get(edge.from).push(edge.to);
     for (const targets of pathOut.values()) targets.sort();
     const path = shortestCycle(scc[0], pathOut, set);
-    const hasFileCycle = java || (facts
-      ? fileCycles.some((modules) => modules.size > 1 && [...modules].every((module) => set.has(module)))
-      : eagerSurvives);
+    const hasFileCycle = Boolean(facts && fileCycles.some((modules) => modules.size > 1 && [...modules].every((module) => set.has(module))));
     return {
       code, dimension, severity: hasFileCycle ? 'error' : 'warning', confidence,
       message: java

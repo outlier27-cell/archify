@@ -49,12 +49,31 @@ test('Code Analysis paginates a duplicate group without splitting its finding id
   const browser = new ChromeVisualBrowser(chrome); t.after(() => browser.close()); const session = await browser.sessionPromise;
   const send = (method, params = {}) => browser.cdp.send(method, params, session); const run = async expression => { const response = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); assert.equal(response.exceptionDetails, undefined, response.exceptionDetails?.exception?.description); return response.result?.value; };
   const loaded = browser.cdp.waitFor('Page.loadEventFired', session); await send('Page.navigate', { url: new URL(`file://${file.replaceAll('\\', '/')}`).href }); await loaded;
-  await run("document.getElementById('btn-bauify').click(); document.querySelector('#bauify-overview [data-finding]').click(); document.querySelector('.duplicate-locations').open=true");
-  assert.equal(await run("document.querySelectorAll('.duplicate-page .ref').length"), 20);
-  assert.match(await run("document.querySelector('.duplicate-status').textContent"), /Page 1 of 3 · 1–20 of 45/);
-  await run("document.querySelector('.duplicate-next').click()"); assert.equal(await run("document.querySelectorAll('.duplicate-page .ref').length"), 20);
-  await run("document.querySelector('.duplicate-next').click()"); assert.equal(await run("document.querySelectorAll('.duplicate-page .ref').length"), 5);
-  assert.match(await run("document.querySelector('.duplicate-status').textContent"), /Page 3 of 3 · 41–45 of 45/);
+  await run("document.getElementById('btn-bauify').click(); document.querySelector('#bauify-overview [data-finding]').click(); document.querySelector('.finding-locations').open=true");
+  assert.equal(await run("document.querySelectorAll('.locations-page .ref').length"), 20);
+  assert.match(await run("document.querySelector('.locations-status').textContent"), /Page 1 of 3 · 1–20 of 45/);
+  await run("document.querySelector('.locations-next').click()"); assert.equal(await run("document.querySelectorAll('.locations-page .ref').length"), 20);
+  await run("document.querySelector('.locations-next').click()"); assert.equal(await run("document.querySelectorAll('.locations-page .ref').length"), 5);
+  assert.match(await run("document.querySelector('.locations-status').textContent"), /Page 3 of 3 · 41–45 of 45/);
+});
+
+test('Code Analysis shows external diagnostic provenance and every location', {
+  skip: chrome ? false : 'Set ARCHIFY_CHROME to run Code Analysis browser coverage.',
+}, async t => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-external-page-')); const root = path.join(scratch, 'repo'); fs.mkdirSync(root); t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(root, 'a.js'), 'export const a = 1;\n'); fs.writeFileSync(path.join(root, 'b.js'), 'export const b = 2;\n');
+  const repository = { root, revision: null, baseRevision: null, sourceKind: 'working-tree', snapshotId: 'external-page', url: null, language: 'ts', adapter: 'synthetic' };
+  const graph = { schema_version: 1, repository, grouping: { depth: 1, packageBoundaries: true, groups: [] }, excluded: { roles: [], files: 0 }, modules: [{ id: 'root', label: 'root', path: '', files: 2, loc: 2, fanIn: 0, fanOut: 0, instability: null, entry: ['a.js', 'b.js'] }], fileModules: { 'a.js': 'root', 'b.js': 'root' }, edges: [], unresolved: { external: 0, outside: 0, unknown: 0, opaque: 0 } };
+  const facts = { repository, files: [{ path: 'a.js', role: 'source', loc: 1, sourceText: 'export const a = 1;\n' }, { path: 'b.js', role: 'source', loc: 1, sourceText: 'export const b = 2;\n' }], imports: [], symbols: [], calls: [], functions: [], unresolved: graph.unresolved };
+  const finding = { id: 'AISM-aaaaaaaaaaaa', code: 'external/eslint', dimension: 'ai-smell', severity: 'warning', confidence: 0.5, message: 'Avoid alert', subject: { file: 'a.js', line: 1, column: 1, rule: 'no-alert', tool: 'eslint' }, evidence: { threshold: null, source: 'sarif', tool: 'eslint', toolVersion: '9', rule: 'no-alert', originalLevel: 'error', ruleDescription: 'Avoid alert', importedAt: '2026-11-07T00:00:00Z', locations: [{ file: 'a.js', line: 1, column: 1, status: 'ok' }, { file: 'b.js', line: 1, column: 1, status: 'ok' }] }, supportedFixes: ['review it'] };
+  const ir = { schema_version: 1, diagram_type: 'architecture', meta: { title: 'External', output: 'external.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [160, 60], sources: [{ path: 'a.js' }] }], connections: [] };
+  const file = path.join(scratch, 'external.html'); fs.writeFileSync(file, buildOverlay({ ir, graph, facts, findings: [finding], html: '<html><body><div class="toolbar"></div><svg><g data-node-id="app"></g></svg></body></html>', sourceRoot: root, run: { rules: ['external/eslint'], review: null } }).html);
+  const browser = new ChromeVisualBrowser(chrome); t.after(() => browser.close()); const session = await browser.sessionPromise; const send = (method, params = {}) => browser.cdp.send(method, params, session); const run = async expression => { const response = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); assert.equal(response.exceptionDetails, undefined, response.exceptionDetails?.exception?.description); return response.result?.value; };
+  const loaded = browser.cdp.waitFor('Page.loadEventFired', session); await send('Page.navigate', { url: new URL(`file://${file.replaceAll('\\', '/')}`).href }); await loaded;
+  await run("document.getElementById('btn-bauify').click(); document.querySelector('#bauify-overview [data-finding]').click(); document.querySelector('.finding-locations').open=true");
+  assert.match(await run("document.querySelector('#bauify-detail h3').textContent"), /eslint: no-alert/);
+  assert.match(await run("document.querySelector('#bauify-detail .level').textContent"), /original level error · 2 locations · imported 2026-11-07/);
+  assert.equal(await run("document.querySelectorAll('.locations-page .ref').length"), 2);
 });
 
 test('Code Analysis browser scale baseline measures 500 and 5000 findings', {

@@ -54,6 +54,11 @@ test('SARIF related locations are preserved and included in the evidence digest'
   ] }), { root });
   assert.deepEqual(finding.evidence.locations.map(({ file }) => file), ['src/a.js', 'src/b.js']);
   assert.deepEqual(finding.evidenceDigest.files, ['src/a.js', 'src/b.js']);
+  const task = buildTask({ findings: { diagnostics: [finding], repository: { language: 'ts' } }, facts: { files: [{ path: 'src/a.js', sourceText: 'source\n' }, { path: 'src/b.js', sourceText: 'source\n' }], repository: { language: 'ts' } }, ids: [finding.id] });
+  assert.deepEqual(task.locations.map((location) => location.file), ['src/a.js', 'src/b.js']);
+  assert.deepEqual(task.scope.modify, ['src/a.js', 'src/b.js']);
+  assert.equal(task.facts[0].evidence.tool, 'eslint');
+  assert.equal(task.facts[0].evidence.locations.length, 2);
 });
 
 test('SARIF structural limits fail closed', () => {

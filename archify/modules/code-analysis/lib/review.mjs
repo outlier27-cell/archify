@@ -129,6 +129,7 @@ export function comparability(before, after) {
   if (changes.length) add('adapter-changed', changes.join(' '));
   if (before.configDigest !== after.configDigest) add('config-changed', 'The analysis configuration changed (thresholds, include/exclude, roles, boundaries or ignored rules).');
   if (JSON.stringify(before.externalDiagnostics || []) !== JSON.stringify(after.externalDiagnostics || [])) add('external-diagnostics-changed', 'The imported diagnostic files, formats or rule inventory changed.');
+  if (JSON.stringify(before.concentrationContext || null) !== JSON.stringify(after.concentrationContext || null)) add('concentration-denominator-changed', 'The module count or analyzed LOC denominator used by concentration changed.');
   const rulesBefore = before.ruleVersions || {}, rulesAfter = after.ruleVersions || {};
   const removed = Object.keys(rulesBefore).filter((r) => !(r in rulesAfter)).sort(compareText);
   const added = Object.keys(rulesAfter).filter((r) => !(r in rulesBefore)).sort(compareText);

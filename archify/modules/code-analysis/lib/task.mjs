@@ -204,11 +204,9 @@ export function validateTask(doc, file = null) {
 // evidence check hashes; the excerpt around it is added by withExcerpt.
 export function locationsOf(d) {
   const s = d.subject || {}, ev = d.evidence || {};
-  if (d.code.startsWith('external/')) {
-    const primary = Array.isArray(ev.locations) ? ev.locations[0] : null;
-    if (!primary || primary.status !== 'ok' || !s.file || !Number.isInteger(s.line)) return [];
-    return [{ file: s.file, startLine: s.line, endLine: s.line, kind: 'range' }];
-  }
+  if (d.code.startsWith('external/')) return uniqueLocations((ev.locations || [])
+    .filter((location) => location.status === 'ok' && location.file && Number.isInteger(location.line))
+    .map((location) => ({ file: location.file, startLine: location.line, endLine: location.line, kind: 'range' })));
   if (d.code === 'coupling/duplicate-code') return uniqueLocations((ev.locations || []).filter((location) => location.file && Number.isInteger(location.startLine) && Number.isInteger(location.endLine)).map((location) => ({ file: location.file, startLine: location.startLine, endLine: location.endLine, kind: 'range' })));
   if (d.code === 'complexity/function' && s.file && Number.isInteger(s.line)) {
     return [{ file: s.file, startLine: s.line, endLine: Number.isInteger(s.endLine) ? s.endLine : s.line, kind: 'function', symbol: s.function, ...(Number.isInteger(ev.deepestLine) ? { focusLine: ev.deepestLine } : {}), note: `complexity ${ev.complexity}, nesting ${ev.nesting}` }];
@@ -337,7 +335,7 @@ function keyEvidence(d) {
     case 'coupling/internal-leak': return pick(['entries', 'entrySource', 'internalFiles', 'consumers', 'totalImports', 'threshold']);
     case 'coupling/duplicate-code': return pick(['threshold', 'tokenCount', 'locations']);
     case 'coupling/concentration': return pick(['threshold', 'dependentModules', 'dependentCount', 'totalExternalModules', 'dependentRatio', 'moduleLoc', 'totalAnalyzedLoc', 'moduleLocRatio', 'largestFile']);
-    default: return pick(['threshold']);
+    default: return d.code.startsWith('external/') ? pick(['source', 'tool', 'toolVersion', 'rule', 'originalLevel', 'ruleDescription', 'locations', 'importedAt']) : pick(['threshold']);
   }
 }
 

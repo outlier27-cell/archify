@@ -969,6 +969,7 @@ const JS = `
     if (f.code === 'architecture/boundary' && s.boundary) return s.boundary.from + ' depends on ' + s.boundary.to;
     // Java names carry their parameter types to tell overloads apart.
     if (f.code === 'complexity/function' && s.function) return s.function + (s.function.endsWith(')') ? '' : '()') + ' is complex';
+    if (f.code.startsWith('external/')) return (f.evidence?.tool || s.tool || 'external tool') + ': ' + (f.evidence?.rule || s.rule || 'diagnostic');
     return f.code;
   }
   function findingWhat(f) {
@@ -986,6 +987,7 @@ const JS = `
     }
     if (f.code === 'complexity/function' && f.evidence) return 'complexity ' + f.evidence.complexity + ' · nesting ' + f.evidence.nesting + ' · ' + plural(f.evidence.length, 'line') + ' · ' + short(s.file);
     if (f.code === 'architecture/boundary' && f.evidence) return plural(f.evidence.totalImports, 'import') + ' in ' + plural(f.evidence.files.length, 'file') + ' · rule: ' + (f.evidence.rule.reason || s.boundary.from + ' must not depend on ' + s.boundary.to);
+    if (f.code.startsWith('external/') && f.evidence) return 'original level ' + (f.evidence.originalLevel || 'unknown') + ' · ' + plural((f.evidence.locations || []).length, 'location') + (f.evidence.importedAt ? ' · imported ' + f.evidence.importedAt : '');
     return f.message;
   }
   function findingWhere(f) {
@@ -1183,17 +1185,24 @@ const JS = `
       return h;
     }).join('');
   }
-  function duplicateLocationsHtml(f) {
-    if (f.code !== 'coupling/duplicate-code' || !Array.isArray(f.evidence && f.evidence.locations)) return '';
-    return '<details class="duplicate-locations" data-duplicate-id="' + esc(f.id) + '"><summary>Duplicate locations · ' + f.evidence.locations.length + '</summary><div class="duplicate-page"></div><div class="task-actions"><button type="button" class="duplicate-prev">Previous</button><span class="ev duplicate-status"></span><button type="button" class="duplicate-next">Next</button></div></details>';
+  function multiLocationsHtml(f) {
+    var locations = f.evidence && f.evidence.locations;
+    if (!Array.isArray(locations) || (!f.code.startsWith('external/') && f.code !== 'coupling/duplicate-code')) return '';
+    var label = f.code === 'coupling/duplicate-code' ? 'Duplicate locations' : 'Diagnostic locations';
+    return '<details class="finding-locations" data-locations-id="' + esc(f.id) + '"><summary>' + label + ' · ' + locations.length + '</summary><div class="locations-page"></div><div class="task-actions"><button type="button" class="locations-prev">Previous</button><span class="ev locations-status"></span><button type="button" class="locations-next">Next</button></div></details>';
   }
-  function wireDuplicateLocations(f) {
-    var box = detail.querySelector('[data-duplicate-id="' + f.id + '"]'); if (!box) return;
-    var locations = f.evidence.locations || [], pageSize = 20, page = 0, pages = Math.max(1, Math.ceil(locations.length / pageSize));
-    var list = box.querySelector('.duplicate-page'), status = box.querySelector('.duplicate-status'), previous = box.querySelector('.duplicate-prev'), next = box.querySelector('.duplicate-next');
+  function wireMultiLocations(f) {
+    var box = detail.querySelector('[data-locations-id="' + f.id + '"]'); if (!box) return;
+    var locations = (f.evidence.locations || []).filter(function (location) { return location.file; }), pageSize = 20, page = 0, pages = Math.max(1, Math.ceil(locations.length / pageSize));
+    var list = box.querySelector('.locations-page'), status = box.querySelector('.locations-status'), previous = box.querySelector('.locations-prev'), next = box.querySelector('.locations-next');
     var render = function () {
       var start = page * pageSize, current = locations.slice(start, start + pageSize);
-      list.innerHTML = current.map(function (location) { return ref(location.file, location.startLine, 'lines ' + location.startLine + '–' + location.endLine, 'Exact token duplicate; compare responsibilities before sharing code.', toneOf(f.severity), location.startLine, location.endLine); }).join('');
+      list.innerHTML = current.map(function (location) {
+        var startLine = location.startLine || location.line, endLine = location.endLine || location.line;
+        if (location.status && location.status !== 'ok') return '<div class="ev"><b>' + esc(short(location.file)) + '</b>' + (startLine ? ':' + startLine : '') + ' · ' + esc(location.reason || 'unverifiable location') + '</div>';
+        var why = f.code === 'coupling/duplicate-code' ? 'Exact token duplicate; compare responsibilities before sharing code.' : 'External diagnostic location; verify the original tool result against current source.';
+        return ref(location.file, startLine, 'lines ' + startLine + '–' + endLine, why, toneOf(f.severity), startLine, endLine);
+      }).join('');
       status.textContent = 'Page ' + (page + 1) + ' of ' + pages + ' · ' + (start + 1) + '–' + (start + current.length) + ' of ' + locations.length;
       previous.disabled = page === 0; next.disabled = page + 1 >= pages; wireRefs();
     };
@@ -1286,7 +1295,7 @@ const JS = `
     h += '<div class="level"><b>' + esc(lvl.name) + '</b> — ' + esc(findingWhat(f)) + '<br>' + esc(explanation) + '</div>';
     if (f.review && f.review.reason) h += '<p class="ev"><span class="badge-accepted">' + (f.review.status === 'accepted-changed' ? 'accepted · evidence changed' : 'accepted') + '</span> ' + esc(f.review.reason) + (f.review.status === 'accepted-changed' ? ' — the code behind it changed since it was accepted; review it again.' : '') + '</p>';
     if (data.baselineConfigured && window.__archifyAnalysisToken) h += baselineActionHtml(f);
-    h += quickHandoff(f) + '<div class="k">Code evidence</div>' + evidencePreview(f) + duplicateLocationsHtml(f);
+    h += quickHandoff(f) + '<div class="k">Code evidence</div>' + evidencePreview(f) + multiLocationsHtml(f);
     h += nextStepHtml(f) + taskHtml(f);
     if ((f.componentIds || []).length) h += '<button type="button" class="locate">Locate related components</button>';
     else h += '<p class="ev">Not mapped to this diagram. Use the code evidence above.</p>';
@@ -1304,7 +1313,7 @@ const JS = `
     if (locate) locate.addEventListener('click', function () { locateComponents(f.componentIds, true); });
     detail.querySelectorAll('[data-finding]').forEach(function (el) { el.addEventListener('click', function () { showFinding(el.getAttribute('data-finding')); }); });
     wireRefs();
-    wireDuplicateLocations(f);
+    wireMultiLocations(f);
     wireTasks();
     wireBaselineAction(f);
     var heading = detail.querySelector('h3'); heading.tabIndex = -1; heading.focus({ preventScroll: true });

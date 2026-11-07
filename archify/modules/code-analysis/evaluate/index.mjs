@@ -66,6 +66,10 @@ export function analysisContext({ graph, config = {}, facts = null, active = RUL
     // any key therefore reads as a config change, which errs toward "not comparable".
     configDigest: sha256(JSON.stringify(settings)),
     ruleVersions: Object.fromEntries(active.filter((r) => !suppressed.has(r.code)).map((r) => [r.code, r.version ?? 1]).sort(([a], [b]) => compareText(a, b))),
+    ...(active.some((rule) => rule.code === 'coupling/concentration' && !suppressed.has(rule.code)) ? { concentrationContext: {
+      modules: graph?.modules?.length ?? 0,
+      totalLoc: (graph?.modules || []).reduce((sum, module) => sum + (Number.isFinite(module.loc) ? module.loc : 0), 0),
+    } } : {}),
     coverage: {
       files: facts ? facts.files.filter((f) => !excludedRoles.has(f.role)).length : null,
       excludedRoles: [...excludedRoles].sort(compareText),

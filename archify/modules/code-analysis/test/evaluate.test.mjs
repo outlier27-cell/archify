@@ -22,7 +22,7 @@ test('cycle: a DAG yields no finding; a 3-cycle yields one finding naming exactl
   assert.equal(out.diagnostics.length, 1);
   const f = out.diagnostics[0];
   assert.equal(f.code, 'coupling/cycle');
-  assert.equal(f.severity, 'error', 'eager package cycles are structural errors');
+  assert.equal(f.severity, 'warning', 'a package cycle without file facts stays a warning');
   assert.equal(f.evidence.kind, 'eager');
   assert.equal(f.confidence, 1);
   assert.deepEqual(f.subject.modules, ['a', 'b', 'c']);
@@ -32,12 +32,25 @@ test('cycle: a DAG yields no finding; a 3-cycle yields one finding naming exactl
   assert.deepEqual(schemaErrors('findings', out), []);
 });
 
+test('cycle: package-only evidence stays warning until a file cycle corroborates it', () => {
+  const graph = graphOf([['a', 'b'], ['b', 'a']]);
+  graph.fileModules = { 'a/one.java': 'a', 'a/two.java': 'a', 'b/one.java': 'b', 'b/two.java': 'b' };
+  graph.repository.language = 'java';
+  const facts = { schema_version: 1, repository: { ...graph.repository, adapter: 'java@test' }, files: Object.keys(graph.fileModules).map((path) => ({ path, loc: 1, role: 'source' })), symbols: [], calls: [], imports: [
+    { from: 'a/one.java', to: 'b/one.java', specifier: 'b.One', kind: 'static', line: 1, resolved: true },
+    { from: 'b/two.java', to: 'a/two.java', specifier: 'a.Two', kind: 'static', line: 1, resolved: true },
+  ], unresolved: { external: 0, outside: 0, unknown: 0, opaque: 0 } };
+  const finding = evaluate(graph, {}, facts).diagnostics.find((diagnostic) => diagnostic.code === 'coupling/cycle');
+  assert.equal(finding.severity, 'warning');
+  assert.equal(finding.evidence.kind, 'structural');
+});
+
 test('cycle: two separate cycles are two findings; a self-contained 2-cycle quotes both imports', () => {
   const out = evaluate(graphOf([['a', 'b'], ['b', 'a'], ['x', 'y'], ['y', 'z'], ['z', 'x']]));
   // evaluate() orders findings by code, then subject, so ids are stable across runs.
   assert.deepEqual(out.diagnostics.map((d) => d.subject.modules), [['a', 'b'], ['x', 'y', 'z']]);
   assert.equal(out.diagnostics[0].evidence.edges.length, 2);
-  assert.equal(out.summary.errors, 2);
+  assert.equal(out.summary.warnings, 2);
 });
 
 test('ids: a finding keeps its id when an unrelated finding sorting before it appears or disappears', () => {

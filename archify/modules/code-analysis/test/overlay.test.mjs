@@ -128,7 +128,7 @@ test('overlay: the delivered HTML is extended, never rewritten, and refuses non-
   const result = buildOverlay({ ir, graph, html: FAKE_HTML, map: null });
   assert.ok(result.html.startsWith(FAKE_HTML.slice(0, FAKE_HTML.indexOf('</body>'))), 'original bytes precede the injection');
   assert.ok(result.html.includes('id="btn-bauify"') || result.html.includes("btn.id = 'btn-bauify'"));
-  assert.match(result.html, /duplicate-locations/);
+  assert.match(result.html, /finding-locations/);
   assert.match(result.html, /pageSize = 20/);
   assert.throws(() => buildOverlay({ ir, graph, html: '<html><body>plain</body></html>', map: null }), /not-archify-html|does not look like/);
 });

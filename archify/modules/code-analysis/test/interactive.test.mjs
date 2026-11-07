@@ -137,15 +137,15 @@ test('serve: arguments are validated up front', () => {
   assert.deepEqual(parseArgs(['repo', '--ir', 'x.json', '--out', 'o', '--language', 'py']).options, { '--ir': 'x.json', '--out': 'o', '--language': 'py' });
 });
 
-test('serve: imported ESLint finding reaches the page and checked task endpoint', { skip: ARCHIFY_AVAILABLE ? false : 'needs an Archify checkout' }, async (t) => {
+test('serve: imported multi-location SARIF finding reaches the page and checked task endpoint', { skip: ARCHIFY_AVAILABLE ? false : 'needs an Archify checkout' }, async (t) => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-external-serve-'));
   t.after(() => fs.rmSync(out, { recursive: true, force: true }));
   const repo = path.join(out, 'repo'); fs.cpSync(path.join(BAUIFY_ROOT, 'test/fixtures/ts-basic'), repo, { recursive: true });
-  const report = path.join(out, 'eslint.json');
-  fs.writeFileSync(report, JSON.stringify([{ filePath: path.join(repo, 'src/index.mjs'), messages: [{ ruleId: 'no-alert', severity: 2, message: 'Avoid alert', line: 1, column: 1 }] }]));
+  const report = path.join(out, 'report.sarif');
+  fs.writeFileSync(report, JSON.stringify({ version: '2.1.0', runs: [{ tool: { driver: { name: 'eslint', version: '9' } }, results: [{ ruleId: 'no-alert', level: 'error', message: { text: 'Avoid alert' }, locations: [{ physicalLocation: { artifactLocation: { uri: 'src/index.mjs' }, region: { startLine: 1, startColumn: 1 } } }], relatedLocations: [{ physicalLocation: { artifactLocation: { uri: 'src/lib/helper.mjs' }, region: { startLine: 1, startColumn: 1 } } }] }] }] }));
   const ir = path.join(out, 'arch.json');
   fs.writeFileSync(ir, JSON.stringify({ schema_version: 1, diagram_type: 'architecture', meta: { title: 'external', output: 'architecture.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [170, 64] }], connections: [] }));
-  const view = await startAnalysisView([repo, '--ir', ir, '--out', path.join(out, 'view'), '--language', 'ts', '--eslint', report]);
+  const view = await startAnalysisView([repo, '--ir', ir, '--out', path.join(out, 'view'), '--language', 'ts', '--sarif', report]);
   t.after(() => new Promise((resolve) => { view.server.close(resolve); view.server.closeAllConnections?.(); }));
   const headers = { Origin: view.url, 'X-Analysis-Token': view.token, 'Content-Type': 'application/json' };
   const response = await fetch(view.url + '/analyze', { method: 'POST', headers });
@@ -159,7 +159,10 @@ test('serve: imported ESLint finding reaches the page and checked task endpoint'
   assert.equal(taskResponse.status, 200);
   const task = await taskResponse.json();
   assert.equal(task.task.evidence.status, 'valid');
-  assert.deepEqual(task.task.scope.modify, ['src/index.mjs']);
+  assert.deepEqual(task.task.scope.modify, ['src/index.mjs', 'src/lib/helper.mjs']);
+  assert.deepEqual(task.task.locations.map((location) => location.file), ['src/index.mjs', 'src/lib/helper.mjs']);
+  assert.equal(task.task.facts[0].evidence.tool, 'eslint');
+  assert.equal(task.task.facts[0].evidence.originalLevel, 'error');
 });
 
 test('serve: baseline decisions are scoped to the configured file and current finding', { skip: ARCHIFY_AVAILABLE ? false : 'needs an Archify checkout' }, async (t) => {

@@ -123,6 +123,8 @@ test('comparison: a previous run without analysis context has unknown comparabil
   assert.deepEqual(parse.reasons.map((r) => r.code), ['parse-errors']);
   const external = comparability({ ...findings.analysis, externalDiagnostics: [] }, { ...findings.analysis, externalDiagnostics: [{ format: 'eslint', sha256: 'a'.repeat(64), findings: 1, rules: ['eslint:no-alert'] }] });
   assert.deepEqual(external.reasons.map((r) => r.code), ['external-diagnostics-changed']);
+  const concentration = comparability({ ...findings.analysis, concentrationContext: { modules: 2, totalLoc: 100 } }, { ...findings.analysis, concentrationContext: { modules: 3, totalLoc: 200 } });
+  assert.deepEqual(concentration.reasons.map((r) => r.code), ['concentration-denominator-changed']);
 });
 
 // ---- review findings on PR #992 -------------------------------------------
