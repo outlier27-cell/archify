@@ -5,6 +5,8 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { ChromeVisualBrowser, findChrome } from '../archify/bin/visual-check.mjs';
 import { buildOverlay } from '../archify/modules/code-analysis/overlay/inject.mjs';
+import { evaluate } from '../archify/modules/code-analysis/evaluate/index.mjs';
+import { buildTask } from '../archify/modules/code-analysis/lib/task.mjs';
 
 const chrome = process.env.ARCHIFY_CHROME ? findChrome() : null;
 
@@ -39,12 +41,24 @@ test('Code Analysis paginates a duplicate group without splitting its finding id
 }, async t => {
   const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-duplicate-page-'));
   const root = path.join(scratch, 'repo'); fs.mkdirSync(root); t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
-  const source = Array.from({ length: 60 }, (_, index) => `export const value_${index} = ${index};`).join('\n') + '\n'; fs.writeFileSync(path.join(root, 'src.mjs'), source);
-  const graph = { schema_version: 1, repository: { root, revision: null, baseRevision: null, sourceKind: 'working-tree', snapshotId: 'duplicate-page', url: null, language: 'ts', adapter: 'synthetic' }, grouping: { depth: 1, packageBoundaries: true, groups: [] }, excluded: { roles: [], files: 0 }, modules: [{ id: 'src', label: 'src', path: 'src', files: 1, loc: 60, fanIn: 0, fanOut: 0, instability: null, entry: ['src.mjs'] }], fileModules: { 'src.mjs': 'src' }, edges: [], unresolved: { external: 0, outside: 0, unknown: 0, opaque: 0 } };
-  const facts = { repository: graph.repository, files: [{ path: 'src.mjs', role: 'source', loc: 60, sourceText: source }], imports: [], symbols: [], calls: [], functions: [], unresolved: graph.unresolved };
-  const locations = Array.from({ length: 45 }, (_, index) => ({ file: 'src.mjs', startLine: index + 1, endLine: index + 1 }));
-  const finding = { id: 'COUP-aaaaaaaaaaaa', code: 'coupling/duplicate-code', dimension: 'coupling', severity: 'warning', confidence: 0.75, message: '45 exact duplicate locations', subject: { groupId: 'DUP-a', files: ['src.mjs'] }, evidence: { threshold: { minTokens: 80, minLines: 10 }, tokenCount: 80, locations }, supportedFixes: ['review responsibilities'] };
-  const ir = { schema_version: 1, diagram_type: 'architecture', meta: { title: 'Duplicate page', output: 'duplicate.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [160, 60], sources: [{ path: 'src.mjs' }] }], connections: [] };
+  const source = Array.from({ length: 60 }, (_, index) => `export const value_${index} = ${index};`).join('\n') + '\n';
+  const files = Array.from({ length: 45 }, (_, index) => {
+    const file = `src/copy-${index}.mjs`;
+    fs.mkdirSync(path.dirname(path.join(root, file)), { recursive: true });
+    fs.writeFileSync(path.join(root, file), source);
+    return { path: file, role: 'source', loc: 60, sourceText: source };
+  });
+  const repository = { root, revision: null, baseRevision: null, sourceKind: 'working-tree', snapshotId: 'duplicate-page', url: null, language: 'ts', adapter: 'typescript' };
+  const graph = { schema_version: 1, repository, grouping: { depth: 1, packageBoundaries: true, groups: [] }, excluded: { roles: [], files: 0 }, modules: [{ id: 'src', label: 'src', path: 'src', files: files.length, loc: 60 * files.length, fanIn: 0, fanOut: 0, instability: null, entry: files.map((file) => file.path) }], fileModules: Object.fromEntries(files.map((file) => [file.path, 'src'])), edges: [], unresolved: { external: 0, outside: 0, unknown: 0, opaque: 0 } };
+  const facts = { repository, files, imports: [], symbols: [], calls: [], functions: [], unresolved: graph.unresolved };
+  const findings = evaluate(graph, { rules: { coupling: { duplicateCode: { enabled: true, minTokens: 80, minLines: 10 } } } }, facts);
+  const finding = findings.diagnostics.find((item) => item.code === 'coupling/duplicate-code');
+  assert.ok(finding, 'the detector must create the browser finding');
+  assert.equal(finding.evidence.locations.length, 45);
+  const task = buildTask({ findings, facts, ids: [finding.id] });
+  assert.equal(task.locations.length, 12, 'task evidence uses the general bounded excerpt cap; the reader retains all 45 ranges');
+  assert.ok(task.locations.every((location) => location.kind === 'range' && location.sha256));
+  const ir = { schema_version: 1, diagram_type: 'architecture', meta: { title: 'Duplicate page', output: 'duplicate.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [160, 60], sources: [{ path: files[0].path }] }], connections: [] };
   const file = path.join(scratch, 'duplicate.html'); fs.writeFileSync(file, buildOverlay({ ir, graph, facts, findings: [finding], html: '<html><body><div class="toolbar"></div><svg><g data-node-id="app"></g></svg></body></html>', sourceRoot: root, run: { rules: ['coupling/duplicate-code'], review: null } }).html);
   const browser = new ChromeVisualBrowser(chrome); t.after(() => browser.close()); const session = await browser.sessionPromise;
   const send = (method, params = {}) => browser.cdp.send(method, params, session); const run = async expression => { const response = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); assert.equal(response.exceptionDetails, undefined, response.exceptionDetails?.exception?.description); return response.result?.value; };
@@ -55,6 +69,8 @@ test('Code Analysis paginates a duplicate group without splitting its finding id
   await run("document.querySelector('.locations-next').click()"); assert.equal(await run("document.querySelectorAll('.locations-page .ref').length"), 20);
   await run("document.querySelector('.locations-next').click()"); assert.equal(await run("document.querySelectorAll('.locations-page .ref').length"), 5);
   assert.match(await run("document.querySelector('.locations-status').textContent"), /Page 3 of 3 · 41–45 of 45/);
+  await run("document.querySelector('.locations-page .ref').click()");
+  assert.equal(await run("document.getElementById('bauify-code').hidden === false"), true, 'a detector-produced range opens source evidence');
 });
 
 test('Code Analysis shows external diagnostic provenance and every location', {

@@ -288,3 +288,21 @@ test('organization heuristics honor the graph test and generated exclusions', as
   assert.ok(findings.length);
   assert.ok(findings.every((finding) => !JSON.stringify(finding).includes('test/') && !JSON.stringify(finding).includes('generated/')));
 });
+
+test('organization heuristics keep documented small-tool, utility, entry and framework-convention counterexamples quiet', async () => {
+  const { evaluate } = await import('../evaluate/index.mjs');
+  const files = [
+    { path: 'tools/release.ts', role: 'source', sourceText: 'process.argv; const fs = require("fs"); render("done"); class ReleaseModel {}' },
+    { path: 'src/date-util.ts', role: 'source', sourceText: 'export const today = () => new Date();' },
+    { path: 'src/main.ts', role: 'source', sourceText: 'process.argv; const fs = require("fs");' },
+    { path: 'test/fixture.ts', role: 'test', sourceText: 'process.argv; const fs = require("fs"); render(view); class Fixture {}' },
+    { path: 'generated/types.ts', role: 'generated', sourceText: 'process.argv; const fs = require("fs"); render(view); class Generated {}' },
+  ];
+  const graph = { repository: { language: 'ts' }, modules: [], edges: [], fileModules: {}, excluded: { roles: ['test', 'generated'], files: 2 } };
+  const config = { rules: { organization: { mixedRoles: { enabled: true }, folderRoles: { enabled: true }, genericName: { enabled: true } } }, ignore: [] };
+  const diagnostics = evaluate(graph, config, { repository: graph.repository, files, imports: [], functions: [] }).diagnostics;
+  assert.ok(diagnostics.some((finding) => finding.code === 'organization/mixed-roles' && finding.subject.file === 'tools/release.ts'), 'small tools are visible heuristic candidates for reviewer disposition');
+  assert.ok(!diagnostics.some((finding) => finding.subject.file === 'src/date-util.ts'), 'descriptive utility names stay quiet');
+  assert.ok(!diagnostics.some((finding) => finding.subject.file === 'src/main.ts' && finding.code === 'organization/mixed-roles'), 'entry and IO alone do not trigger mixed roles');
+  assert.ok(diagnostics.every((finding) => !JSON.stringify(finding).includes('test/fixture.ts') && !JSON.stringify(finding).includes('generated/types.ts')));
+});
