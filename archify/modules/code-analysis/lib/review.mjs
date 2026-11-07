@@ -76,7 +76,10 @@ export function reviewFindings(diagnostics, { baseline = null, previous = null, 
   };
 }
 
-const LEGACY_ID = /^[A-Z]{2,4}-[0-9]{4,}$/;
+// The historical format used a four-digit sequence (for example COUP-0001).
+// Stable ids are twelve hexadecimal digits and can legitimately contain only
+// decimal digits, so a broad numeric suffix would misclassify them as legacy.
+const LEGACY_ID = /^[A-Z]{2,4}-[0-9]{4}$/;
 
 function comparisonOf({ previous, before, current, findings, ids, analysis, files }) {
   const { comparable, reasons } = comparability(previous.analysis || null, analysis);

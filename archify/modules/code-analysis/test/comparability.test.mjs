@@ -139,6 +139,15 @@ test('comparison: findings with position-numbered ids stay readable and are flag
   assert.ok(c.reasons.some((r) => r.code === 'legacy-ids'));
 });
 
+test('comparison: a twelve-digit stable id that happens to be numeric is not legacy', (t) => {
+  const dir = copySource(); t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const { findings, facts } = analyzeFixture(dir);
+  const numeric = { ...findings, diagnostics: findings.diagnostics.map((d, index) => index === 0 ? { ...d, id: `${d.id.split('-')[0]}-657052838136` } : d) };
+  const c = reviewFindings(numeric.diagnostics, { previous: numeric, analysis: numeric.analysis, files: facts.files.map((file) => file.path) }).comparison;
+  assert.equal(c.comparable, true);
+  assert.ok(!c.reasons.some((reason) => reason.code === 'legacy-ids'));
+});
+
 test('comparison: reordering first-match config maps or changing the extractor is not comparable', (t) => {
   const dir = copySource();
   t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
