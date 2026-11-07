@@ -89,6 +89,19 @@ test('check: imports native ESLint and Ruff JSON without executing either tool',
   assert.equal(JSON.parse(ruffRun.stdout).gate.failing[0].code, 'external/ruff');
 });
 
+test('check: imports ESLint and Ruff together without dropping either input', (t) => {
+  const root = fixture(t, { 'src/ok.py': 'value = 1\n', 'src/app.js': 'alert(1)\n' });
+  const eslint = path.join(root, 'eslint.json');
+  const ruff = path.join(root, 'ruff.json');
+  fs.writeFileSync(eslint, JSON.stringify([{ filePath: path.join(root, 'src/app.js'), messages: [{ ruleId: 'no-alert', severity: 2, message: 'Avoid alert', line: 1, column: 1 }] }]));
+  fs.writeFileSync(ruff, JSON.stringify([{ filename: 'src/ok.py', code: 'F401', message: 'unused import', location: { row: 1, column: 1 } }]));
+  const run = check(root, ['--language', 'py', '--eslint', eslint, '--ruff', ruff, '--json']);
+  assert.equal(run.status, 1, run.stdout + run.stderr);
+  const receipt = JSON.parse(run.stdout);
+  assert.equal(receipt.gate.failing.length, 2);
+  assert.deepEqual(receipt.rules.filter((rule) => rule.startsWith('external/')), ['external/eslint', 'external/ruff']);
+});
+
 test('check: external diagnostics participate in a comparable follow-up run', (t) => {
   const root = fixture(t, { 'src/app.js': 'alert(1)\n' });
   const report = path.join(root, 'eslint.json');

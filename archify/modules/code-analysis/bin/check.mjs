@@ -74,9 +74,9 @@ export async function runCheck(argv) {
     findings.rules = [...findings.rules, ...new Set(imported.map((finding) => finding.code))].sort();
     findings.summary.warnings += imported.length;
   }
-  if (options['--eslint'] || options['--ruff']) {
+  for (const format of ['eslint', 'ruff']) {
+    if (!options[`--${format}`]) continue;
     const { importEslint, importRuff } = await import('../lib/diagnostics.mjs');
-    const format = options['--eslint'] ? 'eslint' : 'ruff';
     const externalFile = path.resolve(options[`--${format}`]);
     const imported = format === 'eslint'
       ? importEslint(readJsonInput(externalFile, 'check --eslint', { maxBytes: 50 * 1024 * 1024 }), { root, source: 'eslint', importedAt })
