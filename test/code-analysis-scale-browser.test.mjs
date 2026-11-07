@@ -34,6 +34,29 @@ function fixture(size, root) {
   return buildOverlay({ ir, graph, facts, findings, html, sourceRoot: root, run: { rules: ['complexity/function'], review: null } }).html;
 }
 
+test('Code Analysis paginates a duplicate group without splitting its finding identity', {
+  skip: chrome ? false : 'Set ARCHIFY_CHROME to run Code Analysis browser coverage.',
+}, async t => {
+  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'archify-duplicate-page-'));
+  const root = path.join(scratch, 'repo'); fs.mkdirSync(root); t.after(() => fs.rmSync(scratch, { recursive: true, force: true }));
+  const source = Array.from({ length: 60 }, (_, index) => `export const value_${index} = ${index};`).join('\n') + '\n'; fs.writeFileSync(path.join(root, 'src.mjs'), source);
+  const graph = { schema_version: 1, repository: { root, revision: null, baseRevision: null, sourceKind: 'working-tree', snapshotId: 'duplicate-page', url: null, language: 'ts', adapter: 'synthetic' }, grouping: { depth: 1, packageBoundaries: true, groups: [] }, excluded: { roles: [], files: 0 }, modules: [{ id: 'src', label: 'src', path: 'src', files: 1, loc: 60, fanIn: 0, fanOut: 0, instability: null, entry: ['src.mjs'] }], fileModules: { 'src.mjs': 'src' }, edges: [], unresolved: { external: 0, outside: 0, unknown: 0, opaque: 0 } };
+  const facts = { repository: graph.repository, files: [{ path: 'src.mjs', role: 'source', loc: 60, sourceText: source }], imports: [], symbols: [], calls: [], functions: [], unresolved: graph.unresolved };
+  const locations = Array.from({ length: 45 }, (_, index) => ({ file: 'src.mjs', startLine: index + 1, endLine: index + 1 }));
+  const finding = { id: 'COUP-aaaaaaaaaaaa', code: 'coupling/duplicate-code', dimension: 'coupling', severity: 'warning', confidence: 0.75, message: '45 exact duplicate locations', subject: { groupId: 'DUP-a', files: ['src.mjs'] }, evidence: { threshold: { minTokens: 80, minLines: 10 }, tokenCount: 80, locations }, supportedFixes: ['review responsibilities'] };
+  const ir = { schema_version: 1, diagram_type: 'architecture', meta: { title: 'Duplicate page', output: 'duplicate.html' }, components: [{ id: 'app', type: 'backend', label: 'App', pos: [40, 40], size: [160, 60], sources: [{ path: 'src.mjs' }] }], connections: [] };
+  const file = path.join(scratch, 'duplicate.html'); fs.writeFileSync(file, buildOverlay({ ir, graph, facts, findings: [finding], html: '<html><body><div class="toolbar"></div><svg><g data-node-id="app"></g></svg></body></html>', sourceRoot: root, run: { rules: ['coupling/duplicate-code'], review: null } }).html);
+  const browser = new ChromeVisualBrowser(chrome); t.after(() => browser.close()); const session = await browser.sessionPromise;
+  const send = (method, params = {}) => browser.cdp.send(method, params, session); const run = async expression => { const response = await send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true }); assert.equal(response.exceptionDetails, undefined, response.exceptionDetails?.exception?.description); return response.result?.value; };
+  const loaded = browser.cdp.waitFor('Page.loadEventFired', session); await send('Page.navigate', { url: new URL(`file://${file.replaceAll('\\', '/')}`).href }); await loaded;
+  await run("document.getElementById('btn-bauify').click(); document.querySelector('#bauify-overview [data-finding]').click(); document.querySelector('.duplicate-locations').open=true");
+  assert.equal(await run("document.querySelectorAll('.duplicate-page .ref').length"), 20);
+  assert.match(await run("document.querySelector('.duplicate-status').textContent"), /Page 1 of 3 · 1–20 of 45/);
+  await run("document.querySelector('.duplicate-next').click()"); assert.equal(await run("document.querySelectorAll('.duplicate-page .ref').length"), 20);
+  await run("document.querySelector('.duplicate-next').click()"); assert.equal(await run("document.querySelectorAll('.duplicate-page .ref').length"), 5);
+  assert.match(await run("document.querySelector('.duplicate-status').textContent"), /Page 3 of 3 · 41–45 of 45/);
+});
+
 test('Code Analysis browser scale baseline measures 500 and 5000 findings', {
   skip: chrome ? false : 'Set ARCHIFY_CHROME to run Code Analysis browser coverage.',
 }, async t => {
