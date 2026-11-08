@@ -28,6 +28,17 @@ in `#1242`; it is not evidence that the focused A1/A2 behavior regressed.
 Merging or reviewing it does not automatically update the different base branch
 used by `#1250`.
 
+## Evidence-index branch verification
+
+The evidence-index commits change documentation only. `git diff --check` passed
+before publication. The repository does not define a `bun run check` script.
+On the current Windows runner, the root `bun run test` invokes
+`test/core-smoke.test.mjs` under Node 24 with an unlimited test timeout and did
+not yield a useful terminal result after dependencies were restored. That result
+is an environment/test-runner limitation, not a passing test claim. The recorded
+candidate test receipt above was produced on Node 22.23.2 and remains the
+relevant reproducibility target for a future code PR.
+
 ## Latest A2 archive identity
 
 The latest A2 archive on `#1223` is the archive produced by
