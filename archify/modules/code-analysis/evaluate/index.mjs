@@ -8,6 +8,10 @@
 import * as cycle from './rules/coupling/cycle.mjs';
 import * as hub from './rules/coupling/hub.mjs';
 import * as concentration from './rules/coupling/concentration.mjs';
+import * as duplicate from './rules/coupling/duplicate.mjs';
+import * as mixedRoles from './rules/organization/mixed-roles.mjs';
+import * as folderRoles from './rules/organization/folder-roles.mjs';
+import * as genericName from './rules/organization/generic-name.mjs';
 import * as internalLeak from './rules/coupling/internal-leak.mjs';
 import * as importCycle from './rules/coupling/import-cycle.mjs';
 import * as boundary from './rules/architecture/boundary.mjs';
@@ -17,7 +21,7 @@ import fs from 'node:fs';
 
 const PACKAGE = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
-export const RULES = [importCycle, cycle, hub, concentration, internalLeak, boundary, complexity];
+export const RULES = [importCycle, cycle, hub, concentration, duplicate, mixedRoles, folderRoles, genericName, internalLeak, boundary, complexity];
 
 export function evaluate(graph, config = {}, facts = null) {
   const suppressed = new Set(config.ignore || []);

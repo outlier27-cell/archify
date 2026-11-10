@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { importEslint, importRuff, importSarif } from '../lib/diagnostics.mjs';
 import { buildTask } from '../lib/task.mjs';
 import { readJsonInput } from '../lib/analysis.mjs';
+import { findDuplicateGroups } from '../lib/duplicate.mjs';
 
 const sarif = (result) => ({ version: '2.1.0', runs: [{ tool: { driver: { name: 'eslint', version: '9', rules: [{ id: 'no-alert', shortDescription: { text: 'Avoid alert' } }] } }, results: [result] }] });
 
@@ -139,4 +140,206 @@ test('unverifiable external locations never enter a task modification scope', ()
   const task = buildTask({ findings: { diagnostics: [finding], repository: { language: 'ts' } }, facts: { files: [], repository: { language: 'ts' } }, ids: [finding.id] });
   assert.deepEqual(task.scope.modify, []);
   assert.deepEqual(task.locations, []);
+});
+
+test('duplicate detector groups exact token windows across files and excludes configured files', () => {
+  const body = Array.from({ length: 45 }, (_, i) => `value${i} = value${i} + 1`).join('\n');
+  const groups = findDuplicateGroups([{ path: 'a.py', sourceText: body }, { path: 'b.py', sourceText: `# header\n${body}` }, { path: 'tests/c.py', sourceText: body }], { minTokens: 40, exclude: (file) => file.path.startsWith('tests/') });
+  assert.equal(groups.length, 1);
+  assert.deepEqual([...new Set(groups[0].locations.map((location) => location.file))], ['a.py', 'b.py']);
+});
+
+test('duplicate detector uses token contents and merges sliding windows into maximal occurrences', () => {
+  const body = Array.from({ length: 80 }, (_, i) => `value${i} = value${i} + 1`).join('\n');
+  const groups = findDuplicateGroups([{ path: 'a.js', sourceText: body }, { path: 'b.js', sourceText: body }], { minTokens: 40, minLines: 7 });
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].locations, [
+    { file: 'a.js', startLine: 1, endLine: 80 },
+    { file: 'b.js', startLine: 1, endLine: 80 },
+  ]);
+  const different = findDuplicateGroups([
+    { path: 'a.js', sourceText: 'alpha beta gamma delta epsilon' },
+    { path: 'b.js', sourceText: 'one two three four five' },
+  ], { minTokens: 4, minLines: 1 });
+  assert.deepEqual(different, [], 'token objects must not collapse to the same string key');
+});
+
+test('duplicate detector does not bridge different sequences through one common file', () => {
+  const groups = findDuplicateGroups([
+    { path: 'a.js', sourceText: 'a b c d e' },
+    { path: 'b.js', sourceText: 'a b c d z' },
+    { path: 'c.js', sourceText: 'z b c d e' },
+  ], { minTokens: 4, minLines: 1 });
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map((group) => group.locations.map((location) => location.file).sort()).sort(), [['a.js', 'b.js'], ['a.js', 'c.js']]);
+});
+
+test('duplicate detector keeps separated repeated blocks separate', () => {
+  const block = Array.from({ length: 18 }, (_, i) => `value${i} = value${i} + 1`).join('\n');
+  const separator = Array.from({ length: 64 }, (_, i) => `const separator${i} = true;`).join('\n');
+  const groups = findDuplicateGroups([{ path: 'a.js', sourceText: `${block}\n${separator}\n${block}` }, { path: 'b.js', sourceText: block }], { minTokens: 40, minLines: 7 });
+  assert.ok(groups.some((group) => group.locations.filter((location) => location.file === 'a.js').length >= 2), JSON.stringify(groups));
+});
+
+test('duplicate detector retains separate occurrences within one file', () => {
+  const block = Array.from({ length: 18 }, (_, i) => `value${i} = value${i} + 1`).join('\n');
+  const separator = Array.from({ length: 64 }, (_, i) => `const separator${i} = true;`).join('\n');
+  const groups = findDuplicateGroups([{ path: 'a.js', sourceText: `${block}\n${separator}\n${block}` }, { path: 'b.js', sourceText: block }], { minTokens: 40, minLines: 7 });
+  const locations = groups.flatMap((group) => group.locations.filter((location) => location.file === 'a.js'));
+  assert.ok(locations.length >= 2, JSON.stringify(groups));
+  assert.ok(locations.some((location) => location.startLine === 1));
+  assert.ok(locations.some((location) => location.startLine > block.split('\n').length));
+});
+
+test('duplicate detector bounds dense groups without dropping occurrence ranges', () => {
+  const body = Array.from({ length: 18 }, (_, i) => `value${i} = value${i} + 1`).join('\n');
+  const files = Array.from({ length: 120 }, (_, i) => ({ path: `src/${i}.js`, sourceText: body }));
+  const groups = findDuplicateGroups(files, { minTokens: 40, minLines: 7 });
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].locations.length, 120, 'one duplicate group retains every occurrence; the reader paginates it');
+  assert.equal(new Set(groups[0].locations.map((location) => location.file)).size, 120);
+  assert.ok(groups[0].locations.every((location) => location.startLine === 1 && location.endLine === 18));
+});
+
+test('duplicate detector keeps three separated occurrences with the same separator', () => {
+  const block = Array.from({ length: 18 }, (_, i) => `value${i} = value${i} + 1`).join('\n');
+  const separator = Array.from({ length: 64 }, (_, i) => `const separator${i} = true;`).join('\n');
+  const groups = findDuplicateGroups([
+    { path: 'many.js', sourceText: [block, separator, block, separator, block].join('\n') },
+    { path: 'peer.js', sourceText: block },
+  ], { minTokens: 40, minLines: 7 });
+  const repeatedBlock = groups.find((group) => group.locations.some((location) => location.file === 'peer.js'));
+  assert.ok(repeatedBlock, JSON.stringify(groups));
+  const occurrences = repeatedBlock.locations.filter((location) => location.file === 'many.js');
+  assert.equal(occurrences.length, 3, JSON.stringify(repeatedBlock));
+  assert.ok(occurrences.every((location, index, all) => index === 0 || all[index - 1].endLine < location.startLine));
+});
+
+test('duplicate detector applies minLines after expanding a dense token seed', () => {
+  const dense = Array.from({ length: 7 }, (_, line) => Array.from({ length: 10 }, (_, token) => `v${line}_${token}`).join(' + ')).join('\n');
+  const groups = findDuplicateGroups([{ path: 'a.js', sourceText: dense }, { path: 'b.js', sourceText: dense }], { minTokens: 40, minLines: 7 });
+  assert.equal(groups.length, 1);
+  assert.deepEqual(groups[0].locations, [{ file: 'a.js', startLine: 1, endLine: 7 }, { file: 'b.js', startLine: 1, endLine: 7 }]);
+});
+
+test('duplicate detector keeps one stable group beyond one reader page', () => {
+  const block = Array.from({ length: 18 }, (_, i) => `value${i} = value${i} + 1`).join('\n');
+  const files = Array.from({ length: 101 }, (_, index) => ({ path: `src/${index}.js`, sourceText: block }));
+  const groups = findDuplicateGroups(files, { minTokens: 40, minLines: 7 });
+  assert.equal(groups.length, 1);
+  assert.equal(groups[0].locations.length, 101);
+});
+
+test('duplicate detector identity changes with members and ignores an unrelated group', () => {
+  const block = Array.from({ length: 18 }, (_, i) => `value${i} = value${i} + 1`).join('\n');
+  const other = Array.from({ length: 18 }, (_, i) => `other${i} = other${i} * 2`).join('\n');
+  const run = (files) => findDuplicateGroups(files, { minTokens: 40, minLines: 7 });
+  const before = run([{ path: 'a.js', sourceText: block }, { path: 'b.js', sourceText: block }]);
+  const withUnrelated = run([{ path: 'a.js', sourceText: block }, { path: 'b.js', sourceText: block }, { path: 'x.js', sourceText: other }, { path: 'y.js', sourceText: other }]);
+  const afterMember = run([{ path: 'a.js', sourceText: block }, { path: 'b.js', sourceText: block }, { path: 'c.js', sourceText: block }]);
+  const firstId = before[0].id;
+  assert.ok(withUnrelated.some((group) => group.id === firstId), 'an unrelated duplicate group keeps the original identity');
+  assert.ok(!afterMember.some((group) => group.id === firstId), 'adding a member changes the group identity');
+});
+
+test('duplicate rule is opt-in and records every repeated range', async () => {
+  const { evaluate } = await import('../evaluate/index.mjs');
+  const source = Array.from({ length: 18 }, (_, i) => `const value${i} = input${i} + 1;`).join('\n');
+  const facts = { repository: { language: 'ts' }, files: [{ path: 'a.js', role: 'source', sourceText: source }, { path: 'b.js', role: 'source', sourceText: source }], imports: [], functions: [] };
+  const graph = { repository: facts.repository, modules: [], edges: [], fileModules: {}, excluded: { roles: ['test', 'generated'], files: 0 } };
+  assert.equal(evaluate(graph, {}, facts).rules.includes('coupling/duplicate-code'), false);
+  const findings = evaluate(graph, { rules: { coupling: { duplicateCode: { enabled: true, minTokens: 40, minLines: 7 } } } }, facts);
+  const duplicate = findings.diagnostics.find((finding) => finding.code === 'coupling/duplicate-code');
+  assert.ok(duplicate);
+  assert.equal(duplicate.confidence, 0.75);
+  assert.ok(duplicate.subject.groupId.startsWith('DUP-'));
+  assert.deepEqual([...new Set(duplicate.evidence.locations.map((location) => location.file))], ['a.js', 'b.js']);
+  assert.deepEqual(duplicate.evidence.threshold, { minTokens: 40, minLines: 7 });
+  const task = buildTask({ findings, facts, ids: [duplicate.id] });
+  assert.equal(task.locations.length, 2);
+  assert.ok(task.locations.every((location) => location.kind === 'range' && location.sha256));
+  assert.equal(evaluate(graph, { rules: { coupling: { duplicateCode: { enabled: true, minTokens: 40, minLines: 7 } } } }, { ...facts, repository: { language: 'py' } }).rules.includes('coupling/duplicate-code'), false);
+});
+
+test('duplicate finding identity survives unrelated groups', async () => {
+  const { evaluate } = await import('../evaluate/index.mjs');
+  const repeated = Array.from({ length: 18 }, (_, i) => `const value${i} = input${i} + 1;`).join('\n');
+  const files = [{ path: 'a.js', role: 'source', sourceText: repeated }, { path: 'b.js', role: 'source', sourceText: repeated }];
+  const graph = { repository: { language: 'ts' }, modules: [], edges: [], fileModules: {}, excluded: { roles: ['test', 'generated'], files: 0 } };
+  const config = { rules: { coupling: { duplicateCode: { enabled: true, minTokens: 40, minLines: 7 } } } };
+  const first = evaluate(graph, config, { repository: graph.repository, files, imports: [], functions: [] }).diagnostics.find((finding) => finding.code === 'coupling/duplicate-code');
+  const nextFiles = [...files, { path: 'c.js', role: 'source', sourceText: 'const other = true;' }, { path: 'd.js', role: 'source', sourceText: 'const other = true;' }];
+  const next = evaluate(graph, config, { repository: graph.repository, files: nextFiles, imports: [], functions: [] }).diagnostics.find((finding) => finding.subject.groupId === first.subject.groupId);
+  assert.equal(next.id, first.id);
+});
+
+test('duplicate identities distinguish a concrete legacy-hash collision', async () => {
+  const { evaluate } = await import('../evaluate/index.mjs');
+  const graph = { repository: { language: 'ts' }, modules: [], edges: [], fileModules: {}, excluded: { roles: ['test', 'generated'], files: 0 } };
+  const config = { rules: { coupling: { duplicateCode: { enabled: true, minTokens: 1, minLines: 1 } } } };
+  const run = (token) => {
+    const files = ['a.js', 'b.js'].map((path) => ({ path, role: 'source', sourceText: token }));
+    const groups = findDuplicateGroups(files, { minTokens: 1, minLines: 1 });
+    assert.equal(groups.length, 1);
+    const finding = evaluate(graph, config, { repository: graph.repository, files, imports: [], functions: [] }).diagnostics.find((entry) => entry.code === 'coupling/duplicate-code');
+    return { groupId: groups[0].id, findingId: finding.id, evidenceDigest: finding.evidenceDigest.sha256 };
+  };
+  const first = run('t1ulncsw');
+  const second = run('t1lhsoh6');
+  assert.notEqual(first.evidenceDigest, second.evidenceDigest, 'the two source findings must remain distinct');
+  assert.notEqual(first.groupId, second.groupId, 'different duplicate groups must not share a legacy 32-bit identity');
+  assert.notEqual(first.findingId, second.findingId, 'different evaluator findings must not be aliased');
+});
+
+test('organization heuristics are opt-in and preserve explainable role evidence', async () => {
+  const { evaluate } = await import('../evaluate/index.mjs');
+  const facts = { repository: { language: 'ts' }, files: [
+    { path: 'src/util.js', role: 'source', sourceText: 'export function util() {}\n' },
+    { path: 'src/entry.js', role: 'source', sourceText: 'const fs = require("fs"); process.argv; render(view); class Model {}\n' },
+  ], imports: [], functions: [] };
+  const graph = { repository: facts.repository, modules: [], edges: [], fileModules: {}, excluded: { roles: ['test', 'generated'], files: 0 } };
+  const config = { rules: { organization: { mixedRoles: { enabled: true }, folderRoles: { enabled: false }, genericName: { enabled: true } } }, ignore: [] };
+  const findings = evaluate(graph, config, facts);
+  assert.ok(findings.diagnostics.some((finding) => finding.code === 'organization/generic-name'));
+  const mixed = findings.diagnostics.find((finding) => finding.code === 'organization/mixed-roles');
+  assert.ok(mixed);
+  assert.equal(mixed.dimension, 'organization');
+  assert.ok(Object.hasOwn(mixed.evidence, 'threshold'));
+  assert.deepEqual(mixed.evidence.roles, ['entry', 'io', 'model', 'view']);
+  assert.deepEqual(mixed.evidence.triggers.map(({ role }) => role), ['entry', 'io', 'view', 'model']);
+  assert.ok(mixed.evidence.triggers.every(({ line, text }) => Number.isInteger(line) && text));
+  assert.equal(evaluate(graph, {}, facts).rules.some((rule) => rule.startsWith('organization/')), false);
+});
+
+test('organization heuristics honor the graph test and generated exclusions', async () => {
+  const { evaluate } = await import('../evaluate/index.mjs');
+  const facts = { repository: { language: 'ts' }, files: [
+    { path: 'src/util.ts', role: 'source', sourceText: 'export function util() {}' },
+    { path: 'src/a.ts', role: 'source', sourceText: 'process.argv; const fs = require("fs"); render(view); class Model {}' },
+    { path: 'test/util.ts', role: 'test', sourceText: 'process.argv; const fs = require("fs"); render(view); class Model {}' },
+    { path: 'generated/common.ts', role: 'generated', sourceText: 'process.argv; const fs = require("fs"); render(view); class Model {}' },
+  ], imports: [], functions: [] };
+  const graph = { repository: facts.repository, modules: [], edges: [], fileModules: {}, excluded: { roles: ['test', 'generated'], files: 2 } };
+  const config = { rules: { organization: { mixedRoles: { enabled: true }, folderRoles: { enabled: true }, genericName: { enabled: true } } }, ignore: [] };
+  const findings = evaluate(graph, config, facts).diagnostics.filter((finding) => finding.dimension === 'organization');
+  assert.ok(findings.length);
+  assert.ok(findings.every((finding) => !JSON.stringify(finding).includes('test/') && !JSON.stringify(finding).includes('generated/')));
+});
+
+test('organization heuristics keep documented small-tool, utility, entry and framework-convention counterexamples quiet', async () => {
+  const { evaluate } = await import('../evaluate/index.mjs');
+  const files = [
+    { path: 'tools/release.ts', role: 'source', sourceText: 'process.argv; const fs = require("fs"); render("done"); class ReleaseModel {}' },
+    { path: 'src/date-util.ts', role: 'source', sourceText: 'export const today = () => new Date();' },
+    { path: 'src/main.ts', role: 'source', sourceText: 'process.argv; const fs = require("fs");' },
+    { path: 'test/fixture.ts', role: 'test', sourceText: 'process.argv; const fs = require("fs"); render(view); class Fixture {}' },
+    { path: 'generated/types.ts', role: 'generated', sourceText: 'process.argv; const fs = require("fs"); render(view); class Generated {}' },
+  ];
+  const graph = { repository: { language: 'ts' }, modules: [], edges: [], fileModules: {}, excluded: { roles: ['test', 'generated'], files: 2 } };
+  const config = { rules: { organization: { mixedRoles: { enabled: true }, folderRoles: { enabled: true }, genericName: { enabled: true } } }, ignore: [] };
+  const diagnostics = evaluate(graph, config, { repository: graph.repository, files, imports: [], functions: [] }).diagnostics;
+  assert.ok(diagnostics.some((finding) => finding.code === 'organization/mixed-roles' && finding.subject.file === 'tools/release.ts'), 'small tools are visible heuristic candidates for reviewer disposition');
+  assert.ok(!diagnostics.some((finding) => finding.subject.file === 'src/date-util.ts'), 'descriptive utility names stay quiet');
+  assert.ok(!diagnostics.some((finding) => finding.subject.file === 'src/main.ts' && finding.code === 'organization/mixed-roles'), 'entry and IO alone do not trigger mixed roles');
+  assert.ok(diagnostics.every((finding) => !JSON.stringify(finding).includes('test/fixture.ts') && !JSON.stringify(finding).includes('generated/types.ts')));
 });

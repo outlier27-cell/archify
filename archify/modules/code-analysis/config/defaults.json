@@ -43,5 +43,19 @@
       "**/third_party/**",
       "**/third-party/**"
     ]
+  },
+  "rules": {
+    "coupling": {
+      "duplicateCode": {
+        "enabled": false,
+        "minTokens": 80,
+        "minLines": 10
+      }
+    },
+    "organization": {
+      "mixedRoles": { "enabled": false },
+      "folderRoles": { "enabled": false },
+      "genericName": { "enabled": false }
+    }
   }
 }
