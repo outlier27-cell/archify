@@ -42,6 +42,21 @@
           },
           "description": "Denominators used by coupling/concentration; changes make its ratios incomparable."
         },
+        "externalDiagnostics": {
+          "type": "array",
+          "description": "Identity of imported diagnostic files. A changed or missing input makes runs incomparable.",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["format", "sha256", "findings", "rules"],
+            "properties": {
+              "format": { "enum": ["sarif", "eslint", "ruff"] },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+              "findings": { "type": "integer", "minimum": 0 },
+              "rules": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        },
         "coverage": {
           "type": "object",
           "additionalProperties": false,
