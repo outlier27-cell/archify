@@ -151,6 +151,10 @@ This writes every current finding to `analysis-baseline.json` with that reason. 
 
 To review existing tool output without running the producing tool, pass `--sarif results.sarif`, `--eslint results.json`, or `--ruff results.json`. These adapters keep the tool, rule, original level, message and locations in finding evidence, normalize imported diagnostics to warning, and mark root-external or missing locations as unverifiable. Unverifiable locations are not included in task modification scope. The adapters do not fetch artifacts or execute lint commands.
 
+Exact duplicate token detection is an opt-in JavaScript/TypeScript lexical experiment. Add `{"rules":{"coupling":{"duplicateCode":{"enabled":true}}}}` to the analysis config to enable it. It ignores comments and whitespace, expands matching token seeds into maximal exact sequences, and reports distinct occurrences rather than sliding windows. It does not parse language semantics; its findings do not establish equivalent behavior. The rule remains disabled by default after three-repository calibration. When enabled without explicit thresholds it uses 80 tokens and 10 lines; 50/7 is a high-recall review setting. Test, generated, vendor and third-party files are excluded. Python and Java are not checked by this rule.
+
+Organization heuristics are also opt-in experiments: `organization.mixedRoles`, `organization.folderRoles`, and `organization.genericName` can each be enabled under `rules`. They report warning-level, confidence-0.7 signals with the matched path, detected roles and (for text-role matches) trigger line/text. They remain disabled by default until cross-project false-positive review is complete.
+
 ```sh
 node bin/archify.mjs code-analysis check "/path/to/project" --baseline analysis-baseline.json --fail-on warning --out .analysis
 ```
