@@ -149,6 +149,8 @@ This writes every current finding to `analysis-baseline.json` with that reason. 
 
 `check` runs the same analysis without a diagram and exits with a status a pipeline can use:
 
+To review existing tool output without running the producing tool, pass `--sarif results.sarif`, `--eslint results.json`, or `--ruff results.json`. These adapters keep the tool, rule, original level, message and locations in finding evidence, normalize imported diagnostics to warning, and mark root-external or missing locations as unverifiable. Unverifiable locations are not included in task modification scope. The adapters do not fetch artifacts or execute lint commands.
+
 ```sh
 node bin/archify.mjs code-analysis check "/path/to/project" --baseline analysis-baseline.json --fail-on warning --out .analysis
 ```

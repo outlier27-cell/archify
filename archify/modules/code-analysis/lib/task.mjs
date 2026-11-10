@@ -30,6 +30,8 @@ const IMPACT = {
   'coupling/cycle': 'These modules cannot be changed, tested or reused independently of each other.',
   'coupling/hub': 'Changes here reach many dependents, and the module may combine several responsibilities.',
   'coupling/internal-leak': 'Other modules depend on this module\'s internal files, so moving, renaming or splitting any of them breaks importers; there is no single interface to keep stable.',
+  'coupling/duplicate-code': 'The same exact token sequence appears in multiple files; changing one copy can leave behavior split across locations, while similarity alone does not prove shared responsibility.',
+  'coupling/concentration': 'A small part of the analyzed module graph accounts for a large share of dependency reach or code size; this is a maintenance-risk signal, not a required refactor.',
   'architecture/boundary': 'Code in one layer depends on a layer the configured rule forbids, so changes in that layer can break it and the intended layering erodes.',
 };
 
@@ -202,6 +204,10 @@ export function validateTask(doc, file = null) {
 // evidence check hashes; the excerpt around it is added by withExcerpt.
 export function locationsOf(d) {
   const s = d.subject || {}, ev = d.evidence || {};
+  if (d.code.startsWith('external/')) return uniqueLocations((ev.locations || [])
+    .filter((location) => location.role !== 'related' && location.status === 'ok' && location.file && Number.isInteger(location.line))
+    .map((location) => ({ file: location.file, startLine: location.line, endLine: location.line, kind: 'range' })));
+  if (d.code === 'coupling/duplicate-code') return uniqueLocations((ev.locations || []).filter((location) => location.file && Number.isInteger(location.startLine) && Number.isInteger(location.endLine)).map((location) => ({ file: location.file, startLine: location.startLine, endLine: location.endLine, kind: 'range' })));
   if (d.code === 'complexity/function' && s.file && Number.isInteger(s.line)) {
     return [{ file: s.file, startLine: s.line, endLine: Number.isInteger(s.endLine) ? s.endLine : s.line, kind: 'function', symbol: s.function, ...(Number.isInteger(ev.deepestLine) ? { focusLine: ev.deepestLine } : {}), note: `complexity ${ev.complexity}, nesting ${ev.nesting}` }];
   }
@@ -216,13 +222,22 @@ export function locationsOf(d) {
 // One location per cited line; a line importing several resolved files
 // (a package and its submodule) lists every target.
 function uniqueLocations(list) {
-  const byLine = new Map();
-  for (const l of list) {
-    const k = `${l.file}:${l.startLine}`;
-    if (!byLine.has(k)) byLine.set(k, { ...l, targets: [...l.targets] });
-    else for (const t of l.targets) if (!byLine.get(k).targets.includes(t)) byLine.get(k).targets.push(t);
+  const unique = new Map();
+  for (const location of list) {
+    if (!Array.isArray(location.targets)) {
+      const key = `${location.file}:${location.startLine}:${location.endLine}:${location.kind}`;
+      if (!unique.has(key)) unique.set(key, { ...location });
+      continue;
+    }
+    const key = `${location.file}:${location.startLine}:import`;
+    if (!unique.has(key)) unique.set(key, { ...location, targets: [...location.targets] });
+    else for (const target of location.targets) if (!unique.get(key).targets.includes(target)) unique.get(key).targets.push(target);
   }
-  return [...byLine.values()].map(({ targets, ...l }) => ({ ...l, note: `imports ${targets.join(', ')}` }));
+  return [...unique.values()].map((location) => {
+    if (!Array.isArray(location.targets)) return location;
+    const { targets, ...rest } = location;
+    return { ...rest, note: `imports ${targets.join(', ')}` };
+  });
 }
 
 // Adds the hash of the exact range and a bounded excerpt with explicit
@@ -318,7 +333,9 @@ function keyEvidence(d) {
     case 'coupling/hub': return pick(['fanIn', 'fanOut', 'instability', 'threshold']);
     case 'architecture/boundary': return { ...pick(['rule', 'totalImports', 'files']), boundary: d.subject.boundary };
     case 'coupling/internal-leak': return pick(['entries', 'entrySource', 'internalFiles', 'consumers', 'totalImports', 'threshold']);
-    default: return pick(['threshold']);
+    case 'coupling/duplicate-code': return pick(['threshold', 'tokenCount', 'locations']);
+    case 'coupling/concentration': return pick(['threshold', 'dependentModules', 'dependentCount', 'totalExternalModules', 'dependentRatio', 'moduleLoc', 'totalAnalyzedLoc', 'moduleLocRatio', 'largestFile']);
+    default: return d.code.startsWith('external/') ? pick(['source', 'tool', 'toolVersion', 'rule', 'originalLevel', 'ruleDescription', 'locations', 'importedAt']) : pick(['threshold']);
   }
 }
 
@@ -331,6 +348,8 @@ function titleOf(selected, language) {
     if (d.code === 'coupling/cycle') return `Break the dependency cycle between ${s.modules.length} modules`;
     if (d.code === 'coupling/hub') return `Reduce the coupling of hub module ${s.module}`;
     if (d.code === 'coupling/internal-leak') return `Give module ${s.module} one entry point and import through it`;
+    if (d.code === 'coupling/duplicate-code') return `Review exact duplicate code in ${s.files.length} files`;
+    if (d.code === 'coupling/concentration') return `Review concentration in module ${s.module}`;
     if (d.code === 'architecture/boundary') return `Remove the "${s.boundary.from}" → "${s.boundary.to}" boundary violation`;
     return `Address ${d.code}`;
   };

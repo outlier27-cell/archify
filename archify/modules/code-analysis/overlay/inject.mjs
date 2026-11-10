@@ -41,7 +41,7 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
     });
   }
   const modules = new Map(graph.modules.map((m) => [m.id, m]));
-  const mapping = resolveMapping(ir, graph, map);
+  const mapping = resolveMapping(ir, graph, map, facts);
   const claimed = new Set([...mapping.values()].flat());
   const fileIndex = indexFiles(graph, facts);
   const findingsByFile = new Map();
@@ -52,7 +52,9 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
 
   // Indicators and the diagram rings show open findings: a finding accepted in
   // the baseline (with unchanged evidence) stays listed but does not colour the diagram.
-  const accepted = new Set(Object.entries(run.review ? run.review.findings : {}).filter(([, r]) => r.status === 'accepted').map(([id]) => id));
+  const accepted = new Set(Object.entries(run.review ? run.review.findings : {})
+    .filter(([, r]) => r.status === 'accepted')
+    .map(([id]) => id));
   const openFindings = findings.filter((f) => !accepted.has(f.id));
   const components = ir.components.map((c) => {
     const ids = mapping.get(c.id) || [];
@@ -83,6 +85,7 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
     edgeMap.set(key, { from: c.id, to: o.component, weight: o.weight, evidence: o.evidence });
   }
   const edges = [...edgeMap.values()].sort((a, b) => (a.from < b.from ? -1 : a.from > b.from ? 1 : a.to < b.to ? -1 : 1));
+  const consistency = compareDeclaredEdges(ir, graph, mapping);
   const unmapped = graph.modules.filter((m) => !claimed.has(m.id)).map((m) => ({ id: m.id, label: m.label, files: m.files, loc: m.loc, fanIn: m.fanIn, fanOut: m.fanOut, fileList: (fileIndex.get(m.id) || []).map((f) => ({ ...f, module: m.id })) }));
   const fileModule = new Map([...fileIndex].flatMap(([id, list]) => list.map((f) => [f.path, id])));
   const reviewed = run.review ? run.review.findings : {};
@@ -102,6 +105,7 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
     hasFileFacts: Boolean(facts),
     components,
     edges,
+    consistency,
     unmapped,
     findings: listed,
     tasks: facts && findingsDocument ? buildTaskPayloads({ findings: findingsDocument, facts, review: run.review }) : {},
@@ -118,6 +122,24 @@ export function buildOverlay({ ir, graph, html, map, facts = null, findings = []
   const idx = html.lastIndexOf('</body>');
   const out = idx === -1 ? html + injection : html.slice(0, idx) + injection + html.slice(idx);
   return { html: out, overview: payload.overview, mapped: components.filter((c) => c.modules.length).length, components: components.length, edges: edges.length, unmapped: unmapped.length, snippets: Object.keys(payload.snippets).length };
+}
+
+// Compare only resolved static module relationships that can be mapped to an
+// authored component. Dynamic/unmapped relationships stay unknown rather than
+// being presented as architecture errors.
+function compareDeclaredEdges(ir, graph, mapping) {
+  const declared = new Set((ir.connections || []).filter((edge) => edge && edge.from && edge.to).map((edge) => `${edge.from}>${edge.to}`));
+  if (!declared.size) return { status: 'unknown', reason: 'the authored diagram declares no comparable connections', missing: [], extra: [] };
+  const componentForModule = new Map();
+  for (const [component, modules] of mapping) for (const module of modules) componentForModule.set(module, component);
+  const actual = new Set(), unknown = [];
+  for (const edge of graph.edges || []) {
+    const from = componentForModule.get(edge.from), to = componentForModule.get(edge.to);
+    if (!from || !to) { unknown.push({ from: edge.from, to: edge.to, reason: 'module is not mapped to an authored component' }); continue; }
+    if ((edge.kinds?.lazy || edge.kinds?.conditional || edge.kinds?.typeOnly) && !edge.kinds?.eager) { unknown.push({ from, to, reason: 'relationship is deferred, conditional, or type-only' }); continue; }
+    actual.add(`${from}>${to}`);
+  }
+  return { status: unknown.length ? 'partial' : 'comparable', missing: [...actual].filter((edge) => !declared.has(edge)).sort(), extra: [...declared].filter((edge) => !actual.has(edge)).sort(), unknown };
 }
 
 // Modules a finding is about: named directly, or owning one of its files.
@@ -277,11 +299,13 @@ function indexFiles(graph, facts) {
 // componentId -> [moduleId]. Explicit `map` wins; otherwise derive from each
 // component's `sources` paths: a source under a module's path claims that
 // module and, when no other component claims them, its descendant modules.
-function resolveMapping(ir, graph, map) {
+function resolveMapping(ir, graph, map, facts) {
   const result = new Map();
   const byPathDepth = [...graph.modules].sort((a, b) => b.path.split('/').length - a.path.split('/').length);
+  const knownFiles = facts ? new Set(facts.files.map((file) => file.path)) : graph.fileModules ? new Set(Object.keys(graph.fileModules)) : null;
   const moduleForFile = (file) => {
     const rel = graph.repository.root && graph.repository.root !== '.' && file.startsWith(`${graph.repository.root}/`) ? file.slice(graph.repository.root.length + 1) : file;
+    if (knownFiles && !knownFiles.has(rel)) return null;
     if (graph.fileModules && graph.fileModules[rel]) return graph.fileModules[rel];
     for (const m of byPathDepth) {
       if (m.path === '' ) continue;
@@ -573,6 +597,9 @@ html[data-bauify="on"] .cards, html[data-bauify="on"] .guided-views { display: n
 #bauify-reader .task-actions button:disabled { opacity: .5; cursor: wait; }
 #bauify-reader .task-preview { display: block; box-sizing: border-box; width: 100%; min-height: 180px; max-height: 360px; resize: vertical; padding: 10px; border: 1px solid var(--panel-border, #1e293b); border-radius: 6px; color: var(--text, #f8fafc); background: var(--bg, #0b1220); font: 12px/1.6 ui-monospace, monospace; }
 #bauify-reader .coverage-notice { padding: 8px 0; color: var(--text-muted, #94a3b8); font-size: 12px; }
+#bauify-reader .finding-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: end; margin: 10px 0; }
+#bauify-reader .finding-filters label { display: grid; gap: 4px; color: var(--text-muted, #94a3b8); font-size: 12px; }
+#bauify-reader .finding-filters select, #bauify-reader .finding-filters input { min-height: 32px; max-width: 100%; padding: 5px 8px; color: var(--text, #f8fafc); background: var(--bg, #0b1220); border: 1px solid var(--panel-border, #1e293b); border-radius: 4px; font: inherit; }
 #bauify-reader .relationship { margin: 16px 0; }
 @media (max-width: 600px) { html[data-bauify="on"] .toolbar #btn-preset, html[data-bauify="on"] .toolbar #btn-present { display: none; } }
 `;
@@ -580,6 +607,7 @@ html[data-bauify="on"] .cards, html[data-bauify="on"] .guided-views { display: n
 const JS = `
 (function () {
   var data = JSON.parse(document.getElementById('bauify-analysis').textContent);
+  var findingFilter = { rule: '', severity: '', source: '', status: '', query: '' };
   var root = document.documentElement;
   var toolbar = document.querySelector('.toolbar');
   var svg = document.querySelector('svg');
@@ -927,9 +955,11 @@ const JS = `
     if (f.code === 'coupling/cycle' && s.modules) return 'Module cycle · ' + plural(s.modules.length, 'module');
     if (f.code === 'coupling/hub' && s.module) return modLabel(s.module) + ' connects many modules';
     if (f.code === 'coupling/internal-leak' && s.module) return modLabel(s.module) + ' is imported through its internals';
+    if (f.code === 'coupling/concentration' && s.module) return modLabel(s.module) + ' is concentrated';
     if (f.code === 'architecture/boundary' && s.boundary) return s.boundary.from + ' depends on ' + s.boundary.to;
     // Java names carry their parameter types to tell overloads apart.
     if (f.code === 'complexity/function' && s.function) return s.function + (s.function.endsWith(')') ? '' : '()') + ' is complex';
+    if (f.code.startsWith('external/')) return (f.evidence?.tool || s.tool || 'external tool') + ': ' + (f.evidence?.rule || s.rule || 'diagnostic');
     return f.code;
   }
   function findingWhat(f) {
@@ -938,8 +968,16 @@ const JS = `
     if (s.modules) return 'Modules: ' + s.modules.slice(0, 4).map(modLabel).join(', ') + (s.modules.length > 4 ? ' …' : '');
     if (f.code === 'coupling/hub' && f.evidence) return f.evidence.fanIn + ' modules depend on it; it depends on ' + f.evidence.fanOut + '.';
     if (f.code === 'coupling/internal-leak' && f.evidence) return plural(f.evidence.totalImports, 'import') + ' from ' + plural(f.evidence.consumers.length, 'module') + ' reach ' + plural(f.evidence.internalFiles.length, 'internal file') + ' of ' + f.evidence.moduleFiles + (f.evidence.entries.length ? ' · entry point: ' + f.evidence.entries.map(short).join(', ') : ' · no entry file');
+    if (f.code === 'coupling/concentration' && f.evidence) {
+      var threshold = f.evidence.threshold || {}, parts = [];
+      parts.push(f.evidence.dependentCount + ' / ' + f.evidence.totalExternalModules + ' modules depend on it (' + (f.evidence.dependentRatio * 100).toFixed(1) + '%; threshold ' + (threshold.reachRatio === null ? 'off' : (threshold.reachRatio * 100).toFixed(1) + '%') + ')');
+      parts.push(f.evidence.moduleLoc + ' / ' + f.evidence.totalAnalyzedLoc + ' LOC (' + (f.evidence.moduleLocRatio * 100).toFixed(1) + '%; threshold ' + (threshold.moduleLocRatio === null ? 'off' : (threshold.moduleLocRatio * 100).toFixed(1) + '%') + ')');
+      if (f.evidence.largestFile && f.evidence.largestFile.path) parts.push(short(f.evidence.largestFile.path) + ' · ' + f.evidence.largestFile.loc + ' LOC (threshold ' + (threshold.fileLoc === null ? 'off' : threshold.fileLoc) + ')');
+      return parts.join(' · ');
+    }
     if (f.code === 'complexity/function' && f.evidence) return 'complexity ' + f.evidence.complexity + ' · nesting ' + f.evidence.nesting + ' · ' + plural(f.evidence.length, 'line') + ' · ' + short(s.file);
     if (f.code === 'architecture/boundary' && f.evidence) return plural(f.evidence.totalImports, 'import') + ' in ' + plural(f.evidence.files.length, 'file') + ' · rule: ' + (f.evidence.rule.reason || s.boundary.from + ' must not depend on ' + s.boundary.to);
+    if (f.code.startsWith('external/') && f.evidence) return 'original level ' + (f.evidence.originalLevel || 'unknown') + ' · ' + plural((f.evidence.locations || []).length, 'location') + (f.evidence.importedAt ? ' · imported ' + f.evidence.importedAt : '');
     return f.message;
   }
   function findingWhere(f) {
@@ -968,6 +1006,12 @@ const JS = `
     var pe = files.parseErrors || [];
     if (pe.length) lines.push(plural(pe.length, 'file') + ' could not be parsed: ' + pe.slice(0, 3).join(', ') + (pe.length > 3 ? ' …' : ''));
     var u = c.unresolved || {}, unresolved = (u.unknown || 0) + (u.opaque || 0);
+    if (data.consistency) {
+      var consistency = data.consistency;
+      if (consistency.status === 'comparable' && (consistency.missing.length || consistency.extra.length)) lines.push('Static source relationships differ from the authored diagram; review the declared and observed edges.');
+      else if (consistency.status === 'partial') lines.push('Static relationship comparison is partial; some edges are unmapped or deferred and require review.');
+      else if (consistency.status === 'unknown') lines.push('Static relationship comparison is unavailable for this authored diagram.');
+    }
     // Java counts each unresolved type reference as well as imports.
     if (unresolved) lines.push(plural(unresolved, c.language === 'java' ? 'dependency record' : 'import') + ' could not be resolved');
     if ((c.unmappedModules || []).length) lines.push(plural(c.unmappedModules.length, 'module') + ' not on this diagram');
@@ -1008,19 +1052,41 @@ const JS = `
     var v = VERDICT[o.verdict] || VERDICT['none-found'];
     var acceptedCount = o.counts.accepted || 0;
     var verdictText = o.verdict === 'none-found' && acceptedCount ? 'No open findings · ' + acceptedCount + ' accepted in the baseline' : v.text;
-    var counts = [plural(o.counts.findings, 'finding')]
-      .concat(['error', 'warning', 'info'].filter(function (k) { return o.counts[k]; }).map(function (k) { return o.counts[k] + ' ' + k; }))
-      .concat(acceptedCount ? [acceptedCount + ' accepted'] : [])
+    var visible = (o.findings || []).filter(function (entry) {
+      var finding = findingById[entry.id] || {};
+      return (!findingFilter.rule || finding.code === findingFilter.rule)
+        && (!findingFilter.severity || finding.severity === findingFilter.severity)
+        && (!findingFilter.source || (finding.evidence && (finding.evidence.source === findingFilter.source || finding.evidence.tool === findingFilter.source)))
+        && (!findingFilter.status || (findingFilter.status === 'accepted' ? entry.status === 'accepted' : entry.status !== 'accepted'))
+        && (!findingFilter.query || String(finding.message || '').toLowerCase().includes(findingFilter.query) || JSON.stringify([finding.subject || {}, finding.evidence || {}]).toLowerCase().includes(findingFilter.query));
+    });
+    var visibleIds = new Set(visible.map(function (entry) { return entry.id; }));
+    var visibleCounts = { error: 0, warning: 0, info: 0, accepted: 0 };
+    visible.forEach(function (entry) { if (entry.status === 'accepted') visibleCounts.accepted += 1; else visibleCounts[entry.severity] += 1; });
+    var counts = [plural(visible.length, 'finding') + (visible.length === o.findings.length ? '' : ' shown')]
+      .concat(['error', 'warning', 'info'].filter(function (k) { return visibleCounts[k]; }).map(function (k) { return visibleCounts[k] + ' ' + k; }))
+      .concat(visibleCounts.accepted ? [visibleCounts.accepted + ' accepted'] : [])
       .concat(o.counts.offDiagram ? [o.counts.offDiagram + ' not on this diagram'] : []).join(' · ');
     var h = typeof window.__archifyReanalyze === 'function' ? '<button type="button" class="bauify-reanalyze" title="Read the repository again and compare with this result">Re-analyze</button>' : '';
     h += '<h3><i class="bauify-' + v.tone + '"></i>' + esc(verdictText) + '</h3>';
     h += '<div class="ev">' + esc(counts) + '</div>';
+    var sources = [...new Set((o.findings || []).map(function (entry) { var f = findingById[entry.id] || {}; return f.evidence && (f.evidence.tool || f.evidence.source); }).filter(Boolean))].sort();
+    h += '<div class="finding-filters"><label>Rule <select class="finding-rule"><option value="">All rules</option>' + o.groups.map(function (g) { return '<option value="' + esc(g.code) + '"' + (findingFilter.rule === g.code ? ' selected' : '') + '>' + esc(GROUPS[g.code] || g.code) + '</option>'; }).join('') + '</select></label><label>Severity <select class="finding-severity"><option value="">All levels</option>' + ['error', 'warning', 'info'].map(function (level) { return '<option value="' + level + '"' + (findingFilter.severity === level ? ' selected' : '') + '>' + level + '</option>'; }).join('') + '</select></label><label>Source <select class="finding-source"><option value="">All sources</option>' + sources.map(function (source) { return '<option value="' + esc(source) + '"' + (findingFilter.source === source ? ' selected' : '') + '>' + esc(source) + '</option>'; }).join('') + '</select></label><label>Status <select class="finding-status"><option value="">All statuses</option><option value="open"' + (findingFilter.status === 'open' ? ' selected' : '') + '>Open</option><option value="accepted"' + (findingFilter.status === 'accepted' ? ' selected' : '') + '>Accepted</option></select></label><label>Search <input class="finding-search" type="search" value="' + esc(findingFilter.query) + '" placeholder="path or message"></label><button type="button" class="finding-clear" title="Clear finding filters">Clear</button></div>';
     var checkedRules = o.coverage && o.coverage.rules && o.coverage.rules.run || [];
     var unchecked = [['redundancy/', 'duplicate code'], ['conventions/', 'project coding conventions']].filter(function (x) { return !checkedRules.some(function (r) { return r.indexOf(x[0]) === 0; }); }).map(function (x) { return x[1]; });
     if (unchecked.length) h += '<div class="coverage-notice">Not checked: ' + esc(unchecked.join(', ')) + '. See Coverage for the full scope.</div>';
     h += reviewHtml(o.review);
-    if (o.priorities.length) {
-      var picks = o.priorities.map(function (id) { return findingById[id]; }).filter(Boolean);
+    var priorities = [], priorityRules = new Set(), priorityCovered = new Set();
+    var openVisible = visible.filter(function (entry) { return entry.status !== 'accepted'; });
+    var topVisibleSeverity = openVisible.length ? openVisible[0].severity : null;
+    openVisible.forEach(function (entry) {
+      if (priorities.length >= 3 || entry.severity !== topVisibleSeverity || priorityRules.has(entry.code) || priorityCovered.has(entry.id)) return;
+      priorityRules.add(entry.code); priorityCovered.add(entry.id); priorities.push(entry.id);
+      (entry.relatedIds || []).forEach(function (id) { priorityCovered.add(id); });
+    });
+    openVisible.forEach(function (entry) { if (priorities.length < 3 && !priorityCovered.has(entry.id)) { priorities.push(entry.id); priorityCovered.add(entry.id); } });
+    if (priorities.length) {
+      var picks = priorities.map(function (id) { return findingById[id]; }).filter(Boolean);
       var hubs = picks.filter(function (f) { return f.code === 'coupling/hub'; });
       var onlyBoundaries = picks.every(function (f) { return f.code === 'architecture/boundary'; });
       var anyCycle = picks.some(function (f) { return f.code === 'coupling/import-cycle' || f.code === 'coupling/cycle'; });
@@ -1032,20 +1098,37 @@ const JS = `
         : 'Start with the dependency structures below. ';
       h += '<p class="verdict-note">' + lead + 'Each finding links to its evidence' + (anyCycle ? '; runtime failure is not proven.' : '.') + '</p>';
     }
-    if (o.priorities.length) {
+    if (!visible.length && o.findings.length) h += '<div class="ev" style="margin-top:8px">No findings match these filters.</div>';
+    else if (priorities.length) {
       h += '<div class="k">Look at first</div>';
-      o.priorities.forEach(function (id, i) { h += findingRow(id, i + 1); });
-    } else if (acceptedCount) h += '<div class="ev" style="margin-top:8px">Every finding is accepted in the baseline. New findings, and accepted ones whose code changes, will show up here.</div>';
-    else h += '<div class="ev" style="margin-top:8px">No rule fired. This covers only the checks listed under Coverage; it is not a quality guarantee.</div>';
+      priorities.forEach(function (id, i) { h += findingRow(id, i + 1); });
+    } else if (visible.length && acceptedCount && visible.every(function (entry) { return entry.status === 'accepted'; })) h += '<div class="ev" style="margin-top:8px">Every matching finding is accepted in the baseline.</div>';
+    else if (!o.findings.length && acceptedCount) h += '<div class="ev" style="margin-top:8px">Every finding is accepted in the baseline. New findings, and accepted ones whose code changes, will show up here.</div>';
+    else if (!o.findings.length) h += '<div class="ev" style="margin-top:8px">No rule fired. This covers only the checks listed under Coverage; it is not a quality guarantee.</div>';
     if (o.groups.length) {
       h += '<div class="k">All findings · click a component on the diagram for its own view</div>';
       o.groups.forEach(function (g) {
-        h += '<details><summary><i class="bauify-' + toneOf(g.severity) + '"></i>' + esc(GROUPS[g.code] || g.code) + ' · ' + g.count + '</summary>' + g.ids.map(function (id) { return findingRow(id); }).join('') + '</details>';
+        var ids = g.ids.filter(function (id) { return visibleIds.has(id); });
+        if (!ids.length) return;
+        h += '<details><summary><i class="bauify-' + toneOf(g.severity) + '"></i>' + esc(GROUPS[g.code] || g.code) + ' · ' + ids.length + '</summary>' + ids.map(function (id) { return findingRow(id); }).join('') + '</details>';
       });
     }
     h += coverageHtml(o.coverage);
     h += '<details><summary>Colour key</summary>' + legend() + '</details>';
     overview.innerHTML = h;
+    var ruleSelect = overview.querySelector('.finding-rule'), severitySelect = overview.querySelector('.finding-severity'), sourceSelect = overview.querySelector('.finding-source'), statusSelect = overview.querySelector('.finding-status'), clear = overview.querySelector('.finding-clear'), search = overview.querySelector('.finding-search');
+    ruleSelect.addEventListener('change', function () { findingFilter.rule = ruleSelect.value; renderOverview(); });
+    severitySelect.addEventListener('change', function () { findingFilter.severity = severitySelect.value; renderOverview(); });
+    sourceSelect.addEventListener('change', function () { findingFilter.source = sourceSelect.value; renderOverview(); });
+    statusSelect.addEventListener('change', function () { findingFilter.status = statusSelect.value; renderOverview(); });
+    clear.addEventListener('click', function () { findingFilter = { rule: '', severity: '', source: '', status: '', query: '' }; renderOverview(); });
+    search.addEventListener('input', function () {
+      findingFilter.query = search.value.trim().toLowerCase();
+      var cursor = search.selectionStart;
+      renderOverview();
+      var next = overview.querySelector('.finding-search');
+      if (next) { next.focus(); next.setSelectionRange(cursor, cursor); }
+    });
     var again = overview.querySelector('.bauify-reanalyze');
     if (again) again.addEventListener('click', function () {
       again.disabled = true; again.textContent = 'Analyzing…';
@@ -1088,6 +1171,32 @@ const JS = `
       h += '</pre><div class="ev">Captured lines ' + (start + 1) + '–' + end + ' of ' + snip.lines.length + ' · excerpt only; click the path to expand.</div></div>';
       return h;
     }).join('');
+  }
+  function multiLocationsHtml(f) {
+    var locations = f.evidence && f.evidence.locations;
+    if (!Array.isArray(locations) || (!f.code.startsWith('external/') && f.code !== 'coupling/duplicate-code')) return '';
+    var label = f.code === 'coupling/duplicate-code' ? 'Duplicate locations' : 'Diagnostic locations';
+    return '<details class="finding-locations" data-locations-id="' + esc(f.id) + '"><summary>' + label + ' · ' + locations.length + '</summary><div class="locations-page"></div><div class="task-actions"><button type="button" class="locations-prev">Previous</button><span class="ev locations-status"></span><button type="button" class="locations-next">Next</button></div></details>';
+  }
+  function wireMultiLocations(f) {
+    var box = detail.querySelector('[data-locations-id="' + f.id + '"]'); if (!box) return;
+    var locations = (f.evidence.locations || []).filter(function (location) { return location.file; }), pageSize = 20, page = 0, pages = Math.max(1, Math.ceil(locations.length / pageSize));
+    var list = box.querySelector('.locations-page'), status = box.querySelector('.locations-status'), previous = box.querySelector('.locations-prev'), next = box.querySelector('.locations-next');
+    var render = function () {
+      var start = page * pageSize, current = locations.slice(start, start + pageSize);
+      list.innerHTML = current.map(function (location) {
+        var startLine = location.startLine || location.line, endLine = location.endLine || location.line;
+        if (location.status && location.status !== 'ok') return '<div class="ev"><b>' + esc(short(location.file)) + '</b>' + (startLine ? ':' + startLine : '') + ' · ' + esc(location.reason || 'unverifiable location') + '</div>';
+        var why = f.code === 'coupling/duplicate-code' ? 'Exact token duplicate; compare responsibilities before sharing code.' : 'External diagnostic location; verify the original tool result against current source.';
+        return ref(location.file, startLine, 'lines ' + startLine + '–' + endLine, why, toneOf(f.severity), startLine, endLine);
+      }).join('');
+      status.textContent = 'Page ' + (page + 1) + ' of ' + pages + ' · ' + (start + 1) + '–' + (start + current.length) + ' of ' + locations.length;
+      previous.disabled = page === 0; next.disabled = page + 1 >= pages; wireRefs();
+    };
+    previous.addEventListener('click', function () { if (page > 0) { page -= 1; render(); } });
+    next.addEventListener('click', function () { if (page + 1 < pages) { page += 1; render(); } });
+    box.addEventListener('toggle', function () { if (box.open) render(); });
+    render();
   }
   function taskHtml(f) {
     return '<details class="ai-task" data-task-id="' + esc(f.id) + '"><summary>Task preview and download</summary><p class="ev">Review the brief, then give it to your coding AI. Exporting does not modify code.</p><p class="task-status ev" role="status" aria-live="polite">Open to prepare the task.</p><div class="task-actions"><button type="button" class="task-copy" disabled>Copy AI task</button><button type="button" class="task-download" disabled>Download .md</button><button type="button" class="task-refresh">Check again</button></div><label class="ev">Task preview · select text to copy manually<textarea class="task-preview" readonly spellcheck="false" aria-label="AI task preview"></textarea></label></details>';
@@ -1172,7 +1281,7 @@ const JS = `
       : f.code === 'complexity/function' ? 'Cyclomatic complexity counts independent paths through the function. A high count is a maintenance signal, not a defect.' : lvl.text;
     h += '<div class="level"><b>' + esc(lvl.name) + '</b> — ' + esc(findingWhat(f)) + '<br>' + esc(explanation) + '</div>';
     if (f.review && f.review.reason) h += '<p class="ev"><span class="badge-accepted">' + (f.review.status === 'accepted-changed' ? 'accepted · evidence changed' : 'accepted') + '</span> ' + esc(f.review.reason) + (f.review.status === 'accepted-changed' ? ' — the code behind it changed since it was accepted; review it again.' : '') + '</p>';
-    h += quickHandoff(f) + '<div class="k">Code evidence</div>' + evidencePreview(f);
+    h += quickHandoff(f) + '<div class="k">Code evidence</div>' + evidencePreview(f) + multiLocationsHtml(f);
     h += nextStepHtml(f) + taskHtml(f);
     if ((f.componentIds || []).length) h += '<button type="button" class="locate">Locate related components</button>';
     else h += '<p class="ev">Not mapped to this diagram. Use the code evidence above.</p>';
@@ -1190,6 +1299,7 @@ const JS = `
     if (locate) locate.addEventListener('click', function () { locateComponents(f.componentIds, true); });
     detail.querySelectorAll('[data-finding]').forEach(function (el) { el.addEventListener('click', function () { showFinding(el.getAttribute('data-finding')); }); });
     wireRefs();
+    wireMultiLocations(f);
     wireTasks();
     var heading = detail.querySelector('h3'); heading.tabIndex = -1; heading.focus({ preventScroll: true });
   }
