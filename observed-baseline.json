@@ -1,0 +1,248 @@
+{
+  "labs": "eeeb687f527446bc211a6cdbb1b206485439fcd3",
+  "node": "v22.23.2",
+  "cases": {
+    "positive": {
+      "allMappedEdgeCounts": [
+        19,
+        20
+      ],
+      "allMappedNew": [
+        [
+          "vapour-dom",
+          "vapour-slots"
+        ]
+      ],
+      "allMappedNotObserved": [],
+      "files": [
+        751,
+        751
+      ],
+      "mapped": [
+        7,
+        7
+      ],
+      "ambiguous": [
+        0,
+        0
+      ],
+      "unmapped": [
+        44,
+        44
+      ],
+      "findingsComparison": {
+        "comparable": true,
+        "new": 1,
+        "notDetected": 1,
+        "fixed": 1,
+        "evidenceChanged": 12,
+        "unchanged": 296
+      },
+      "undeclaredCounts": [
+        9,
+        10
+      ],
+      "newlyObserved": [
+        {
+          "from": "vapour-dom",
+          "to": "vapour-slots",
+          "weight": 2,
+          "sample": "packages/runtime-vapor/src/dom/hydrateFragment.ts:38"
+        }
+      ],
+      "notObserved": [],
+      "alreadyObservedWithChangedCount": [
+        {
+          "from": "vapour-dom",
+          "to": "runtime-dom",
+          "base": 3,
+          "head": 4
+        }
+      ],
+      "authoredDelta": {
+        "components": {
+          "added": 0,
+          "changed": 0,
+          "evidenceChanged": 0,
+          "removed": 0,
+          "moved": 0
+        },
+        "connections": {
+          "added": 0,
+          "changed": 0,
+          "removed": 0,
+          "rerouted": 0
+        },
+        "boundaries": {
+          "added": 0,
+          "changed": 0,
+          "removed": 0,
+          "geometryChanged": 0
+        },
+        "presentationChanged": false,
+        "provenanceChanged": false
+      },
+      "irSha256": "254f1b10ffc0603450ddcd75a3119fed8ec5a8859575682affcc3d969f0dc850",
+      "configSha256": "89a8effc1f5cd8cc3fa8f7892d468b1cca89cd7f08080f39254df8c2dcc13441",
+      "mapSha256": "4c0a689fb1f145244d7f3aadfd44331396d4111d55af6c529517043239de806e",
+      "baseCoverage": {
+        "extractor": "typescript@5.9.3",
+        "adapterRevision": 22,
+        "unresolved": {
+          "external": 260,
+          "outside": 0,
+          "unknown": 79,
+          "opaque": 6
+        },
+        "parseErrors": 0
+      },
+      "headCoverage": {
+        "extractor": "typescript@5.9.3",
+        "adapterRevision": 22,
+        "unresolved": {
+          "external": 260,
+          "outside": 0,
+          "unknown": 79,
+          "opaque": 6
+        },
+        "parseErrors": 0
+      },
+      "directImports": {
+        "base": [],
+        "head": [
+          {
+            "from": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "to": "packages/runtime-vapor/src/slotBoundary.ts",
+            "line": 38,
+            "kind": "static",
+            "typeOnly": false,
+            "resolved": true
+          },
+          {
+            "from": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "to": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 39,
+            "kind": "static",
+            "typeOnly": false,
+            "resolved": true
+          }
+        ]
+      }
+    },
+    "move": {
+      "allMappedEdgeCounts": [
+        9,
+        9
+      ],
+      "allMappedNew": [],
+      "allMappedNotObserved": [],
+      "files": [
+        700,
+        701
+      ],
+      "mapped": [
+        5,
+        5
+      ],
+      "ambiguous": [
+        0,
+        0
+      ],
+      "unmapped": [
+        44,
+        44
+      ],
+      "findingsComparison": {
+        "comparable": true,
+        "new": 0,
+        "notDetected": 0,
+        "fixed": 0,
+        "evidenceChanged": 1,
+        "unchanged": 259
+      },
+      "undeclaredCounts": [
+        2,
+        2
+      ],
+      "newlyObserved": [],
+      "notObserved": [],
+      "alreadyObservedWithChangedCount": [],
+      "authoredDelta": {
+        "components": {
+          "added": 0,
+          "changed": 0,
+          "evidenceChanged": 0,
+          "removed": 0,
+          "moved": 0
+        },
+        "connections": {
+          "added": 0,
+          "changed": 0,
+          "removed": 0,
+          "rerouted": 0
+        },
+        "boundaries": {
+          "added": 0,
+          "changed": 0,
+          "removed": 0,
+          "geometryChanged": 0
+        },
+        "presentationChanged": false,
+        "provenanceChanged": false
+      },
+      "irSha256": "9c3afa66e2de28955d9fbacc59a7747093382f22c4cf032c67c409aed84ededb",
+      "configSha256": "1461c2fd6ebd2cfa813b5de6e63176f2dc287f944e6bf3dcc3dd006c88a26ea4",
+      "mapSha256": "bfe350cbfdfd7e09544154867c38cb1a8154e7194b67fb1acb1a30ccd2b3489d",
+      "baseCoverage": {
+        "extractor": "typescript@5.9.3",
+        "adapterRevision": 22,
+        "unresolved": {
+          "external": 250,
+          "outside": 0,
+          "unknown": 70,
+          "opaque": 6
+        },
+        "parseErrors": 0
+      },
+      "headCoverage": {
+        "extractor": "typescript@5.9.3",
+        "adapterRevision": 22,
+        "unresolved": {
+          "external": 250,
+          "outside": 0,
+          "unknown": 70,
+          "opaque": 6
+        },
+        "parseErrors": 0
+      },
+      "movedRegistry": {
+        "base": [
+          {
+            "from": "packages/runtime-vapor/src/components/Transition.ts",
+            "to": "packages/runtime-vapor/src/block.ts",
+            "line": 22,
+            "kind": "static",
+            "typeOnly": false,
+            "resolved": true
+          }
+        ],
+        "head": [
+          {
+            "from": "packages/runtime-vapor/src/components/Transition.ts",
+            "to": "packages/runtime-vapor/src/transition.ts",
+            "line": 23,
+            "kind": "static",
+            "typeOnly": false,
+            "resolved": true
+          }
+        ],
+        "owners": [
+          "vapour-core",
+          "vapour-core",
+          "vapour-core",
+          "vapour-core"
+        ]
+      }
+    }
+  }
+}

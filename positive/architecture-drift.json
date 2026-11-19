@@ -1,0 +1,1664 @@
+{
+  "schemaVersion": 1,
+  "command": "drift",
+  "status": "ok",
+  "locale": "en",
+  "pins": {
+    "base": "ecdeaa10d2d19c2ca4f291b882118f3638ca96ad",
+    "head": "1bd72c351c89808fbc8d5705a3a01f845118b51a"
+  },
+  "inputs": {
+    "irSha256": "254f1b10ffc0603450ddcd75a3119fed8ec5a8859575682affcc3d969f0dc850",
+    "configSha256": "66d41d6b4ae7d01f7d349ef98b72b37962853ca896fc18e16f4b089788d18570",
+    "mapSha256": "90cb68852c300b4d9ab4fd43d20e62083f3a480fc8479c5b0131398a55de3efa",
+    "analyzer": "typescript@5.9.3",
+    "adapterRevision": 22
+  },
+  "components": [
+    {
+      "id": "vapour-dom",
+      "label": "Vapor DOM"
+    },
+    {
+      "id": "vapour-slots",
+      "label": "Vapor slots"
+    },
+    {
+      "id": "vapour-core",
+      "label": "Vapor core"
+    },
+    {
+      "id": "runtime-dom",
+      "label": "Runtime DOM"
+    },
+    {
+      "id": "runtime-core",
+      "label": "Runtime core"
+    },
+    {
+      "id": "reactivity",
+      "label": "Reactivity"
+    },
+    {
+      "id": "shared",
+      "label": "Shared"
+    }
+  ],
+  "coverage": {
+    "base": {
+      "files": 751,
+      "mappedComponents": 7,
+      "ambiguousModules": 0,
+      "unmappedModules": 44,
+      "parseErrors": 0,
+      "scopedParseErrors": 0,
+      "unresolvedImports": {
+        "external": 260,
+        "outside": 0,
+        "unknown": 79,
+        "opaque": 6
+      },
+      "skippedLinks": 0
+    },
+    "head": {
+      "files": 751,
+      "mappedComponents": 7,
+      "ambiguousModules": 0,
+      "unmappedModules": 44,
+      "parseErrors": 0,
+      "scopedParseErrors": 0,
+      "unresolvedImports": {
+        "external": 260,
+        "outside": 0,
+        "unknown": 79,
+        "opaque": 6
+      },
+      "skippedLinks": 0
+    }
+  },
+  "summary": {
+    "newUndeclared": 1,
+    "newDeclared": 0,
+    "previouslyObserved": 18,
+    "notObservedAtHead": 0,
+    "inconclusive": 0
+  },
+  "edges": [
+    {
+      "from": "reactivity",
+      "to": "shared",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 10,
+        "locations": [
+          {
+            "path": "packages/reactivity/src/arrayInstrumentations.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isArray } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/baseHandlers.ts",
+            "line": 16,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/reactivity/src/collectionHandlers.ts",
+            "line": 11,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/reactivity/src/computed.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { hasChanged, isFunction } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/debug.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/dep.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isArray, isIntegerKey, isMap, isSymbol } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/effect.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/reactive.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { def, hasOwn, isObject, toRawType } from '@vue/shared'"
+          }
+        ]
+      },
+      "head": {
+        "count": 10,
+        "locations": [
+          {
+            "path": "packages/reactivity/src/arrayInstrumentations.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isArray } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/baseHandlers.ts",
+            "line": 16,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/reactivity/src/collectionHandlers.ts",
+            "line": 11,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/reactivity/src/computed.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { hasChanged, isFunction } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/debug.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/dep.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isArray, isIntegerKey, isMap, isSymbol } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/effect.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend } from '@vue/shared'"
+          },
+          {
+            "path": "packages/reactivity/src/reactive.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { def, hasOwn, isObject, toRawType } from '@vue/shared'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "runtime-core",
+      "to": "reactivity",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 30,
+        "locations": [
+          {
+            "path": "packages/runtime-core/src/apiAsyncComponent.ts",
+            "line": 18,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { type Ref, ref } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiComputed.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { computed as _computed } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiLifecycle.ts",
+            "line": 12,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { type DebuggerEvent, setActiveSub } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiWatch.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-core/src/compat/global.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-core/src/compat/instance.ts",
+            "line": 22,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { shallowReadonly } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-core/src/component.ts",
+            "line": 2,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-core/src/componentCurrentInstance.ts",
+            "line": 7,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { type EffectScope, setCurrentScope } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "head": {
+        "count": 30,
+        "locations": [
+          {
+            "path": "packages/runtime-core/src/apiAsyncComponent.ts",
+            "line": 18,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { type Ref, ref } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiComputed.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { computed as _computed } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiLifecycle.ts",
+            "line": 12,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { type DebuggerEvent, setActiveSub } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiWatch.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-core/src/compat/global.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-core/src/compat/instance.ts",
+            "line": 22,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { shallowReadonly } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-core/src/component.ts",
+            "line": 2,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-core/src/componentCurrentInstance.ts",
+            "line": 7,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { type EffectScope, setCurrentScope } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "runtime-core",
+      "to": "shared",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 57,
+        "locations": [
+          {
+            "path": "packages/runtime-core/src/apiAsyncComponent.ts",
+            "line": 12,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isFunction, isObject } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiCreateApp.ts",
+            "line": 31,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { NO, extend, hasOwn, isFunction, isObject } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiDefineComponent.ts",
+            "line": 30,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { type IsKeyValues, extend, isFunction } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiInject.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isFunction } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiLifecycle.ts",
+            "line": 11,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { toHandlerKey } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiSetupHelpers.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-core/src/apiWatch.ts",
+            "line": 13,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { EMPTY_OBJ, NOOP, extend, isFunction, isString } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/compat/attrsFallthrough.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isOn } from '@vue/shared'"
+          }
+        ]
+      },
+      "head": {
+        "count": 57,
+        "locations": [
+          {
+            "path": "packages/runtime-core/src/apiAsyncComponent.ts",
+            "line": 12,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isFunction, isObject } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiCreateApp.ts",
+            "line": 31,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { NO, extend, hasOwn, isFunction, isObject } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiDefineComponent.ts",
+            "line": 30,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { type IsKeyValues, extend, isFunction } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiInject.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isFunction } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiLifecycle.ts",
+            "line": 11,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { toHandlerKey } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/apiSetupHelpers.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-core/src/apiWatch.ts",
+            "line": 13,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { EMPTY_OBJ, NOOP, extend, isFunction, isString } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-core/src/compat/attrsFallthrough.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isOn } from '@vue/shared'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "runtime-dom",
+      "to": "runtime-core",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 14,
+        "locations": [
+          {
+            "path": "packages/runtime-dom/src/apiCustomElement.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/components/Transition.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/components/TransitionGroup.ts",
+            "line": 13,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/directives/vModel.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/directives/vOn.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/helpers/useCssModule.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import { useInstanceOption, warn } from '@vue/runtime-core'"
+          },
+          {
+            "path": "packages/runtime-dom/src/helpers/useCssVars.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/index.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "head": {
+        "count": 14,
+        "locations": [
+          {
+            "path": "packages/runtime-dom/src/apiCustomElement.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/components/Transition.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/components/TransitionGroup.ts",
+            "line": 13,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/directives/vModel.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/directives/vOn.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/helpers/useCssModule.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import { useInstanceOption, warn } from '@vue/runtime-core'"
+          },
+          {
+            "path": "packages/runtime-dom/src/helpers/useCssVars.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/index.ts",
+            "line": 1,
+            "target": "packages/runtime-core/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "runtime-dom",
+      "to": "shared",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 13,
+        "locations": [
+          {
+            "path": "packages/runtime-dom/src/apiCustomElement.ts",
+            "line": 35,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/components/Transition.ts",
+            "line": 11,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend, isArray, isObject, toNumber } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/components/TransitionGroup.ts",
+            "line": 32,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/directives/vModel.ts",
+            "line": 10,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/directives/vOn.ts",
+            "line": 9,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { hyphenate, isArray } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/helpers/useCssModule.ts",
+            "line": 2,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { EMPTY_OBJ } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/helpers/useCssVars.ts",
+            "line": 14,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { NOOP, ShapeFlags, extend, normalizeCssVarValue } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/index.ts",
+            "line": 25,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "head": {
+        "count": 13,
+        "locations": [
+          {
+            "path": "packages/runtime-dom/src/apiCustomElement.ts",
+            "line": 35,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/components/Transition.ts",
+            "line": 11,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend, isArray, isObject, toNumber } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/components/TransitionGroup.ts",
+            "line": 32,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/directives/vModel.ts",
+            "line": 10,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-dom/src/directives/vOn.ts",
+            "line": 9,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { hyphenate, isArray } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/helpers/useCssModule.ts",
+            "line": 2,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { EMPTY_OBJ } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/helpers/useCssVars.ts",
+            "line": 14,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { NOOP, ShapeFlags, extend, normalizeCssVarValue } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-dom/src/index.ts",
+            "line": 25,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "shared",
+      "to": "reactivity",
+      "state": "previously-observed",
+      "declared": false,
+      "base": {
+        "count": 1,
+        "locations": [
+          {
+            "path": "packages/shared/src/toDisplayString.ts",
+            "line": 2,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { ReactiveFlags } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "head": {
+        "count": 1,
+        "locations": [
+          {
+            "path": "packages/shared/src/toDisplayString.ts",
+            "line": 2,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { ReactiveFlags } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-core",
+      "to": "reactivity",
+      "state": "previously-observed",
+      "declared": false,
+      "base": {
+        "count": 14,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineCustomElement.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { shallowReactive } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiTemplateRef.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { type Ref, isRef, onScopeDispose } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/component.ts",
+            "line": 50,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/componentProps.ts",
+            "line": 32,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/components/KeepAlive.ts",
+            "line": 47,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { EffectScope, shallowReactive } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/components/Teleport.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/components/Transition.ts",
+            "line": 24,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { computed } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "head": {
+        "count": 14,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineCustomElement.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { shallowReactive } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiTemplateRef.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { type Ref, isRef, onScopeDispose } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/component.ts",
+            "line": 50,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/componentProps.ts",
+            "line": 32,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/components/KeepAlive.ts",
+            "line": 47,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { EffectScope, shallowReactive } from '@vue/reactivity'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/components/Teleport.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/components/Transition.ts",
+            "line": 24,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { computed } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-core",
+      "to": "runtime-dom",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 28,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/apiCreateApp.ts",
+            "line": 9,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateDynamicComponent.ts",
+            "line": 1,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 36,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import { MoveType, queuePostFlushCb, warn } from '@vue/runtime-dom'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineAsyncComponent.ts",
+            "line": 1,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineCustomElement.ts",
+            "line": 4,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiSetupHelpers.ts",
+            "line": 1,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiTemplateRef.ts",
+            "line": 9,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/block.ts",
+            "line": 9,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "head": {
+        "count": 28,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/apiCreateApp.ts",
+            "line": 9,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateDynamicComponent.ts",
+            "line": 1,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 36,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import { MoveType, queuePostFlushCb, warn } from '@vue/runtime-dom'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineAsyncComponent.ts",
+            "line": 1,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineCustomElement.ts",
+            "line": 4,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiSetupHelpers.ts",
+            "line": 1,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiTemplateRef.ts",
+            "line": 9,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/block.ts",
+            "line": 9,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-core",
+      "to": "shared",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 27,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/apiCreateApp.ts",
+            "line": 22,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { getGlobalThis } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateDynamicComponent.ts",
+            "line": 11,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { Namespaces, VaporDynamicComponentFlags } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 16,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 40,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { VaporVForFlags } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateIf.ts",
+            "line": 21,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { VaporBlockShape, VaporIfFlags } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineComponent.ts",
+            "line": 2,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineCustomElement.ts",
+            "line": 2,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend, isPlainObject } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiTemplateRef.ts",
+            "line": 21,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "head": {
+        "count": 27,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/apiCreateApp.ts",
+            "line": 22,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { getGlobalThis } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateDynamicComponent.ts",
+            "line": 11,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { Namespaces, VaporDynamicComponentFlags } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 16,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 40,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { VaporVForFlags } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateIf.ts",
+            "line": 21,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { VaporBlockShape, VaporIfFlags } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineComponent.ts",
+            "line": 2,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiDefineCustomElement.ts",
+            "line": 2,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { extend, isPlainObject } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiTemplateRef.ts",
+            "line": 21,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-core",
+      "to": "vapour-dom",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 45,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/apiCreateApp.ts",
+            "line": 23,
+            "target": "packages/runtime-vapor/src/dom/prop.ts",
+            "text": "import { optimizePropertyLookup } from './dom/prop'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateApp.ts",
+            "line": 24,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import { setIsHydratingEnabled, withHydration } from './dom/hydration'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateDynamicComponent.ts",
+            "line": 30,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 23,
+            "target": "packages/runtime-vapor/src/dom/node.ts",
+            "text": "import { createComment, createTextNode } from './dom/node'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 41,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 65,
+            "target": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFragment.ts",
+            "line": 2,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateIf.ts",
+            "line": 2,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "head": {
+        "count": 45,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/apiCreateApp.ts",
+            "line": 23,
+            "target": "packages/runtime-vapor/src/dom/prop.ts",
+            "text": "import { optimizePropertyLookup } from './dom/prop'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateApp.ts",
+            "line": 24,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import { setIsHydratingEnabled, withHydration } from './dom/hydration'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateDynamicComponent.ts",
+            "line": 30,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 23,
+            "target": "packages/runtime-vapor/src/dom/node.ts",
+            "text": "import { createComment, createTextNode } from './dom/node'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 41,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFor.ts",
+            "line": 65,
+            "target": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateFragment.ts",
+            "line": 2,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/apiCreateIf.ts",
+            "line": 2,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-core",
+      "to": "vapour-slots",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 4,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/fragment.ts",
+            "line": 55,
+            "target": "packages/runtime-vapor/src/slotBoundary.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/fragment.ts",
+            "line": 71,
+            "target": "packages/runtime-vapor/src/slotFragment.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/vdomInterop.ts",
+            "line": 155,
+            "target": "packages/runtime-vapor/src/slotBoundary.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/vdomInterop.ts",
+            "line": 162,
+            "target": "packages/runtime-vapor/src/slotFragment.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "head": {
+        "count": 4,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/fragment.ts",
+            "line": 47,
+            "target": "packages/runtime-vapor/src/slotBoundary.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/fragment.ts",
+            "line": 57,
+            "target": "packages/runtime-vapor/src/slotFragment.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/vdomInterop.ts",
+            "line": 155,
+            "target": "packages/runtime-vapor/src/slotBoundary.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/vdomInterop.ts",
+            "line": 162,
+            "target": "packages/runtime-vapor/src/slotFragment.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-dom",
+      "to": "reactivity",
+      "state": "previously-observed",
+      "declared": false,
+      "base": {
+        "count": 1,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/dom/event.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { onEffectCleanup } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "head": {
+        "count": 1,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/dom/event.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { onEffectCleanup } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-dom",
+      "to": "runtime-dom",
+      "state": "previously-observed",
+      "declared": false,
+      "base": {
+        "count": 3,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/dom/event.ts",
+            "line": 3,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 1,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/prop.ts",
+            "line": 20,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "head": {
+        "count": 4,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/dom/event.ts",
+            "line": 3,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "line": 2,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import { queuePostFlushCb } from '@vue/runtime-dom'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 1,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/prop.ts",
+            "line": 20,
+            "target": "packages/runtime-dom/src/index.ts",
+            "text": "import {"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-dom",
+      "to": "shared",
+      "state": "previously-observed",
+      "declared": false,
+      "base": {
+        "count": 6,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/dom/event.ts",
+            "line": 2,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isArray } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { NOOP } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 9,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { type Namespace, Namespaces } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/node.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { type Namespace, Namespaces } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/prop.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/template.ts",
+            "line": 13,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { type Namespace, Namespaces, TemplateFlags } from '@vue/shared'"
+          }
+        ]
+      },
+      "head": {
+        "count": 6,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/dom/event.ts",
+            "line": 2,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { isArray } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { NOOP } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 9,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { type Namespace, Namespaces } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/node.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { type Namespace, Namespaces } from '@vue/shared'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/prop.ts",
+            "line": 1,
+            "target": "packages/shared/src/index.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/template.ts",
+            "line": 13,
+            "target": "packages/shared/src/index.ts",
+            "text": "import { type Namespace, Namespaces, TemplateFlags } from '@vue/shared'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-dom",
+      "to": "vapour-core",
+      "state": "previously-observed",
+      "declared": false,
+      "base": {
+        "count": 8,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "line": 27,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "line": 35,
+            "target": "packages/runtime-vapor/src/fragmentFlags.ts",
+            "text": "import { IF, NATIVE_CHILDREN, SLOT } from '../fragmentFlags'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 10,
+            "target": "packages/runtime-vapor/src/insertionState.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 26,
+            "target": "packages/runtime-vapor/src/renderContext.ts",
+            "text": "import { currentRenderContext } from '../renderContext'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 28,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import { remove } from '../block'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/prop.ts",
+            "line": 45,
+            "target": "packages/runtime-vapor/src/component.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/prop.ts",
+            "line": 56,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import { type Block, normalizeBlock } from '../block'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/template.ts",
+            "line": 15,
+            "target": "packages/runtime-vapor/src/renderContext.ts",
+            "text": "import { currentRenderContext } from '../renderContext'"
+          }
+        ]
+      },
+      "head": {
+        "count": 8,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "line": 28,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "line": 40,
+            "target": "packages/runtime-vapor/src/fragmentFlags.ts",
+            "text": "import { IF, NATIVE_CHILDREN, SLOT } from '../fragmentFlags'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 10,
+            "target": "packages/runtime-vapor/src/insertionState.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 26,
+            "target": "packages/runtime-vapor/src/renderContext.ts",
+            "text": "import { currentRenderContext } from '../renderContext'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydration.ts",
+            "line": 28,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import { remove } from '../block'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/prop.ts",
+            "line": 45,
+            "target": "packages/runtime-vapor/src/component.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/prop.ts",
+            "line": 56,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import { type Block, normalizeBlock } from '../block'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/template.ts",
+            "line": 15,
+            "target": "packages/runtime-vapor/src/renderContext.ts",
+            "text": "import { currentRenderContext } from '../renderContext'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-dom",
+      "to": "vapour-slots",
+      "state": "new-undeclared",
+      "declared": false,
+      "base": {
+        "count": 0,
+        "locations": []
+      },
+      "head": {
+        "count": 2,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "line": 38,
+            "target": "packages/runtime-vapor/src/slotBoundary.ts",
+            "text": "import { hasSlotFallback } from '../slotBoundary'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/dom/hydrateFragment.ts",
+            "line": 39,
+            "target": "packages/runtime-vapor/src/slotFragment.ts",
+            "text": "import { recheckSlotResolution } from '../slotFragment'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-slots",
+      "to": "reactivity",
+      "state": "previously-observed",
+      "declared": false,
+      "base": {
+        "count": 1,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { EffectScope } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "head": {
+        "count": 1,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 1,
+            "target": "packages/reactivity/src/index.ts",
+            "text": "import { EffectScope } from '@vue/reactivity'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-slots",
+      "to": "vapour-core",
+      "state": "previously-observed",
+      "declared": false,
+      "base": {
+        "count": 6,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/slotBoundary.ts",
+            "line": 2,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import { type BlockFn, isValidSlot } from './block'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotBoundary.ts",
+            "line": 4,
+            "target": "packages/runtime-vapor/src/renderContext.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 3,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 13,
+            "target": "packages/runtime-vapor/src/scopeId.ts",
+            "text": "import { renderWithSlotScopeIds } from './scopeId'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 19,
+            "target": "packages/runtime-vapor/src/transition.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 24,
+            "target": "packages/runtime-vapor/src/helpers/setKey.ts",
+            "text": "import { setBlockKey } from './helpers/setKey'"
+          }
+        ]
+      },
+      "head": {
+        "count": 6,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/slotBoundary.ts",
+            "line": 2,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import { type BlockFn, isValidSlot } from './block'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotBoundary.ts",
+            "line": 4,
+            "target": "packages/runtime-vapor/src/renderContext.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 3,
+            "target": "packages/runtime-vapor/src/block.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 13,
+            "target": "packages/runtime-vapor/src/scopeId.ts",
+            "text": "import { renderWithSlotScopeIds } from './scopeId'"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 19,
+            "target": "packages/runtime-vapor/src/transition.ts",
+            "text": "import {"
+          },
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 24,
+            "target": "packages/runtime-vapor/src/helpers/setKey.ts",
+            "text": "import { setBlockKey } from './helpers/setKey'"
+          }
+        ]
+      },
+      "reasons": []
+    },
+    {
+      "from": "vapour-slots",
+      "to": "vapour-dom",
+      "state": "previously-observed",
+      "declared": true,
+      "base": {
+        "count": 1,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 12,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import { isHydrating } from './dom/hydration'"
+          }
+        ]
+      },
+      "head": {
+        "count": 1,
+        "locations": [
+          {
+            "path": "packages/runtime-vapor/src/slotFragment.ts",
+            "line": 12,
+            "target": "packages/runtime-vapor/src/dom/hydration.ts",
+            "text": "import { isHydrating } from './dom/hydration'"
+          }
+        ]
+      },
+      "reasons": []
+    }
+  ]
+}

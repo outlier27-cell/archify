@@ -1,0 +1,17 @@
+{
+  "vapour-core": [
+    "vapour-core"
+  ],
+  "shared": [
+    "shared"
+  ],
+  "runtime-dom": [
+    "runtime-dom"
+  ],
+  "runtime-core": [
+    "runtime-core"
+  ],
+  "reactivity": [
+    "reactivity"
+  ]
+}

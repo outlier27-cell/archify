@@ -1,0 +1,13 @@
+{
+  "modules": {
+    "groups": {
+      "vapour-dom": "packages/runtime-vapor/src/dom/**",
+      "vapour-slots": "packages/runtime-vapor/src/slot*.ts",
+      "vapour-core": "packages/runtime-vapor/src/**",
+      "runtime-dom": "packages/runtime-dom/src/**",
+      "runtime-core": "packages/runtime-core/src/**",
+      "reactivity": "packages/reactivity/src/**",
+      "shared": "packages/shared/src/**"
+    }
+  }
+}

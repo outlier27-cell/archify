@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "output": "architecture.html",
+    "title": "Vue architecture drift (move)"
+  },
+  "components": [
+    {
+      "id": "vapour-core",
+      "label": "Vapor core",
+      "type": "backend",
+      "pos": [
+        60,
+        70.0
+      ],
+      "size": [
+        185,
+        62
+      ]
+    },
+    {
+      "id": "runtime-dom",
+      "label": "Runtime DOM",
+      "type": "backend",
+      "pos": [
+        320,
+        70.0
+      ],
+      "size": [
+        185,
+        62
+      ]
+    },
+    {
+      "id": "runtime-core",
+      "label": "Runtime core",
+      "type": "backend",
+      "pos": [
+        580,
+        70.0
+      ],
+      "size": [
+        185,
+        62
+      ]
+    },
+    {
+      "id": "reactivity",
+      "label": "Reactivity",
+      "type": "backend",
+      "pos": [
+        60,
+        220.0
+      ],
+      "size": [
+        185,
+        62
+      ]
+    },
+    {
+      "id": "shared",
+      "label": "Shared",
+      "type": "backend",
+      "pos": [
+        320,
+        220.0
+      ],
+      "size": [
+        185,
+        62
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "to": "shared",
+      "from": "reactivity",
+      "id": "reactivity-to-shared"
+    },
+    {
+      "to": "reactivity",
+      "from": "runtime-core",
+      "id": "runtime-core-to-reactivity"
+    },
+    {
+      "to": "shared",
+      "from": "runtime-core",
+      "id": "runtime-core-to-shared"
+    },
+    {
+      "to": "runtime-core",
+      "from": "runtime-dom",
+      "id": "runtime-dom-to-runtime-core"
+    },
+    {
+      "to": "shared",
+      "from": "runtime-dom",
+      "id": "runtime-dom-to-shared"
+    },
+    {
+      "to": "runtime-dom",
+      "from": "vapour-core",
+      "id": "vapour-core-to-runtime-dom"
+    },
+    {
+      "to": "shared",
+      "from": "vapour-core",
+      "id": "vapour-core-to-shared"
+    }
+  ]
+}
