@@ -1,0 +1,36 @@
+ok 1 - atlas: every in-tree dependency between analyzed files is drawn once, between the right files
+ok 2 - atlas: functions keep their measurements and reported ones point at their finding
+ok 3 - atlas: cycles, module cycles and boundary imports select the files and modules they name
+ok 4 - atlas: a hub selects its module; accepted findings are marked; without raw facts there is no atlas
+ok 5 - atlas: coverage reports what draws no curve
+ok 6 - atlas: module labels are the shortest path tails that stay unique
+ok 7 - atlas: the overlay embeds the atlas before the Classic script only when raw facts are given
+ok 8 - atlas: an internal-imports finding draws its cited imports and marks its module and entry files
+ok 9 - client assets: analysis and drift pages inline their respective browser code
+ok 10 - client assets: scripts are valid classic scripts
+ok 11 - client assets: nothing can close the tag they are inlined in
+ok 12 - overlay: components map to modules through their sources; descendants follow the parent
+ok 13 - overlay: parent directory sources claim child modules from most specific prefix outward without being swallowed by enclosing modules
+ok 14 - overlay: directory sources use file ownership for Go, Rust and explicit groups
+ok 15 - overlay: historical graphs retain directory fallback while new graphs use exact file ownership
+ok 16 - overlay: shared module ownership stays ambiguous across component order and edge direction
+ok 17 - overlay: directory claims preserve ties and splits within a folded module
+ok 18 - overlay: the cycle indicator takes the colour of the highest severity among its file and module cycles, green otherwise
+ok 19 - overlay: every finding is listed once at the top level with its modules and components, including unmapped ones
+ok 20 - overlay: an explicit map wins and an unmapped component is reported, not invented
+ok 21 - overlay: the delivered HTML is extended, never rewritten, and refuses non-Archify input
+ok 22 - overlay: --source embeds the full text of every file a finding cites, nothing more
+ok 23 - analysis: the delivered page is read, never rewritten; the analysis page and every stage land in the output directory
+ok 24 - overlay: embedded JSON stays inside its script element whatever the source text holds
+ok 25 - native PR view keeps comparison chart visible and shares localized source/task interactions
+ok 26 - standalone workbench keeps Atlas alongside evidence, both locales/themes and narrow task access
+ok 27 - prepared workbench localizes, copies first-screen evidence, keeps comparison honest and preserves narrow canvas access
+1..27
+# tests 27
+# suites 0
+# pass 27
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 658352.1187
