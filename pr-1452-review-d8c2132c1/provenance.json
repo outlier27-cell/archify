@@ -1,0 +1,26 @@
+{
+  "pullRequest": "https://github.com/tt-a1i/archify/pull/1452",
+  "exercisedCodeCommit": "d8c2132c18e4d4316fda95f95cad6d9316339c8f",
+  "reviewHead": "ace22716a0cdb9e45f88bd5c973a1fac50f34dea",
+  "followUpPaths": [
+    "archify/modules/code-analysis/test/verification-history.test.mjs",
+    "archify.zip"
+  ],
+  "flaskCommit": "2c1b30d0503cfb064f1cb252e6614a06915a362a",
+  "desktop": "Chrome for Testing, 1440 x 900, CDP pointer input",
+  "cliReceipt": {
+    "file": "cli-verification.json",
+    "sha256": "28aa2df22bdf0019f5fdd45a43d27f76b2c2b497b41fece1e64ae4ccd4eeec62",
+    "originalSha256": "a3cdbeff373409cc793c93f94c5650f80ba9c5444ce15c555543a16e4a9da9ea"
+  },
+  "browserReceipt": {
+    "file": "TASK-910f6ee5e420.verification.json",
+    "sha256": "69ca124f7912491c84249f8cac10912751e663624bf53db2fed910fabe7e0ca4"
+  },
+  "screenshots": [
+    "component-restored.png",
+    "finding-restored.png",
+    "files-restored.png",
+    "verification-preview.png"
+  ]
+}

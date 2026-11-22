@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "kind": "archify-code-analysis-verification",
+  "taskId": "TASK-910f6ee5e420",
+  "findingIds": [
+    "COMP-5404531294a0"
+  ],
+  "before": {
+    "snapshotId": "9b5983b38b012953b9fda2d686d5d132ee43e7808482efde1f225ec370f11929",
+    "analysisSha256": "97d55ee38cd9b194d682e400f6cf6bdafedbc6ad7815e6ad8d64853bf015a31b"
+  },
+  "after": {
+    "snapshotId": "9a2169342ebf657c86fb6409503e125af6e549fa9a6db1b216d65529c644fd76",
+    "analysisSha256": "41d5b3565e3c3478ef4029474aded2d762fd864174a6e965a84eb581658a9953"
+  },
+  "analysis": {
+    "comparable": true,
+    "reasons": [],
+    "newCount": 0,
+    "selected": [
+      {
+        "id": "COMP-5404531294a0",
+        "code": "complexity/function",
+        "sourceId": null,
+        "externalReport": null,
+        "outcome": "evidence-changed",
+        "observed": "evidence-changed",
+        "limitation": null
+      }
+    ]
+  },
+  "projectChecks": {
+    "status": "not-reported",
+    "checks": []
+  }
+}
