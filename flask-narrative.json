@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "revision": "2c1b30d0503cfb064f1cb252e6614a06915a362a",
+  "scope": ".",
+  "sections": [
+    {
+      "title": "How Flask registers a Blueprint",
+      "text": "Blueprint.register stores the blueprint on the application and builds a setup state. It adds an optional static-file rule, merges blueprint functions for a first registration, and invokes each queued deferred function with that state.",
+      "citations": [
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "startLine": 316,
+          "endLine": 335,
+          "sha256": "b454fcceb34c5c3246f7f8cc40df0ae5593f29e3910e78cb8b483f7bb65c3a6b"
+        }
+      ]
+    }
+  ]
+}

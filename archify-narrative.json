@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "revision": "8a4f8e80141f937129796b6a4ad5597fb8a9db47",
+  "scope": "archify/modules/code-analysis",
+  "sections": [
+    {
+      "title": "How local analysis reaches Atlas",
+      "text": "The analysis page first captures raw facts and builds its module graph. It evaluates findings and builds the overlay around the same graph and facts. The overlay projects those inputs into Atlas data; it does not extract a second snapshot.",
+      "citations": [
+        {
+          "path": "archify/modules/code-analysis/overlay/page.mjs",
+          "startLine": 64,
+          "endLine": 77,
+          "sha256": "bbc1c4bb4378905b93bd8fc43927b753d4257be509bfc584a7fd098e9742a52e"
+        },
+        {
+          "path": "archify/modules/code-analysis/overlay/page.mjs",
+          "startLine": 83,
+          "endLine": 88,
+          "sha256": "0650f4d2b5fd389329336f2b8abb25938eba65f1d3150a2967c43331fd61c657"
+        },
+        {
+          "path": "archify/modules/code-analysis/overlay/inject.mjs",
+          "startLine": 149,
+          "endLine": 158,
+          "sha256": "34beafc3d75c56bc05d9253c76dbb554cdd50923cae90a8201f9b0a264c3b3af"
+        }
+      ]
+    }
+  ]
+}
