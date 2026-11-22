@@ -30,7 +30,6 @@ In PR mode, short file/function addition and removal counts follow the original 
 From the `archify/` package directory inside the Archify repository:
 
 ```sh
-npm ci
 npm start -- "/path/to/project" --locale zh-CN
 ```
 
@@ -60,9 +59,9 @@ Language extraction has its own prerequisites:
 
 | Adapter | Required tools and source scope |
 | --- | --- |
-| `ts` | Node.js and the module's installed TypeScript parser dependencies. |
+| `ts` | Node.js; the module's bundled TypeScript parser. |
 | `py` | Node only; transplanted Pyright parser, Python 3.14 syntax by default. Set `python.targetVersion` to 3.8–3.14. |
-| `java` | Node.js and the installed `java-parser` dependency; no JDK or project build. |
+| `java` | Node.js; the module's bundled `java-parser` dependency; no JDK or project build. |
 | `go` | Go 1.18+ and a root `go.mod`; see [Go scope and tooling](GO.md). |
 | `rust` | Cargo/rustc 1.71+, a root `Cargo.toml` and the locked helper dependencies; see [Rust scope and tooling](RUST.md). |
 | `c`, `cpp` | An existing `compile_commands.json`, Python clang bindings and libclang; see [C/C++ scope and tooling](C_CPP.md). |
@@ -280,7 +279,9 @@ Run `check` without a diagram (or pass `--ir architecture.json [--map overlay-ma
 node bin/archify.mjs code-analysis check /path/to/repo --language ts --out out/first-look --json
 ```
 
-Choose `--language` when the repository contains more than one language; without it, `check` stops with `extract/adapter-ambiguous` and lists per-adapter file counts (`evidence.counts`) so the dominant language is visible on first contact. Each run analyzes one language and reports the others under `coverage.otherLanguages`.
+Archify selects an adapter automatically when it is the only eligible choice. In a mixed tree, the leading adapter must account for at least 90% of files matched by eligible adapters. Go or Rust also needs a regular `go.mod` or `Cargo.toml`, respectively, at the analysis root. A C or C++ lead still requires a choice because source counts cannot tell which files have unique compilation commands. The [Java detection rules](JAVA.md) still apply, and the C++ adapter also covers C when both match.
+
+When Archify needs a choice, `extract/adapter-ambiguous` reports the source counts and corresponding `--language` flags. An explicit `--language` takes precedence. Each run reports the other languages and their file counts in `coverage.otherLanguages`.
 
 Start from the JSON receipt, not the full finding list:
 
@@ -409,7 +410,7 @@ How cycles are graded:
 | `coupling/cycle`: a component that only closes through deferred, conditional or type-only edges | warning |
 | Rust file and module cycles | info: files of one crate compile together, and mutual `use` is ordinary there |
 
-**Upgrading.** Before rule version 2, file cycles were warnings and module and Java cycles were info. `check` fails on warnings by default, so a project whose only cycles were module-level or Java cycles passed and will now fail. When `check` fails without `--baseline`, its summary prints the exact command for this project (language and config included). To adopt the new levels without blocking CI on existing cycles, record them once and commit the file:
+**Upgrading.** Before rule version 2, file cycles were warnings and module and Java cycles were info. `check` fails on warnings by default, so a project whose only cycles were module-level or Java cycles passed and will now fail. When `check` fails without `--baseline`, its receipt includes the exact command for this project (language and config included). To adopt the new levels without blocking CI on existing cycles, record them once and commit the file:
 
 ```sh
 node bin/archify.mjs code-analysis check "/path/to/project" --baseline analysis-baseline.json --update-baseline --reason "existing cycle, tracked in <issue>"
@@ -565,7 +566,7 @@ node bin/archify.mjs code-analysis check "/path/to/project" --baseline analysis-
 | `--update-baseline [--reason text]` | Write the baseline instead of checking. |
 | `--json` | Print a machine-readable receipt instead of the summary. |
 
-Exit codes: `0` passed, `1` the gate failed, `2` the analysis could not run (the diagnostic says why). A failing run without `--baseline` ends with the command that records today's findings in `analysis-baseline.json` (also in the `--json` receipt as `gate.adopt`), for a first run or after a rule became stricter. The printed summary lists failing findings as `path:line` with their ids, the comparison counts, and stale baseline entries.
+Exit codes: `0` passed, `1` the gate failed, `2` the analysis could not run (the diagnostic says why). A failing run without `--baseline` offers the command that records today's findings in `analysis-baseline.json`, for a first run or after a rule became stricter. If the baseline or drill-down command contains control characters, the summary points to the exact command in the `--json` receipt under `gate.adopt` or `investigation.drillDown`. The printed summary lists failing findings as `path:line` with their ids, the comparison counts, and stale baseline entries.
 
 
 ## Config files
@@ -656,7 +657,7 @@ Changed or unavailable entry facts and entry parse errors return exit 1. A usabl
 
 ### Investigate a changed source file
 
-With analyzer dependencies already installed, capture two JS/TS roots using the
+Capture two JS/TS roots using the
 current extractor and one analysis configuration:
 
 ```sh
@@ -683,7 +684,7 @@ JSON inventory and a semantic diff are not provided by this mode.
 
 Open a priority finding or a component's finding, read the captured code excerpt, then click **Copy task for AI**. One click prepares the complete brief and copies it, without requiring you to open its preview. Paste it into the coding AI working on this project. **Task preview and download** provides the full preview, **Copy AI task**, **Download .md** and **Check again**. Copy and download refresh the task first when the local service is available. If clipboard access is unavailable, the preview opens and selects the text for manual copying.
 
-The first `serve`, `check` or `task` run initializes the analysis module's missing dependencies using its package lock. Running a task does not itself connect to an AI recipient: the current UI reports copying or downloading, not sending or starting a refactor.
+Parser and schema packages are bundled in `vendor/`, so `serve`, `check` and `task` install nothing. Running a task does not itself connect to an AI recipient: the current UI reports copying or downloading, not sending or starting a refactor.
 
 An offline report exports the captured snapshot and labels it as not checked against current source. Changed, missing, and unverifiable evidence is called out in both the preview and exported brief; ask your coding AI to read the current files before editing. An expired page or a rejected server request requires retry or re-analysis. Export does not apply a patch or execute project checks.
 

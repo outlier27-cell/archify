@@ -16608,6 +16608,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       var viewBox = svg &amp;&amp; svg.viewBox &amp;&amp; svg.viewBox.baseVal;
       var ratio = viewBox &amp;&amp; viewBox.height &gt; 0 ? viewBox.width / viewBox.height : 0;
       var readerFit = svg &amp;&amp; svg.getAttribute(&#39;data-reader-fit&#39;);
+      var fitCards = svg &amp;&amp; svg.hasAttribute(&#39;data-reader-fit-cards&#39;);
       var widthFirstReading = readerFit === &#39;width-first&#39;;
       var automaticSequence = widthFirstReading &amp;&amp; svg.hasAttribute(&#39;data-sequence-column-fit&#39;);
       var readingScroll = widthFirstReading;
@@ -16633,8 +16634,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         : MIN_PROJECTED_NODE_TEXT_PX;
       var declaredPrimaryText = svg ? parseFloat(svg.getAttribute(&#39;data-reader-primary-text&#39;) || &#39;&#39;) : null;
       var SAFE_BOTTOM_GAP = 12;
-      // Wide viewports move summary cards beside the diagram, so the height
-      // budget belongs to the diagram and spare width holds the notes.
+      // The optional right rail uses spare width for notes.
       var RAIL_MIN_VIEWPORT = 1280;
       var RAIL_WIDTH = 288;
       var RAIL_GAP = 20;
@@ -16826,8 +16826,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       function hasCards() {
         return Boolean((cards &amp;&amp; cards.children.length &amp;&amp; !cards.hidden) || (outline &amp;&amp; !outline.hidden));
       }
-      // Bottom notes and index are reading material below the fold: the first
-      // screen belongs to the interactive diagram and its controls.
+      function fitBottomCards() {
+        return fitCards &amp;&amp; html.getAttribute(&#39;data-reader-rail&#39;) === &#39;bottom&#39; &amp;&amp; visible(cards);
+      }
+      // The diagram can pass containment on its own when bottom notes need
+      // to scroll. First-screen card fitting is best effort.
       function belowFold() {
         return html.getAttribute(&#39;data-reader-rail&#39;) === &#39;bottom&#39; ? outerHeight(railPanel) : 0;
       }
@@ -16863,17 +16866,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         html.style.setProperty(&#39;--archify-reader-width&#39;, Math.max(rounded, shellFloor) + &#39;px&#39;);
         var railShare = html.getAttribute(&#39;data-reader-rail&#39;) === &#39;true&#39; ? RAIL_WIDTH + RAIL_GAP : 0;
         var diagramWidth = Math.max(1, rounded - railShare - chromeMetrics().diagramX);
-        // Content fitting and automatic enlargement never reduce the outer
-        // reader region. The SVG alone takes the narrower reading width.
+        // The SVG takes the narrower reading width. With first-screen cards,
+        // let the stage follow that SVG&#39;s height and leave room for the notes.
         var automaticWidthCap = measuredHeightFit &amp;&amp; viewBox &amp;&amp; viewBox.width &gt; 0
           ? viewBox.width * MAX_AUTOMATIC_SCALE : 0;
-        if (automaticWidthCap &amp;&amp; diagramWidth &gt; automaticWidthCap) {
-          diagramWidth = automaticWidthCap;
+        var capped = automaticWidthCap &gt; 0 &amp;&amp; diagramWidth &gt; automaticWidthCap;
+        if (capped) diagramWidth = automaticWidthCap;
+        if (capped &amp;&amp; !fitBottomCards()) {
           html.style.setProperty(&#39;--archify-diagram-min-height&#39;, automaticAreaHeight + &#39;px&#39;);
           html.setAttribute(&#39;data-reader-area&#39;, &#39;true&#39;);
         } else {
-          // Ordinary automatic diagrams retain their existing document flow.
-          // Settling can also stop binding the cap without a new measure.
           html.style.removeProperty(&#39;--archify-diagram-min-height&#39;);
           html.removeAttribute(&#39;data-reader-area&#39;);
         }
@@ -16964,7 +16966,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         setRail(mode);
         chrome = chromeMetrics();
         if (docked) minWidth = Math.min(maxWidth, minWidth + railExtra);
-        var stackedBelow = mode === &#39;bottom&#39; ? 0 : docked ? 0 : outerHeight(cards);
+        // Keep the index outside the height budget. If cards need more room
+        // than the readable width permits, they can continue below the fold.
+        var stackedBelow = mode === &#39;bottom&#39; || docked ? 0 : outerHeight(cards);
+        if (fitBottomCards()) {
+          minWidth = Math.max(minWidth, Math.min(maxWidth, readableWidth));
+          stackedBelow = outerHeight(cards) + number(window.getComputedStyle(railPanel).marginTop);
+        }
         var fixedHeight = chrome.bodyY + chrome.diagramY + SAFE_BOTTOM_GAP +
           outerHeight(header) + stackedBelow;
         var availableSvgHeight = Math.max(1, window.innerHeight - fixedHeight);
@@ -17236,6 +17244,53 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         if (!lift) return rect;
         return { x: rect.x, y: rect.y + lift, left: rect.left, right: rect.right, top: rect.top + lift, bottom: rect.bottom + lift, width: rect.width, height: rect.height };
       }
+      function segmentReachesDock(start, end, rect, margin) {
+        var entry = 0;
+        var exit = 1;
+        var limits = [[rect.left, rect.right], [rect.top, rect.bottom]];
+        for (var axis = 0; axis &lt; 2; axis += 1) {
+          var lo = limits[axis][0] - margin;
+          var hi = limits[axis][1] + margin;
+          var change = end[axis] - start[axis];
+          if (!change) {
+            if (start[axis] &lt; lo || start[axis] &gt; hi) return false;
+            continue;
+          }
+          var a = (lo - start[axis]) / change;
+          var b = (hi - start[axis]) / change;
+          entry = Math.max(entry, Math.min(a, b));
+          exit = Math.min(exit, Math.max(a, b));
+          if (entry &gt; exit) return false;
+        }
+        return true;
+      }
+      function coversArchitecture(dock, amount) {
+        if (window.scrollY &gt; 1 || (svg.dataset.diagramType !== &#39;architecture&#39; &amp;&amp; svg.dataset.readerPrimaryText !== &#39;14&#39;)) return false;
+        var lifted = { left: dock.left, right: dock.right, top: dock.top - amount, bottom: dock.bottom - amount };
+        if (!intersectionArea(lifted, protectedStageRect())) return false;
+        var content = svg.querySelectorAll(&#39;g[data-node-id], g[data-edge-from] &gt; rect, [data-boundary-label]&#39;);
+        if (Array.from(content).some(function (element) { return intersectionArea(lifted, element.getBoundingClientRect()) &gt; 0; })) return true;
+        return Array.from(svg.querySelectorAll(&#39;path[data-composition-points]&#39;)).some(function (edge) {
+          var matrix = edge.getScreenCTM();
+          if (!matrix) return false;
+          var scale = Math.max(Math.hypot(matrix.a, matrix.b), Math.hypot(matrix.c, matrix.d));
+          var stroke = Number(edge.getAttribute(&#39;stroke-width&#39;)) || 1.5;
+          var pad = Math.max(8, stroke / 2) * scale;
+          var points = edge.dataset.compositionPoints.split(&#39;;&#39;).map(function (point) {
+            var coords = point.split(&#39;,&#39;).map(Number);
+            return [matrix.a * coords[0] + matrix.c * coords[1] + matrix.e, matrix.b * coords[0] + matrix.d * coords[1] + matrix.f];
+          });
+          return points.slice(1).some(function (end, index) {
+            var start = points[index];
+            // On short approaches a wide arrowhead can extend past the
+            // last corner. Include that overhang as well as the stroke.
+            var margin = index === points.length - 2 &amp;&amp; edge.hasAttribute(&#39;marker-end&#39;)
+              ? Math.max(pad, 3.5 * stroke * scale, 9 * stroke * scale - Math.hypot(end[0] - start[0], end[1] - start[1]))
+              : pad;
+            return segmentReachesDock(start, end, lifted, margin);
+          });
+        });
+      }
       function updateLift() {
         liftFrame = 0;
         var next = 0;
@@ -17243,6 +17298,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           var rest = restingNavRect();
           var box = container.getBoundingClientRect();
           next = Math.round(Math.max(0, Math.min(rest.bottom - (window.innerHeight - 16), rest.top - box.top - 16)));
+          if (next &amp;&amp; coversArchitecture(rest, next)) next = 0;
         }
         if (next === lift) return;
         lift = next;
@@ -32794,6 +32850,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       var viewBox = svg &amp;&amp; svg.viewBox &amp;&amp; svg.viewBox.baseVal;
       var ratio = viewBox &amp;&amp; viewBox.height &gt; 0 ? viewBox.width / viewBox.height : 0;
       var readerFit = svg &amp;&amp; svg.getAttribute(&#39;data-reader-fit&#39;);
+      var fitCards = svg &amp;&amp; svg.hasAttribute(&#39;data-reader-fit-cards&#39;);
       var widthFirstReading = readerFit === &#39;width-first&#39;;
       var automaticSequence = widthFirstReading &amp;&amp; svg.hasAttribute(&#39;data-sequence-column-fit&#39;);
       var readingScroll = widthFirstReading;
@@ -32819,8 +32876,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         : MIN_PROJECTED_NODE_TEXT_PX;
       var declaredPrimaryText = svg ? parseFloat(svg.getAttribute(&#39;data-reader-primary-text&#39;) || &#39;&#39;) : null;
       var SAFE_BOTTOM_GAP = 12;
-      // Wide viewports move summary cards beside the diagram, so the height
-      // budget belongs to the diagram and spare width holds the notes.
+      // The optional right rail uses spare width for notes.
       var RAIL_MIN_VIEWPORT = 1280;
       var RAIL_WIDTH = 288;
       var RAIL_GAP = 20;
@@ -33012,8 +33068,11 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
       function hasCards() {
         return Boolean((cards &amp;&amp; cards.children.length &amp;&amp; !cards.hidden) || (outline &amp;&amp; !outline.hidden));
       }
-      // Bottom notes and index are reading material below the fold: the first
-      // screen belongs to the interactive diagram and its controls.
+      function fitBottomCards() {
+        return fitCards &amp;&amp; html.getAttribute(&#39;data-reader-rail&#39;) === &#39;bottom&#39; &amp;&amp; visible(cards);
+      }
+      // The diagram can pass containment on its own when bottom notes need
+      // to scroll. First-screen card fitting is best effort.
       function belowFold() {
         return html.getAttribute(&#39;data-reader-rail&#39;) === &#39;bottom&#39; ? outerHeight(railPanel) : 0;
       }
@@ -33049,17 +33108,16 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         html.style.setProperty(&#39;--archify-reader-width&#39;, Math.max(rounded, shellFloor) + &#39;px&#39;);
         var railShare = html.getAttribute(&#39;data-reader-rail&#39;) === &#39;true&#39; ? RAIL_WIDTH + RAIL_GAP : 0;
         var diagramWidth = Math.max(1, rounded - railShare - chromeMetrics().diagramX);
-        // Content fitting and automatic enlargement never reduce the outer
-        // reader region. The SVG alone takes the narrower reading width.
+        // The SVG takes the narrower reading width. With first-screen cards,
+        // let the stage follow that SVG&#39;s height and leave room for the notes.
         var automaticWidthCap = measuredHeightFit &amp;&amp; viewBox &amp;&amp; viewBox.width &gt; 0
           ? viewBox.width * MAX_AUTOMATIC_SCALE : 0;
-        if (automaticWidthCap &amp;&amp; diagramWidth &gt; automaticWidthCap) {
-          diagramWidth = automaticWidthCap;
+        var capped = automaticWidthCap &gt; 0 &amp;&amp; diagramWidth &gt; automaticWidthCap;
+        if (capped) diagramWidth = automaticWidthCap;
+        if (capped &amp;&amp; !fitBottomCards()) {
           html.style.setProperty(&#39;--archify-diagram-min-height&#39;, automaticAreaHeight + &#39;px&#39;);
           html.setAttribute(&#39;data-reader-area&#39;, &#39;true&#39;);
         } else {
-          // Ordinary automatic diagrams retain their existing document flow.
-          // Settling can also stop binding the cap without a new measure.
           html.style.removeProperty(&#39;--archify-diagram-min-height&#39;);
           html.removeAttribute(&#39;data-reader-area&#39;);
         }
@@ -33150,7 +33208,13 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         setRail(mode);
         chrome = chromeMetrics();
         if (docked) minWidth = Math.min(maxWidth, minWidth + railExtra);
-        var stackedBelow = mode === &#39;bottom&#39; ? 0 : docked ? 0 : outerHeight(cards);
+        // Keep the index outside the height budget. If cards need more room
+        // than the readable width permits, they can continue below the fold.
+        var stackedBelow = mode === &#39;bottom&#39; || docked ? 0 : outerHeight(cards);
+        if (fitBottomCards()) {
+          minWidth = Math.max(minWidth, Math.min(maxWidth, readableWidth));
+          stackedBelow = outerHeight(cards) + number(window.getComputedStyle(railPanel).marginTop);
+        }
         var fixedHeight = chrome.bodyY + chrome.diagramY + SAFE_BOTTOM_GAP +
           outerHeight(header) + stackedBelow;
         var availableSvgHeight = Math.max(1, window.innerHeight - fixedHeight);
@@ -33422,6 +33486,53 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
         if (!lift) return rect;
         return { x: rect.x, y: rect.y + lift, left: rect.left, right: rect.right, top: rect.top + lift, bottom: rect.bottom + lift, width: rect.width, height: rect.height };
       }
+      function segmentReachesDock(start, end, rect, margin) {
+        var entry = 0;
+        var exit = 1;
+        var limits = [[rect.left, rect.right], [rect.top, rect.bottom]];
+        for (var axis = 0; axis &lt; 2; axis += 1) {
+          var lo = limits[axis][0] - margin;
+          var hi = limits[axis][1] + margin;
+          var change = end[axis] - start[axis];
+          if (!change) {
+            if (start[axis] &lt; lo || start[axis] &gt; hi) return false;
+            continue;
+          }
+          var a = (lo - start[axis]) / change;
+          var b = (hi - start[axis]) / change;
+          entry = Math.max(entry, Math.min(a, b));
+          exit = Math.min(exit, Math.max(a, b));
+          if (entry &gt; exit) return false;
+        }
+        return true;
+      }
+      function coversArchitecture(dock, amount) {
+        if (window.scrollY &gt; 1 || (svg.dataset.diagramType !== &#39;architecture&#39; &amp;&amp; svg.dataset.readerPrimaryText !== &#39;14&#39;)) return false;
+        var lifted = { left: dock.left, right: dock.right, top: dock.top - amount, bottom: dock.bottom - amount };
+        if (!intersectionArea(lifted, protectedStageRect())) return false;
+        var content = svg.querySelectorAll(&#39;g[data-node-id], g[data-edge-from] &gt; rect, [data-boundary-label]&#39;);
+        if (Array.from(content).some(function (element) { return intersectionArea(lifted, element.getBoundingClientRect()) &gt; 0; })) return true;
+        return Array.from(svg.querySelectorAll(&#39;path[data-composition-points]&#39;)).some(function (edge) {
+          var matrix = edge.getScreenCTM();
+          if (!matrix) return false;
+          var scale = Math.max(Math.hypot(matrix.a, matrix.b), Math.hypot(matrix.c, matrix.d));
+          var stroke = Number(edge.getAttribute(&#39;stroke-width&#39;)) || 1.5;
+          var pad = Math.max(8, stroke / 2) * scale;
+          var points = edge.dataset.compositionPoints.split(&#39;;&#39;).map(function (point) {
+            var coords = point.split(&#39;,&#39;).map(Number);
+            return [matrix.a * coords[0] + matrix.c * coords[1] + matrix.e, matrix.b * coords[0] + matrix.d * coords[1] + matrix.f];
+          });
+          return points.slice(1).some(function (end, index) {
+            var start = points[index];
+            // On short approaches a wide arrowhead can extend past the
+            // last corner. Include that overhang as well as the stroke.
+            var margin = index === points.length - 2 &amp;&amp; edge.hasAttribute(&#39;marker-end&#39;)
+              ? Math.max(pad, 3.5 * stroke * scale, 9 * stroke * scale - Math.hypot(end[0] - start[0], end[1] - start[1]))
+              : pad;
+            return segmentReachesDock(start, end, lifted, margin);
+          });
+        });
+      }
       function updateLift() {
         liftFrame = 0;
         var next = 0;
@@ -33429,6 +33540,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
           var rest = restingNavRect();
           var box = container.getBoundingClientRect();
           next = Math.round(Math.max(0, Math.min(rest.bottom - (window.innerHeight - 16), rest.top - box.top - 16)));
+          if (next &amp;&amp; coversArchitecture(rest, next)) next = 0;
         }
         if (next === lift) return;
         lift = next;
