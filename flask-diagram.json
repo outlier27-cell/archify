@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "diagram_type": "architecture",
+  "meta": {
+    "title": "Flask",
+    "subtitle": "Application and blueprint registration",
+    "output": "flask.html",
+    "repository": {
+      "url": "https://github.com/pallets/flask",
+      "revision": "2c1b30d0503cfb064f1cb252e6614a06915a362a"
+    }
+  },
+  "components": [
+    {
+      "id": "app",
+      "type": "backend",
+      "label": "Flask application",
+      "pos": [
+        80,
+        140
+      ],
+      "size": [
+        220,
+        80
+      ],
+      "sources": [
+        {
+          "path": "src/flask/sansio/app.py",
+          "line": 1
+        }
+      ]
+    },
+    {
+      "id": "blueprints",
+      "type": "backend",
+      "label": "Blueprint registration",
+      "pos": [
+        410,
+        140
+      ],
+      "size": [
+        230,
+        80
+      ],
+      "sources": [
+        {
+          "path": "src/flask/sansio/blueprints.py",
+          "line": 273
+        }
+      ]
+    }
+  ],
+  "connections": [
+    {
+      "id": "app-register-blueprints",
+      "from": "app",
+      "to": "blueprints",
+      "label": "register blueprint"
+    }
+  ],
+  "boundaries": [],
+  "cards": []
+}
