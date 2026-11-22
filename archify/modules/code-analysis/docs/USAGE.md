@@ -189,6 +189,23 @@ adapter. Wrong revisions, out-of-scope paths and mismatched digests fail
 before publication. The checks verify the source referred to by the guide.
 Read those lines to verify the author's interpretation.
 
+## Update a repository wiki
+
+Pass `--from-wiki previous/wiki.json` to `wiki` along with the new
+`--commit` and a fresh `--out`. Both exact Git commits must be present in
+the same local object database. Reuse the previous scope and selected language.
+
+The new wiki regenerates its module pages from the new commit. Its **Citation
+update** records verified prior citation locations, line shifts, Git-detected
+renames, edited excerpts, deleted files, repeated matches and unavailable
+ranges. The machine-readable `update.json` includes both pins and points to
+the prior manifest by SHA-256. The previous wiki is left intact.
+
+Previous guide sections are flagged for claim review. An exact excerpt means
+those lines still exist, and resolving a new location can help find evidence
+during review. To include guide prose in the new wiki, provide a refreshed
+`--narrative` bound to the new commit with its own verified citations.
+
 ## Review architecture drift between two commits
 
 Use `drift` when a code change may invalidate an existing Architecture diagram.

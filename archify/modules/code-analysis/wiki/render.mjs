@@ -14,6 +14,10 @@ const copy = {
     evidenceNotice: '此 Wiki 反映固定快照中的静态证据。导入关系不代表运行时行为。',
     guideNotice: '说明由作者或 Agent 提供。引用范围已校验，需阅读源码以核对具体结论。',
     noExcerpt: '该产物未嵌入源码。', excerpt: '引用摘录，最多 16 行', excluded: '按角色排除',
+    update: '引用更新', previous: '上一版提交', citationChanges: '逐条查看引用',
+    claimReview: '引用的文字匹配仅说明原文仍在。请重新核对说明所表达的结论。',
+    changedGuides: '上一版说明', reviewRequired: '待重新核对结论', newEvidence: '需补充新证据', currentRange: '新位置',
+    updateStates: { same: '位置不变', shifted: '行号平移', moved: '文件重命名', touched: '原文已变', deleted: '文件已删除', ambiguous: '多个匹配', unavailable: '无法判定' },
     ignored: '排除的路径模式', adapter: '分析器', rule: '运行的规则', language: '语言',
   },
   en: {
@@ -25,6 +29,10 @@ const copy = {
     evidenceNotice: 'This wiki reflects static evidence from one pinned snapshot. Imports do not establish runtime behavior.',
     guideNotice: 'These observations were supplied by an author or agent. The citation ranges were checked. Read the source to confirm each claim.',
     noExcerpt: 'This artifact has no embedded source text.', excerpt: 'Cited excerpt, up to 16 lines', excluded: 'Excluded by role',
+    update: 'Citation update', previous: 'Previous commit', citationChanges: 'Inspect individual citations',
+    claimReview: 'A matching excerpt preserves the cited text. Review whether each previous guide claim still holds.',
+    changedGuides: 'Previous guides', reviewRequired: 'Review the claim', newEvidence: 'New evidence needed', currentRange: 'New location',
+    updateStates: { same: 'Same location', shifted: 'Shifted lines', moved: 'Renamed file', touched: 'Excerpt changed', deleted: 'File deleted', ambiguous: 'Multiple matches', unavailable: 'Undetermined' },
     ignored: 'Excluded path patterns', adapter: 'Analyzer', rule: 'Rules run', language: 'Language',
   },
 };
@@ -46,6 +54,18 @@ function coverageRows(coverage, t) {
     [t.ignored, join(coverage.files.excludePatterns)],
     [t.rule, join(coverage.rules.run)],
   ];
+}
+
+function updateSection(update, t) {
+  if (!update) return '';
+  const guides = update.guides.length ? '<h3>' + t.changedGuides + '</h3><ul>' + update.guides.map(guide =>
+    '<li>' + esc(guide.title) + ' · ' + (guide.evidence === 'needs-new-evidence' ? t.newEvidence + ' · ' : '') + t.reviewRequired + '</li>').join('') + '</ul>' : '';
+  const counts = Object.entries(update.counts).map(([key, count]) => '<dt>' + esc(t.updateStates[key]) + '</dt><dd>' + count + '</dd>').join('');
+  const rows = update.citations.map(cite => '<li><strong>' + esc(t.updateStates[cite.state]) + '</strong> · ' + esc(labelFor(cite.previous)) +
+    (cite.next && cite.state !== 'same' ? '<small>' + t.currentRange + ' · ' + esc(labelFor(cite.next)) + '</small>' : '') + '</li>').join('');
+  return '<section id="update"><h2>' + t.update + '</h2><p>' + t.previous + ' <code>' + esc(update.base) +
+    '</code></p><p>' + t.claimReview + '</p><dl class="update-counts">' + counts + '</dl>' + guides +
+    '<details><summary>' + t.citationChanges + '</summary><ol>' + rows + '</ol></details></section>';
 }
 
 export function wikiHtml({ document: doc, excerpts }, markdown) {
@@ -78,13 +98,13 @@ export function wikiHtml({ document: doc, excerpts }, markdown) {
     + '<header><a class="brand" href="#overview">Archify <span>' + t.title + '</span></a><div class="actions">'
     + link('./atlas.html', t.atlas) + '<a id="wiki-download" href="./wiki.md" download>' + t.markdown + '</a></div></header>'
     + '<div class="layout"><aside><nav aria-label="' + t.index + '"><a href="#overview">' + t.overview + '</a><a href="#modules">' + t.modules + '</a>'
-    + (doc.guides.length ? '<a href="#guides">' + t.guides + '</a>' : '') + '<a href="#citations">' + t.source + '</a></nav>'
+    + (doc.update ? '<a href="#update">' + t.update + '</a>' : '') + (doc.guides.length ? '<a href="#guides">' + t.guides + '</a>' : '') + '<a href="#citations">' + t.source + '</a></nav>'
     + '<label for="wiki-search">' + t.search + '</label><input id="wiki-search" type="search"><p id="wiki-empty" role="status" hidden>' + t.noResults + '</p></aside>'
     + '<main><section class="hero" id="overview"><h1>' + esc(doc.title) + '</h1><p>' + t.evidenceNotice + '</p><div class="pin"><span>'
     + t.commit + '</span><code>' + esc(doc.repository.revision) + '</code><span>' + t.scope + '</span><code>' + esc(doc.repository.scope) + '</code></div></section>'
     + '<details class="coverage"><summary>' + t.limits + ' · ' + doc.coverage.files.analyzed + ' ' + t.files + '</summary><dl>'
     + coverageRows(doc.coverage, t).map(([name, value]) => '<dt>' + esc(name) + '</dt><dd>' + esc(value) + '</dd>').join('') + '</dl></details>'
-    + guides + '<section id="modules"><h2>' + t.modules + '</h2>' + doc.modules.map(page).join('') + '</section>'
+    + updateSection(doc.update, t) + guides + '<section id="modules"><h2>' + t.modules + '</h2>' + doc.modules.map(page).join('') + '</section>'
     + findings + evidence + '</main></div><script id="wiki-markdown" type="application/json">'
     + scriptSafeJson(markdown) + '</script><script>' + client + '</script></body></html>\n';
 }
@@ -96,6 +116,14 @@ export function wikiMarkdown(doc) {
   const out = ['# ' + md(doc.title), '', t.evidenceNotice, '', '- ' + t.commit + ' \u0060' + doc.repository.revision + '\u0060',
     '- ' + t.scope + ' ' + md(doc.repository.scope), '- [' + t.atlas + '](atlas.html)', '', '## ' + t.limits, '',
     ...coverageRows(doc.coverage, t).map(([name, value]) => '- **' + md(name) + '** · ' + md(value)), ''];
+  if (doc.update) {
+    out.push('## ' + t.update, '', '- ' + t.previous + ' ' + doc.update.base, t.claimReview, '',
+      ...Object.entries(doc.update.counts).map(([key, count]) => '- ' + t.updateStates[key] + ' · ' + count), '');
+    for (const guide of doc.update.guides) {
+      out.push('- ' + md(guide.title) + ' · ' + (guide.evidence === 'needs-new-evidence' ? t.newEvidence + ' · ' : '') + t.reviewRequired);
+    }
+    out.push('');
+  }
   if (doc.guides.length) {
     out.push('## ' + t.guides, '', t.guideNotice, '');
     for (const guide of doc.guides) out.push('### ' + md(guide.title), '', md(guide.text) + ' ' + guide.citations.map(source).join(' '), '');

@@ -53,3 +53,9 @@ pre { background: #edf5f0; border-radius: 7px; padding: 12px; white-space: pre-w
   aside { position: static; margin-bottom: 24px }
   nav { flex-direction: row }
 }
+
+#update { overflow-wrap: anywhere; }
+#update ol li { margin-block: .4rem; }
+#update ol small { display: block; }
+.update-counts { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .25rem 1rem; max-width: 26rem; }
+.update-counts dd { margin: 0; font-variant-numeric: tabular-nums; }

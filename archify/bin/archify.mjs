@@ -2198,7 +2198,7 @@ const COMMAND_USAGE = {
     'verify-change <analysis-dir> --task <task.json> [--checks <checks.json> | --checks-template]',
     'drift <git-repo> --base <full-sha> --head <full-sha> --ir <architecture.json> --out <new-directory> [--map file] [--config file] [--from-report <original-drift.json>] [--locale en|zh-CN] [--json]',
     'verify-drift <original-drift.json> --task <task.json> --after <follow-up-drift.json> [--checks <checks.json> | --checks-template]',
-    'wiki <git-repo> --commit <full-sha> --language ts|py --out <new-directory> [--scope relative/path] [--locale en|zh-CN] [--narrative file.json] [--include-source] [--json]',
+    'wiki <git-repo> --commit <full-sha> --language ts|py --out <new-directory> [--scope relative/path] [--locale en|zh-CN] [--narrative file.json] [--from-wiki previous/wiki.json] [--include-source] [--json]',
     'import-review <github-pr-url> --out report.json [--author login] [--json]',
     'task <analysis-dir> --finding <id> [--finding <id> …] [--root <repo-root>] [--command cmd] [--format md|json] [--out file] [--require-valid]',
     'task [<analysis-dir>] --question <text> --entry <file> [--base-root <base>] --root <repo-root> [--function <name>] [--config file] [--format md|json] [--out file]',

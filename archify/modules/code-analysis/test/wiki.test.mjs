@@ -145,3 +145,67 @@ test('wiki rejects changed citations and preserves previous output while opt-in 
   assert.equal(existing.body.diagnostics[0].code, 'wiki/output-invalid');
   assert.equal(fs.readFileSync(path.join(valid.out, 'wiki.json'), 'utf8'), previous);
 });
+
+test('wiki update keeps claim review separate and resolves shifts, renames, edits, deletions and ambiguity', async t => {
+  const { revision, scope, scratch, git, root, run } = await fixture(t);
+  const write = (name, text) => fs.writeFileSync(path.join(root, scope, name), text);
+  const text = {
+    'shift.js': 'export const originalShift = 1;\n',
+    'move.js': 'export const originalMove = 2;\n',
+    'edit.js': 'export const originalEdit = 3;\n',
+    'remove.js': 'export const originalRemove = 4;\n',
+    'duplicate.js': '// quoted exactly\nexport const first = 5;\n',
+  };
+  for (const [name, value] of Object.entries(text)) write(name, value);
+  git('add', '.');
+  git('commit', '--quiet', '-m', 'Previous citations');
+  const base = git('rev-parse', 'HEAD');
+  const narrative = path.join(scratch, 'guide-update.json');
+  fs.writeFileSync(narrative, JSON.stringify({ schemaVersion: 1, revision: base, scope, sections: [{
+    title: 'Guide title', text: 'This previous guide requires validation.',
+    citations: Object.entries(text).map(([name, value]) => ({
+      path: scope + '/' + name, startLine: 1, endLine: 1, sha256: hash(value.split('\n')[0]),
+    })),
+  }] }));
+  const previous = run('previous', ['--narrative', narrative], base);
+  assert.equal(previous.status, 0, JSON.stringify(previous.body));
+  const prev = path.join(previous.out, 'wiki.json');
+  const previousBytes = fs.readFileSync(prev);
+  write('shift.js', '// inserted line\n' + text['shift.js']);
+  git('mv', scope + '/move.js', scope + '/moved.js');
+  write('edit.js', 'export const replaced = 6;\n');
+  git('rm', scope + '/remove.js');
+  write('duplicate.js', text['duplicate.js'] + '// quoted exactly\nexport const second = 7;\n');
+  git('add', '.');
+  git('commit', '--quiet', '-m', 'Migrate source citations');
+  const head = git('rev-parse', 'HEAD');
+  const updated = run('updated', ['--from-wiki', prev], head);
+  assert.equal(updated.status, 0, JSON.stringify(updated.body));
+  const report = JSON.parse(fs.readFileSync(updated.body.artifacts['update.json'], 'utf8'));
+  const byPath = new Map(report.citations.map(item => [item.previous.path, item]));
+  assert.deepEqual([report.base, report.head, report.previousSha256], [base, head, hash(previousBytes)]);
+  assert.equal(byPath.get(scope + '/shift.js').state, 'shifted');
+  assert.equal(byPath.get(scope + '/shift.js').next.startLine, 2);
+  assert.equal(byPath.get(scope + '/move.js').state, 'moved');
+  assert.equal(byPath.get(scope + '/move.js').next.path, scope + '/moved.js');
+  assert.equal(byPath.get(scope + '/edit.js').state, 'touched');
+  assert.equal(byPath.get(scope + '/remove.js').state, 'deleted');
+  assert.equal(byPath.get(scope + '/duplicate.js').state, 'ambiguous');
+  assert.equal(byPath.get(scope + '/duplicate.js').next, null);
+  assert.equal(report.guides[0].claim, 'review-required');
+  assert.equal(report.guides[0].evidence, 'needs-new-evidence');
+  const html = fs.readFileSync(updated.body.artifacts['index.html'], 'utf8');
+  assert.match(html, /Citation update/);
+  assert.match(html, /Guide title · New evidence needed · Review the claim/);
+  assert.doesNotMatch(html, /This previous guide requires validation/);
+  assert.deepEqual(fs.readFileSync(prev), previousBytes);
+
+  const malformed = JSON.parse(previousBytes);
+  malformed.citations[0].sha256 = '0'.repeat(64);
+  const tampered = path.join(scratch, 'tampered.json');
+  fs.writeFileSync(tampered, JSON.stringify(malformed));
+  const refusal = run('refusal', ['--from-wiki', tampered], head);
+  assert.equal(refusal.body.diagnostics[0].code, 'wiki/update-citation-invalid');
+  assert.equal(fs.existsSync(refusal.out), false);
+  assert.notEqual(revision, head);
+});
