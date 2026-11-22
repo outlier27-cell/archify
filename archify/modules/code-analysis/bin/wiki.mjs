@@ -11,7 +11,7 @@ import { containedBy } from '../../../renderers/shared/path-semantics.mjs';
 import { resolveNativeOutputDirectory } from '../../../renderers/shared/output-path.mjs';
 import { createOwnedTempDirectory } from '../../../renderers/shared/owned-temp-directory.mjs';
 
-const usage = 'Usage: archify code-analysis wiki <git-repo> --commit <full-sha> --language ts|py --out <new-directory> [--scope relative/path] [--locale en|zh-CN] [--narrative file.json] [--include-source] [--json]';
+const usage = 'Usage: archify code-analysis wiki <git-repo> --commit <full-sha> --language ts|py --out <new-directory> [--scope relative/path] [--locale en|zh-CN] [--narrative file.json] [--from-wiki previous/wiki.json] [--include-source] [--json]';
 const sha256 = value => createHash('sha256').update(value).digest('hex');
 
 function argumentsFor(args) {
@@ -21,7 +21,7 @@ function argumentsFor(args) {
     parsed = parseArgs({
       args, allowPositionals: true, tokens: true, options: {
         commit: { type: 'string' }, scope: { type: 'string', default: '.' }, language: { type: 'string' },
-        out: { type: 'string' }, locale: { type: 'string', default: 'en' }, narrative: { type: 'string' },
+        'from-wiki': { type: 'string' }, out: { type: 'string' }, locale: { type: 'string', default: 'en' }, narrative: { type: 'string' },
         'include-source': { type: 'boolean', default: false }, json: { type: 'boolean' },
       },
     });
@@ -32,7 +32,7 @@ function argumentsFor(args) {
   const names = tokens.filter(token => token.kind === 'option').map(token => token.name);
   if (new Set(names).size !== names.length || positionals.length !== 1 || !values.out || !values.commit ||
       !['ts', 'py'].includes(values.language) || !['en', 'zh-CN'].includes(values.locale) ||
-      (Object.hasOwn(values, 'narrative') && !values.narrative)) invalid();
+      ['narrative', 'from-wiki'].some(key => Object.hasOwn(values, key) && !values[key])) invalid();
   return { directory: positionals[0], ...values };
 }
 
@@ -94,6 +94,7 @@ async function build(args) {
   const { buildOverlay } = await import('../overlay/inject.mjs');
   const { buildWiki } = await import('../wiki/model.mjs');
   const { wikiHtml, wikiMarkdown } = await import('../wiki/render.mjs');
+  const previous = options['from-wiki'] ? readDriftInput(options['from-wiki'], 'previous Wiki', 16 * 1024 * 1024) : null;
   const scratch = createOwnedTempDirectory('archify-wiki-');
   let built;
   try {
@@ -119,10 +120,21 @@ async function build(args) {
     } });
     const wiki = buildWiki({ facts, graph, overview: overlay.overview, findings, title, locale: options.locale, omitted,
       configDigest: sha256(stableJson(config)), narrative, includeSource: options['include-source'] });
+    if (previous) {
+      const { checkPreviousWiki, compareWikiCitations } = await import('../wiki/update.mjs');
+      checkPreviousWiki(previous.doc, scope, options.language);
+      const base = previous.doc.repository.revision;
+      assertDriftPin(root, base, 'previous wiki');
+      const before = base === options.commit ? captured : path.join(scratch.path, 'previous');
+      const beforeOmitted = before === captured ? omitted : captureDriftTree(root, base, before, { scope });
+      wiki.document.update = await compareWikiCitations({ previous: previous.doc, previousSha256: sha256(previous.bytes), repo: root,
+        revision: options.commit, beforeRoot: before, afterRoot: captured, beforeOmitted, afterOmitted: omitted });
+    }
     const markdown = wikiMarkdown(wiki.document);
     const artifacts = new Map([
       ['index.html', wikiHtml(wiki, markdown)], ['wiki.md', markdown], ['atlas.html', overlay.html],
     ]);
+    if (wiki.document.update) artifacts.set('update.json', stableJson(wiki.document.update));
     const manifest = { ...wiki.document, artifacts: Object.fromEntries([...artifacts].map(([name, body]) => [name, {
       sha256: sha256(body), bytes: Buffer.byteLength(body),
     }])) };
