@@ -1,0 +1,77 @@
+{
+  "browser": "Chrome for Testing, desktop 1440 x 900, file://, forced offline, real CDP pointer input",
+  "httpRequests": 0,
+  "markdownDigests": [
+    {
+      "version": "v1",
+      "commit": "2e83d053ec3c2d2078c5ffe3512623168111d9c8",
+      "sample": "archify",
+      "download": "wiki.md",
+      "sha256": "8779f8d3211c8b3d4ae70c86f3d0e14436707cd618c910f9a4e8ca11edc05317",
+      "revision": "8a4f8e80141f937129796b6a4ad5597fb8a9db47",
+      "counts": {
+        "modules": 20,
+        "citations": 197
+      }
+    },
+    {
+      "version": "v1",
+      "commit": "2e83d053ec3c2d2078c5ffe3512623168111d9c8",
+      "sample": "flask",
+      "download": "wiki.md",
+      "sha256": "4b89d7b5563f07eab6d32a0c29b8508d4ead3574428e78c9921c915e308bf6a3",
+      "revision": "2c1b30d0503cfb064f1cb252e6614a06915a362a",
+      "counts": {
+        "modules": 5,
+        "citations": 34
+      }
+    },
+    {
+      "version": "v2",
+      "commit": "3a32d85bf943e90901cd54f29142ef0fe2539832",
+      "sample": "archify",
+      "download": "wiki.md",
+      "sha256": "2da725e5db29a1d35d8a18681ed11b0f494368e2c505e6cec4e34c841b398fad",
+      "base": "8a4f8e80141f937129796b6a4ad5597fb8a9db47",
+      "head": "df7065f6b0da5df64dfde32afb4d618747714fad",
+      "counts": {
+        "same": 187,
+        "shifted": 5,
+        "moved": 0,
+        "touched": 5,
+        "deleted": 0,
+        "ambiguous": 0,
+        "unavailable": 0
+      }
+    },
+    {
+      "version": "v2",
+      "commit": "3a32d85bf943e90901cd54f29142ef0fe2539832",
+      "sample": "flask",
+      "download": "wiki.md",
+      "sha256": "2a8736a4e7257d94c4b5ef48514d62c3c28d62db33d0b83aadd50bf4daa1ded9",
+      "base": "2c1b30d0503cfb064f1cb252e6614a06915a362a",
+      "head": "49943b5a94413a530761350f04e896f76e8d620e",
+      "counts": {
+        "same": 30,
+        "shifted": 2,
+        "moved": 0,
+        "touched": 2,
+        "deleted": 0,
+        "ambiguous": 0,
+        "unavailable": 0
+      }
+    }
+  ],
+  "deletedCitation": {
+    "id": "source-24",
+    "state": "deleted",
+    "previous": {
+      "path": "src/flask/_compat.py",
+      "startLine": 13,
+      "endLine": 16,
+      "sha256": "6cbf127a4212065a990e4d07aecb28b050075afd592d117a1e09cf2a328e378b"
+    },
+    "next": null
+  }
+}
