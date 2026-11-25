@@ -487,6 +487,7 @@ test('story SVGs render in <img>/<picture>, settle under prefers-reduced-motion,
     let invalidRangeRejected = false;
     try { await window.ArchifyStoryStage.exportVideo({start:window.ArchifyStoryStage.duration + 1,seconds:1}); }
     catch(error) { invalidRangeRejected = /range/i.test(error.message); }
+    const videoData = await new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(r.result); r.onerror = reject; r.readAsDataURL(vidBlob); });
     const head = [...new Uint8Array(await vidBlob.slice(0, 4).arrayBuffer())];
     const vUrl = URL.createObjectURL(vidBlob);
     const video = document.createElement('video');
@@ -544,9 +545,11 @@ test('story SVGs render in <img>/<picture>, settle under prefers-reduced-motion,
         silentMp4Head = new TextDecoder().decode(await mp4.slice(4,12).arrayBuffer());
       } finally { window.AudioEncoder = originalAudioEncoder; }
     }
-    return { state, pngDims, head, videoDims, matchedStills, frameDistances, overlapMessage, supportsH264, silentMp4Head, themeAfterExport, presetAfterExport, timeAfterExport, presetOpenBeforeExport, controlsLocked, cancellations, invalidRangeRejected, controlsRestored: controls.every(el => !el.disabled) };
+    return { videoData, state, pngDims, head, videoDims, matchedStills, frameDistances, overlapMessage, supportsH264, silentMp4Head, themeAfterExport, presetAfterExport, timeAfterExport, presetOpenBeforeExport, controlsLocked, cancellations, invalidRangeRejected, controlsRestored: controls.every(el => !el.disabled) };
   })()`);
 
+  fs.writeFileSync('story-linux-diagnostic.webm', Buffer.from(stageCheck.videoData.split(',')[1], 'base64'));
+  console.log('STORY_DIAGNOSTIC', JSON.stringify({dims: stageCheck.videoDims, distances: stageCheck.frameDistances}));
   await t.test('Stage rejects an overlapping export before it can change reader state', () => {
     assert.match(stageCheck.overlapMessage ?? '', /already running/i);
   });
